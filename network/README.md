@@ -254,6 +254,7 @@ struct ResourcePayload {
 | **升级** | `sendPacket(UPGRADE_UNIT, payload)` | 玩家主动点时调用 |
 | **部署同步** | `DEPLOYMENT_END` 后 Host 广播完整部署 | 迷雾结束触发 |
 | **波次触发** | `WAVE_START(waveId)` | PVP 收到 waveId 独立刷怪 |
+| **RNG 使用** | `RandomSynchronizer::rng()` + `randomInt<T>(min, max)` | PVP 组调用此 RNG 生成怪物种类/数量/属性，双方调用顺序一致则结果一致 |
 
 **不在同步范围内的**（由模拟确定性保证）：
 - 基地血量变化、怪物死亡、胜负判定——两边用相同逻辑算出相同结果，不需要网络通知
