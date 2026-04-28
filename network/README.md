@@ -243,21 +243,20 @@ struct ResourcePayload {
 
 ## 五、各模块需要做的事情
 
-### 5.1 PVP 主流程设计（最重要 ⚠️）
+### 5.1 PVP 组需对接的接口（已简化）
 
-这部分目前只有枚举和结构体，**核心逻辑完全未实现**，需要和 Wasdar456 约定清楚接口：
+**设计原则**：确定性模拟 + 输入同步。核心假设：
+- 双方持有相同 RNG 种子，模拟结果天然一致
+- 只需同步**初始状态**（部署）和**玩家操作**（输入），过程结果不广播
 
-| 对接项 | 网络层提供的接口 | PVP 组需要给网络层的接口 |
+| 对接项 | 网络层提供 | PVP 组需要做的 |
 |:---|:---|:---|
-| **波次触发** | `RoundManager::sendRoundValue(waveId)` | PVP 组接到 waveId 后调用哪个函数开始刷怪？ |
-| **单位部署** | `DeploymentSync::addLocalDeploy()` | PVP 组在 UI 点击部署时调哪个函数？ |
-| **升级触发** | `sendPacket(UPGRADE_UNIT, ...)` | 升级是玩家主动点还是条件自动触发？ |
-| **基地血量** | `CoreHpPayload` 已定义 | `PlayerState::damageBase()` 后由谁发 `CORE_HP_SYNC`？ |
-| **资源变化** | `ResourcePayload` 已定义 | 怪物死亡/单位部署后由谁发 `RESOURCE_SYNC`？ |
-| **单位销毁** | `UNIT_DESTROYED` 已定义 | 怪物被击杀后发什么信号通知网络层？ |
-| **Game Over** | `GAME_OVER` 已定义 | 谁来判断胜负并触发广播？ |
+| **升级** | `sendPacket(UPGRADE_UNIT, payload)` | 玩家主动点时调用 |
+| **部署同步** | `DEPLOYMENT_END` 后 Host 广播完整部署 | 迷雾结束触发 |
+| **波次触发** | `WAVE_START(waveId)` | PVP 收到 waveId 独立刷怪 |
 
-**建议开会时确认：PVP 组给网络模块暴露的接口函数列表。**
+**不在同步范围内的**（由模拟确定性保证）：
+- 基地血量变化、怪物死亡、胜负判定——两边用相同逻辑算出相同结果，不需要网络通知
 
 ### 5.2 网络层待完成的工作
 
