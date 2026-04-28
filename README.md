@@ -416,68 +416,201 @@ $$
 
 ## 九、 项目目录结构
 
+> 采用多模块静态库架构，`app/` 生成最终可执行文件，链接下方五个静态库。各模块职责严格分离：`core/` 不依赖 Qt，其余模块通过接口与 `core/` 交互。
+
+### 最终构建产物
+
 ```
-game/
-├── CMakeLists.txt              # CMake 构建配置（或 .pro Qt 项目文件）
-├── README.md                   # 本文档
+GameProject（可执行文件）
+├── game_core          ← 纯 C++ 静态库（不依赖 Qt）
+├── game_ui            ← Qt Widgets 静态库
+├── game_network       ← Qt Network 静态库
+├── game_data_manager  ← 数据读写静态库
+└── game_resources     ← Qt 资源打包静态库（仅含 .qrc）
+```
+
+### 完整目录结构
+
+```
+GameProject/
+├── CMakeLists.txt                         # 顶层 CMake：统一 add_subdirectory()
+├── README.md                              # 项目说明文档
 │
-├── src/                        # 全部 C++ 源代码
-│   ├── main.cpp                # 程序入口，初始化 QApplication
-│   │
-│   ├── core/                   # 核心游戏逻辑（与 Qt 解耦，纯 C++）
-│   │   ├── GameObject.h / .cpp
-│   │   ├── Entity.h / .cpp
-│   │   ├── Card.h / .cpp       # 防御单位基类及派生类
-│   │   ├── Monster.h / .cpp    # 怪物基类及派生类
-│   │   ├── MapGrid.h / .cpp    # 地块类
-│   │   ├── Map.h / .cpp        # 地图容器（管理 MapGrid 二维数组）
-│   │   ├── BattleManager.h / .cpp  # 战斗流程管理（波次、胜负判定）
-│   │   ├── ResourceManager.h / .cpp # 资源（金币/矿石）管理
-│   │   └── AStar.h / .cpp      # A* 寻路算法
-│   │
-│   ├── ui/                     # Qt UI 相关代码
-│   │   ├── MainWindow.h / .cpp # 主窗口，管理页面切换（QStackedWidget）
-│   │   ├── StartPage.h / .cpp  # 起始页面
-│   │   ├── LobbyPage.h / .cpp  # 配置与大厅页面
-│   │   ├── DeckPage.h / .cpp   # 战前选卡 & 图鉴页面
-│   │   ├── BattlePage.h / .cpp # 战斗主页面（含主视口、状态栏、操作栏）
-│   │   └── SettingsPage.h / .cpp # 系统设置页面
-│   │
-│   ├── network/                # PVP 网络模块
-│   │   ├── GameServer.h / .cpp # QTcpServer 封装（Host 端）
-│   │   ├── GameClient.h / .cpp # QTcpSocket 封装（Client 端）
-│   │   └── Protocol.h          # 网络消息协议定义（枚举 + 结构体）
-│   │
-│   └── data/                   # 文件 I/O 与数据管理
-│       ├── LevelLoader.h / .cpp   # level_config.txt 顺序读取
-│       ├── MapLoader.h / .cpp     # map_data.csv 解析
-│       └── UserProfile.h / .cpp  # user_profile.dat 二进制读写
+├── app/                                   # 【应用层】负责模块装配、页面流、游戏会话
+│   ├── CMakeLists.txt                     # 生成最终可执行程序 GameProject
+│   ├── include/app/
+│   │   ├── GameApplication.h              # 程序总入口：创建窗口、控制器、数据中心
+│   │   ├── GameSession.h                  # 当前游戏会话：PVE/PVP、地图、难度、卡组
+│   │   ├── GameController.h               # 总控制器：接收 UI 命令，调用 core/network/data
+│   │   ├── NavigationController.h         # 页面跳转控制器
+│   │   ├── GameLoop.h                     # 游戏主循环：QTimer 驱动 core 更新
+│   │   └── ViewModelMapper.h              # 把 core 数据转换成 UI ViewModel
+│   └── src/
+│       ├── main.cpp                       # QApplication 初始化，启动 GameApplication
+│       ├── GameApplication.cpp
+│       ├── GameSession.cpp
+│       ├── GameController.cpp
+│       ├── NavigationController.cpp
+│       ├── GameLoop.cpp
+│       └── ViewModelMapper.cpp
 │
-├── assets/                     # 美术与静态资源
-│   ├── images/                 # 卡牌、怪物、地形贴图（PNG / JPG）
-│   │   ├── cards/
-│   │   ├── monsters/
-│   │   └── terrain/
-│   ├── audio/                  # 音效与背景音乐（WAV / MP3）
-│   └── fonts/                  # 自定义字体文件
+├── core/                                  # 【核心逻辑层】纯 C++，不依赖 Qt
+│   ├── CMakeLists.txt                     # 编译 game_core 静态库
+│   ├── include/core/
+│   │   ├── base/
+│   │   │   ├── GameObject.h               # 游戏对象基类：ID、坐标、对象类型
+│   │   │   ├── Entity.h                   # 动态实体基类：HP、阵营、状态
+│   │   │   ├── Constants.h                # 核心逻辑常量
+│   │   │   └── CoreTypes.h                # Team、ObjectType、TerrainType 等枚举
+│   │   ├── units/
+│   │   │   ├── Card.h                     # 防御单位基类
+│   │   │   ├── AttackUnit.h               # 攻击型单位
+│   │   │   ├── ProduceUnit.h              # 生产型单位
+│   │   │   ├── HealUnit.h                 # 治疗型单位
+│   │   │   ├── Monster.h                  # 怪物基类
+│   │   │   └── MonsterTypes.h             # 怪物类型定义
+│   │   ├── map/
+│   │   │   ├── MapGrid.h                  # 单个地块：类型、高度、占用状态
+│   │   │   ├── Map.h                      # 地图容器：二维网格数组
+│   │   │   ├── MapPosition.h              # 行列坐标、世界坐标转换
+│   │   │   └── AStar.h                    # A* 寻路算法
+│   │   ├── combat/
+│   │   │   ├── DamageCalculator.h         # 伤害、高台减伤、拼点计算
+│   │   │   ├── TargetSelector.h           # 索敌优先级选择
+│   │   │   ├── Projectile.h               # 投射物逻辑
+│   │   │   ├── Buff.h                     # Buff 数据结构
+│   │   │   └── BuffManager.h              # 减速、眩晕、攻速变化等状态管理
+│   │   ├── systems/
+│   │   │   ├── BattleManager.h            # 战斗总管理：单位列表、胜负判定、update
+│   │   │   ├── ResourceManager.h          # 金币/矿石/资源点管理
+│   │   │   ├── CardSystem.h               # 卡牌部署、升级、撤回、费用判断
+│   │   │   ├── WaveSpawner.h              # 波次生成器
+│   │   │   └── SkillSystem.h              # 自动技能系统
+│   │   └── snapshot/                      # 给 app/UI 使用的只读状态快照
+│   │       ├── BattleSnapshot.h           # 当前战斗完整状态
+│   │       ├── UnitSnapshot.h             # 防御单位显示数据
+│   │       ├── MonsterSnapshot.h          # 怪物显示数据
+│   │       └── MapSnapshot.h              # 地图显示数据
+│   └── src/
+│       ├── base/ ├── units/ ├── map/ ├── combat/ ├── systems/ └── snapshot/
 │
-├── data/                       # 运行时数据文件
-│   ├── maps/                   # 各关卡地图配置
-│   │   ├── map_01.csv
-│   │   └── map_02.csv
-│   ├── levels/                 # 波次配置
-│   │   ├── level_easy.txt
-│   │   ├── level_normal.txt
-│   │   └── level_hard.txt
-│   └── save/                   # 用户存档（运行时生成）
+├── ui/                                    # 【界面层】Qt Widgets，只负责显示和交互
+│   ├── CMakeLists.txt                     # 编译 game_ui 静态库
+│   ├── include/ui/
+│   │   ├── MainWindow.h                   # 主窗口：管理 QStackedWidget
+│   │   ├── common/                        # UI 通用工具与样式
+│   │   │   ├── UiTypes.h / UiConfig.h / UiStyle.h / UiUtils.h / ResourceCache.h
+│   │   ├── pages/                         # 页面级 UI
+│   │   │   ├── StartPage.h                # 起始菜单页
+│   │   │   ├── ModePage.h                 # 模式选择页：PVE / PVP
+│   │   │   ├── PveConfigPage.h            # PVE 地图与难度选择
+│   │   │   ├── PvpLobbyPage.h             # PVP 创建房间 / 加入房间
+│   │   │   ├── DeckPage.h                 # 战前选卡 + 图鉴
+│   │   │   ├── BattlePage.h               # 战斗主页面
+│   │   │   ├── ResultPage.h               # 结算页面
+│   │   │   └── SettingsPage.h             # 设置页面
+│   │   ├── widgets/                       # 可复用 UI 控件
+│   │   │   ├── RadialMenuWidget.h         # 升级 / 移动 / 撤回环形菜单
+│   │   │   ├── StatusBarWidget.h          # 战斗顶部状态栏
+│   │   │   ├── BattleCardBarWidget.h      # 战斗底部卡牌栏
+│   │   │   ├── CardItemWidget.h / CardDetailPanel.h / DeckSlotWidget.h
+│   │   │   ├── ToastWidget.h              # 资源不足等提示
+│   │   │   └── LoadingOverlay.h           # 等待连接 / 加载中遮罩
+│   │   ├── battle/                        # 战斗视图绘制与输入
+│   │   │   ├── BattleView.h               # 战斗主视口：paintEvent + mouseEvent
+│   │   │   ├── BattleRenderer.h           # 战斗总渲染入口
+│   │   │   ├── MapRenderer.h              # 绘制地图、路径、高台、障碍
+│   │   │   ├── EntityRenderer.h           # 绘制防御单位、怪物、血条
+│   │   │   ├── EffectRenderer.h           # 绘制子弹、技能、伤害数字
+│   │   │   ├── GridOverlay.h              # 绘制高亮格、可部署格、移动范围
+│   │   │   ├── DeployPreview.h            # 部署预览层
+│   │   │   └── BattleInputHandler.h       # 鼠标输入转 UI 命令
+│   │   ├── viewmodel/                     # UI 显示用数据，不含真实游戏逻辑
+│   │   │   ├── CardViewData.h / MapViewData.h / UnitViewData.h
+│   │   │   ├── MonsterViewData.h / BattleViewState.h
+│   │   │   └── LobbyViewState.h / ResultViewData.h
+│   │   └── commands/                      # UI 发出的命令，只描述用户意图
+│   │       ├── UiCommand.h                # 通用 UI 命令定义
+│   │       ├── BattleCommand.h            # 部署、升级、移动、撤回
+│   │       ├── DeckCommand.h              # 选择卡牌、移除卡牌、确认卡组
+│   │       ├── LobbyCommand.h             # 创建房间、加入房间
+│   │       └── SettingsCommand.h          # 修改音量、分辨率等设置
+│   └── src/
+│       ├── MainWindow.cpp
+│       ├── common/ ├── pages/ ├── widgets/ └── battle/
+│
+├── network/                               # 【网络层】PVP 通信与同步
+│   ├── CMakeLists.txt                     # 编译 game_network 静态库
+│   ├── include/network/
+│   │   ├── session/                       # 连接管理
+│   │   │   ├── GameServer.h               # Host 端：监听、接受连接
+│   │   │   ├── GameClient.h               # Client 端：连接、发送数据
+│   │   │   ├── NetworkManager.h           # 网络状态机
+│   │   │   └── NetworkState.h             # 连接状态枚举
+│   │   ├── protocol/                      # 通信协议
+│   │   │   ├── Packet.h                   # 包头、包体结构
+│   │   │   ├── ProtocolDef.h              # 消息 ID：SYNC_SEED、DEPLOY、MOVE 等
+│   │   │   ├── Serializer.h               # 序列化为 QByteArray
+│   │   │   └── Deserializer.h             # 从 QByteArray 解析消息
+│   │   └── sync/                          # 同步逻辑
+│   │       ├── RandomSynchronizer.h       # 随机数种子同步
+│   │       ├── DeploymentSync.h           # 部署信息同步
+│   │       ├── ClashSync.h                # 拼点踩死同步
+│   │       └── StateValidator.h           # 双方状态校验
+│   └── src/
+│       ├── session/ ├── protocol/ └── sync/
+│
+├── data_manager/                          # 【数据层】配置读取、存档、资源索引
+│   ├── CMakeLists.txt                     # 编译 game_data_manager 静态库
+│   ├── include/data_manager/
+│   │   ├── loader/
+│   │   │   ├── MapLoader.h                # 解析 map_data.csv
+│   │   │   ├── LevelLoader.h              # 解析 level_config.txt
+│   │   │   ├── CardConfigLoader.h         # 读取卡牌配置
+│   │   │   ├── MonsterConfigLoader.h      # 读取怪物配置
+│   │   │   └── AssetRegistry.h            # ID 到资源路径的映射
+│   │   ├── persistence/
+│   │   │   ├── SaveStructure.h            # 二进制存档结构体
+│   │   │   ├── UserProfileManager.h       # user_profile.dat 读写
+│   │   │   └── SettingsStorage.h          # 音量、分辨率、窗口模式保存
+│   │   ├── config/
+│   │   │   ├── CardConfig.h               # 卡牌属性配置结构
+│   │   │   ├── MonsterConfig.h            # 怪物属性配置结构
+│   │   │   ├── LevelConfig.h              # 波次配置结构
+│   │   │   └── MapConfig.h                # 地图配置结构
+│   │   └── DataHub.h                      # 数据中心：统一访问静态配置
+│   └── src/
+│       ├── loader/ ├── persistence/ └── config/
+│
+├── resources/                             # 【Qt 资源层】打包静态资源
+│   ├── CMakeLists.txt
+│   └── resources.qrc                      # Qt 资源清单
+│
+├── assets/                                # 【原始资源】图片、音频、字体
+│   ├── images/
+│   │   ├── cards/ ├── monsters/ ├── terrain/ ├── effects/ └── ui/
+│   ├── audio/
+│   │   ├── bgm/                           # 背景音乐
+│   │   └── sfx/                           # 点击、部署、攻击、胜利等音效
+│   └── fonts/
+│
+├── data/                                  # 【运行时数据】外部配置，不参与编译
+│   ├── maps/
+│   │   ├── map_01.csv └── map_02.csv
+│   ├── levels/
+│   │   ├── level_easy.txt ├── level_normal.txt └── level_hard.txt
+│   ├── configs/
+│   │   ├── cards.json ├── monsters.json └── settings_default.json
+│   └── save/
 │       └── user_profile.dat
 │
-├── resources/                  # Qt 资源文件
-│   └── resources.qrc           # 将 assets/ 打包进可执行文件
-│
-└── docs/                       # 额外文档
-    ├── class_diagram.png       # UML 类图
-    └── ui_flow.png             # 界面流程图
+└── docs/                                  # 【项目文档】
+    ├── class_diagram.png                  # UML 类图
+    ├── ui_flow.png                        # UI 页面流程图
+    ├── architecture.md                    # 架构说明
+    ├── protocol.md                        # 网络协议说明
+    ├── data_format.md                     # 数据文件格式说明
+    └── report.docx                        # 最终报告
 ```
 
 > **分支规范**：`main` 分支保持可编译可运行；功能开发在 `feature/模块名` 分支进行；合并前须通过至少一名其他成员的 Code Review。
@@ -722,6 +855,232 @@ QPixmap attackPixmap(":/images/cards/attack_unit.png");
 | 网络连接失败 | 检查防火墙是否放行对应端口；双方是否在同一局域网段 |
 | `QTimer` 回调不触发 | 确认 `QApplication::exec()` 已运行（事件循环已启动） |
 | Windows 下运行缺 DLL | 使用 `windeployqt game.exe` 命令自动拷贝所需 Qt DLL |
+
+---
+
+## 十一、 network 模块开发指南
+
+> 本节面向负责 `game_network` 的成员，说明从零开始写网络层的顺序、关键代码结构以及测试方法。
+
+### 11.1 开发顺序
+
+```
+第一步：protocol/       ← 先定义消息格式，其他模块依赖这个
+第二步：session/        ← 实现连接建立（GameServer + GameClient）
+第三步：sync/           ← 最后写业务同步逻辑（种子、部署、拼点）
+```
+
+---
+
+### 11.2 消息协议（ProtocolDef.h / Packet.h）
+
+**消息 ID 枚举（先定好，不要随意改，改了双方必须同时更新）：**
+
+```cpp
+// ProtocolDef.h
+enum class MsgType : quint8 {
+    SYNC_SEED     = 0x01,   // 同步随机数种子
+    DEPLOY        = 0x02,   // 部署单位
+    MOVE_UNIT     = 0x03,   // 移动单位
+    UPGRADE_UNIT  = 0x04,   // 升级单位
+    RECALL_UNIT   = 0x05,   // 撤回单位
+    WAVE_START    = 0x10,   // 波次开始
+    PLAYER_READY  = 0x20,   // 准备完毕
+    PING          = 0xFE,   // 心跳检测
+    DISCONNECT    = 0xFF,   // 主动断开
+};
+```
+
+**包结构（固定包头 + 变长数据）：**
+
+```cpp
+// Packet.h
+#pragma pack(push, 1)
+struct PacketHeader {
+    quint8  msgType;    // 消息类型 ID（1 字节）
+    quint16 bodyLen;    // body 数据长度（2 字节，大端）
+};
+#pragma pack(pop)
+// 完整包 = PacketHeader（3字节）+ body（bodyLen 字节）
+```
+
+---
+
+### 11.3 连接层（GameServer / GameClient）
+
+**GameServer（Host 端）核心结构：**
+
+```cpp
+class GameServer : public QObject {
+    Q_OBJECT
+public:
+    explicit GameServer(QObject *parent = nullptr);
+    bool startListening(quint16 port = 9527);
+    void sendPacket(MsgType type, const QByteArray &body = {});
+
+signals:
+    void clientConnected();
+    void clientDisconnected();
+    void packetReceived(MsgType type, QByteArray body);
+
+private slots:
+    void onNewConnection();
+    void onReadyRead();
+
+private:
+    QTcpServer  *m_server = nullptr;
+    QTcpSocket  *m_client = nullptr;   // 只接受一个客户端
+    QByteArray   m_buffer;             // 粘包缓冲区（关键！）
+    void tryParsePackets();            // 从 m_buffer 解析完整包
+};
+```
+
+**GameClient（Client 端，结构类似）：**
+
+```cpp
+class GameClient : public QObject {
+    Q_OBJECT
+public:
+    void connectToHost(const QString &ip, quint16 port = 9527);
+    void sendPacket(MsgType type, const QByteArray &body = {});
+
+signals:
+    void connected();
+    void disconnected();
+    void packetReceived(MsgType type, QByteArray body);
+    void errorOccurred(const QString &msg);
+
+private:
+    QTcpSocket *m_socket = nullptr;
+    QByteArray  m_buffer;
+};
+```
+
+> ⚠️ **粘包处理是最大坑**：TCP 不保证一次 `readyRead` 恰好是一个完整包，可能拆开也可能多包合并。**必须用 `m_buffer` 缓冲**，根据 `PacketHeader.bodyLen` 判断是否收到完整数据后再处理，否则会随机出现解包错误。
+
+**粘包处理示意：**
+
+```cpp
+void GameServer::tryParsePackets() {
+    while (m_buffer.size() >= (int)sizeof(PacketHeader)) {
+        PacketHeader header;
+        memcpy(&header, m_buffer.constData(), sizeof(PacketHeader));
+        int totalLen = sizeof(PacketHeader) + header.bodyLen;
+        if (m_buffer.size() < totalLen) break;  // 数据还没到齐，等下一次
+
+        QByteArray body = m_buffer.mid(sizeof(PacketHeader), header.bodyLen);
+        m_buffer.remove(0, totalLen);
+        emit packetReceived(static_cast<MsgType>(header.msgType), body);
+    }
+}
+```
+
+---
+
+### 11.4 随机数种子同步（RandomSynchronizer）
+
+PVP 双方用同一个随机数种子初始化 `std::mt19937`，保证刷怪序列完全一致：
+
+```cpp
+// Host 端：生成种子，发送给对方
+quint32 seed = QRandomGenerator::global()->generate();
+QByteArray body(4, 0);
+qToBigEndian(seed, reinterpret_cast<uchar*>(body.data()));
+server->sendPacket(MsgType::SYNC_SEED, body);
+// 本地也应用同一个种子
+std::mt19937 rng(seed);
+
+// Client 端：收到包后解析种子并应用
+connect(client, &GameClient::packetReceived, [](MsgType type, QByteArray body) {
+    if (type == MsgType::SYNC_SEED) {
+        quint32 seed = qFromBigEndian<quint32>(
+            reinterpret_cast<const uchar*>(body.constData()));
+        std::mt19937 rng(seed);
+        // 通知 BattleManager 使用这个 rng
+    }
+});
+```
+
+---
+
+### 11.5 如何测试（不需要等其他模块完成）
+
+#### 方法一：同一台电脑开两个进程（优先做）
+
+在终端加命令行参数区分角色，两个终端分别运行：
+
+```bash
+# 终端 A：Host 模式
+./GameProject --host
+
+# 终端 B：Client 模式，连本机
+./GameProject --client 127.0.0.1
+```
+
+`main.cpp` 里用 `QCoreApplication::arguments()` 判断参数，初始化不同角色。
+
+#### 方法二：写独立网络测试程序（不依赖 UI / core）
+
+```cpp
+// network/test/net_test.cpp
+// 只测收发包，用 QCoreApplication 即可（不需要窗口）
+int main(int argc, char *argv[]) {
+    QCoreApplication app(argc, argv);
+
+    if (QString(argv[1]) == "server") {
+        GameServer server;
+        server.startListening(9527);
+        QObject::connect(&server, &GameServer::packetReceived,
+            [](MsgType type, QByteArray body) {
+                qDebug() << "收到包 type=" << (int)type << " body=" << body.toHex();
+            });
+        QObject::connect(&server, &GameServer::clientConnected, []() {
+            qDebug() << "客户端已连接";
+        });
+        return app.exec();
+
+    } else {
+        GameClient client;
+        client.connectToHost("127.0.0.1", 9527);
+        QObject::connect(&client, &GameClient::connected, [&client]() {
+            qDebug() << "连接成功，发送 PING";
+            client.sendPacket(MsgType::PING);
+        });
+        QObject::connect(&client, &GameClient::packetReceived,
+            [](MsgType type, QByteArray body) {
+                qDebug() << "收到回包 type=" << (int)type;
+            });
+        return app.exec();
+    }
+}
+```
+
+#### 方法三：两台电脑局域网测试
+
+手机开热点，两台电脑连同一热点。Host 电脑用以下代码获取自己的 IP 显示给对方：
+
+```cpp
+#include <QNetworkInterface>
+for (const QHostAddress &addr : QNetworkInterface::allAddresses()) {
+    if (addr.protocol() == QAbstractSocket::IPv4Protocol
+        && addr != QHostAddress::LocalHost) {
+        qDebug() << "本机 IP：" << addr.toString();
+    }
+}
+```
+
+---
+
+### 11.6 常见坑与解决方案
+
+| 坑 | 解决方案 |
+|---|---|
+| 粘包 / 半包 | 必须写 `m_buffer` 缓冲，按包头 `bodyLen` 判断完整性再处理 |
+| `readyRead` 触发但数据未全到 | 不要在 slot 里直接 parse，先 append 到 buffer，再调 `tryParsePackets()` |
+| Host IP 不知道怎么告诉对方 | 用 `QNetworkInterface::allAddresses()` 枚举本机 IP，显示在大厅页面 |
+| 两端状态不一致 | 所有操作必须发消息，**不能只在本地改状态**，两边都要执行 |
+| 对方断线没感知 | 用 `QTimer` 每 2 秒发一个 `PING`，超过 6 秒没收到任何包则判断断线 |
+| Windows 防火墙拦截 | 第一次运行时 Windows 会弹窗询问，选"允许访问"；或临时关闭防火墙测试 |
 
 ---
 
