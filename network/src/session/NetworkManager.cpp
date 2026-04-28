@@ -77,6 +77,19 @@ void NetworkManager::disconnect() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// 重连（Client 专用）
+// ═══════════════════════════════════════════════════════════════
+void NetworkManager::reconnect() {
+    if (m_role != RoomRole::Client) {
+        qWarning() << "[NetworkManager] 只有 Client 模式可以重连";
+        return;
+    }
+
+    setState(ConnectionState::Reconnecting);
+    m_client->connectToHost(m_client->serverIp(), m_client->serverPort());
+}
+
+// ═══════════════════════════════════════════════════════════════
 // 发送数据包
 // ═══════════════════════════════════════════════════════════════
 void NetworkManager::sendPacket(MsgType type, const QByteArray& body) {

@@ -1,24 +1,24 @@
 // ═══════════════════════════════════════════════════════════════
-// 网络模块完整流程测试
+// 网络模块完整流程测试 v2
 //
-// 模拟完整游戏流程：
-//   阶段一：建房与加入
-//     1. Host 启动，监听端口 9527
-//     2. Client 连接 Host，发送 JOIN_ROOM（携带昵称）
-//     3. Host 回复 JOIN_ACK（携带房主昵称）
+// 升级点（相比 v1）：
+//   - ROUND_VALUE 不再传字符串，改为 WaveStartPayload 二进制格式
+//   - Serializer::serialize(WaveStartPayload) 演示 struct 序列化
+//   - Deserializer::decode(WaveStartPayload) 演示 struct 反序列化
+//   - PING/PONG 心跳已内置（GameServer/GameClient 自动处理）
 //
-//   阶段二：准备阶段
-//     4. 双方各自调用 setReady()，发送 PLAYER_READY
-//     5. Host 检测到双方都 ready → 生成种子 → 广播 GAME_START
-//
-//   阶段三：游戏主循环（用 RoundManager 模拟"部署+进攻"轮次）
-//     6. Host 广播 ROUND_VALUE（模拟"本轮怪物数据"）
-//     7. 双方各自"处理"后调用 localAck()
-//     8. Host 收到双方 ack → 广播 ROUND_COMPLETE → 下一轮
+// 流程：
+//   1. Host 启动，监听端口 9527
+//   2. Client 连接 → 发送 JOIN_ROOM
+//   3. Host 回复 JOIN_ACK
+//   4. 双方准备 → GAME_START（含 RNG 种子）
+//   5. Host 广播 WAVE_START（waveId），双方用种子独立生成怪物
+//   6. 双方处理后 ACK，Host 确认双方完成 → 下一轮
+//   7. 心跳每 2 秒一次，自动检测断线
 //
 // 运行方式（两个终端）：
-//   终端 A（Host）:   ./NetworkTest server [你的昵称]
-//   终端 B（Client）: ./NetworkTest client [你的昵称] [Host的IP]
+//   终端 A（Host）:   ./NetworkTest server [昵称]
+//   终端 B（Client）: ./NetworkTest client [昵称] [Host的IP]
 //
 // 局域网测试：
 //   Host: ./NetworkTest server
@@ -35,8 +35,26 @@
 #include "network/session/LobbyManager.h"
 #include "network/session/RoundManager.h"
 #include "network/protocol/ProtocolDef.h"
+#include "network/protocol/Serializer.h"
+#include "network/protocol/Deserializer.h"
 
 using namespace game::network;
+
+// 演示用：双方各自持有一个 RNG（种子相同）
+static std::mt19937 g_rng(0);  // 会收到 seed 后重新初始化
+
+// ─── 辅助：打印收到的 WaveStartPayload ───
+static void dumpWavePacket(const QByteArray& body) {
+    Deserializer d(body);
+    WaveStartPayload p;
+    if (d.decode(p)) {
+        qInfo() << "  └─ WaveStartPayload { waveId =" << p.waveId
+                << ", reserved =" << (int)p.reserved[0]
+                << (int)p.reserved[1] << (int)p.reserved[2] << "}";
+    } else {
+        qWarning() << "  └─ 解析 WaveStartPayload 失败（数据不完整）";
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // HOST 模式
@@ -59,7 +77,7 @@ static void runAsHost(const QString& nickname) {
             server.sendPacket(type, body);
         });
 
-    // ─── 网络包路由：根据消息类型分发给不同 Manager ───
+    // ─── 网络包路由 ───
     QObject::connect(&server, &GameServer::packetReceived,
         [](MsgType type, const QByteArray& body) {
             // 大厅阶段消息
@@ -77,9 +95,8 @@ static void runAsHost(const QString& nickname) {
     QObject::connect(&lobby, &LobbyManager::peerJoined, [](const QString& name) {
         qInfo() << "\n[Host 大厅] ✓ 玩家加入：" << name;
         qInfo() << "[Host 大厅] 提示：等待双方点击准备...";
-        // 模拟 Host 自动准备（1秒后）
         QTimer::singleShot(1000, []() {
-            qInfo() << "[Host 大厅] 房主点击准备！";
+            qInfo() << "[Host 大厅] 房主自动准备！";
             lobby.setReady();
         });
     });
@@ -92,45 +109,76 @@ static void runAsHost(const QString& nickname) {
         qInfo() << "[Host 大厅] 对方取消准备";
     });
 
-    // ─── 游戏开始（LobbyManager 触发） ───
+    // ─── 游戏开始 ───
     QObject::connect(&lobby, &LobbyManager::gameStarted, [](quint32 seed) {
-        qInfo() << "\n[Host] ===================================================";
-        qInfo() << "[Host] ===== 游戏开始！随机种子 =" << seed << "=====";
-        qInfo() << "[Host] ===================================================\n";
+        qInfo() << "\n[Host] ═══════════════════════════════════════";
+        qInfo() << "[Host] 游戏开始！随机种子 =" << seed;
+        qInfo() << "[Host] ═══════════════════════════════════════\n";
 
-        // 500ms 后广播第一轮数据
+        // 用种子初始化本地 RNG（Client 也会用相同 seed 初始化，保证怪物序列一致）
+        g_rng.seed(seed);
+
+        // 500ms 后广播第一轮
         QTimer::singleShot(500, []() {
-            // 模拟"第1轮怪物出兵数据"
-            QString data = QString("wave_%1:monsters=[3,1,2],interval=2000").arg(roundNum);
-            qInfo() << "[Host 游戏] 广播第" << roundNum << "轮数据：" << data;
-            round.sendRoundValue(data.toUtf8());
+            WaveStartPayload payload;
+            payload.waveId = 1;
+            payload.reserved[0] = payload.reserved[1] = payload.reserved[2] = 0;
+
+            QByteArray data = Serializer::serialize(payload);
+            qInfo() << "[Host 游戏] 广播 WAVE_START（第 1 波）："
+                    << "waveId=1, seed 已应用";
+            round.sendRoundValue(data);
         });
     });
 
-    // ─── 轮次：本地处理（模拟耗时） ───
-    QObject::connect(&round, &RoundManager::valueReceived, [](const QByteArray& value) {
-        qInfo() << "\n[Host 游戏] 处理本轮数据：" << value;
-        qInfo() << "[Host 游戏] 模拟处理耗时 500ms...";
-        QTimer::singleShot(500, []() {
-            qInfo() << "[Host 游戏] 本地处理完成 → localAck()";
-            round.localAck();
-        });
-    });
+    // ─── 轮次：收到 WAVE_START，处理 ───
+    QObject::connect(&round, &RoundManager::valueReceived,
+        [](const QByteArray& value) {
+            qInfo() << "\n[Host 游戏] 收到本轮数据：";
+            dumpWavePacket(value);
 
-    // ─── 轮次：双方都 ack → 下一轮 ───
+            // 演示：用 seed + waveId 生成一致的怪物序列（Client 侧也这样算）
+            // 这里只打印，实际由 PVP 组的逻辑调用
+            Deserializer d(value);
+            WaveStartPayload p;
+            if (d.decode(p)) {
+                qInfo() << "[Host 游戏] 用 seed+waveId 生成怪物序列中...";
+                // g_rng() 返回相同序列（因为 Client 侧用相同 seed）
+            }
+
+            qInfo() << "[Host 游戏] 模拟处理耗时 500ms...";
+            QTimer::singleShot(500, []() {
+                qInfo() << "[Host 游戏] 本地处理完成 → localAck()";
+                round.localAck();
+            });
+        });
+
+    // ─── 轮次：双方都 ACK → 下一轮 ───
     QObject::connect(&round, &RoundManager::allAcked, []() {
-        ++roundNum;
-        qInfo() << "\n[Host 游戏] ===== 本轮完成，1.5秒后广播第" << roundNum << "轮 =====";
-        QTimer::singleShot(1500, []() {
-            QString data = QString("wave_%1:monsters=[2,3,4],interval=1500").arg(roundNum);
-            qInfo() << "[Host 游戏] 广播第" << roundNum << "轮数据：" << data;
-            round.sendRoundValue(data.toUtf8());
+        static int roundNum = 2;
+        qInfo() << "\n[Host 游戏] ═══ 本轮完成，准备下一轮 ═══";
+        QTimer::singleShot(1500, [=]() {
+            WaveStartPayload payload;
+            payload.waveId = roundNum;
+            payload.reserved[0] = payload.reserved[1] = payload.reserved[2] = 0;
+
+            qInfo() << "[Host 游戏] 广播 WAVE_START（第" << roundNum << "波）";
+            round.sendRoundValue(Serializer::serialize(payload));
+            roundNum++;
         });
     });
 
     QObject::connect(&round, &RoundManager::roundComplete, []() {
-        qInfo() << "[Host 游戏] 第" << (roundNum - 1) << "轮完成 ✓";
+        qInfo() << "[Host 游戏] 轮次完成 ✓";
     });
+
+    // ─── 心跳日志（收到 PING/PONG 时自动打印）───
+    QObject::connect(&server, &GameServer::packetReceived,
+        [](MsgType type, const QByteArray&) {
+            if (type == MsgType::PONG) {
+                qInfo() << "[Host 心跳] ✓ PONG 收到，连接正常";
+            }
+        });
 
     // ─── 连接/断开事件 ───
     QObject::connect(&server, &GameServer::clientConnected, []() {
@@ -139,7 +187,7 @@ static void runAsHost(const QString& nickname) {
     });
 
     QObject::connect(&server, &GameServer::clientDisconnected, []() {
-        qInfo() << "[Host] 客户端断开连接";
+        qCritical() << "[Host] ⚠ 客户端断开连接！";
     });
 
     QObject::connect(&server, &GameServer::errorOccurred, [](const QString& msg) {
@@ -149,13 +197,14 @@ static void runAsHost(const QString& nickname) {
     // 启动监听
     if (server.startListening(9527)) {
         qInfo() << "╔════════════════════════════════════════╗";
-        qInfo() << "║         HOST 模式启动                  ║";
+        qInfo() << "║         HOST 模式启动                 ║";
         qInfo() << "║  昵称：" << nickname;
-        qInfo() << "║  监听端口：9527                         ║";
-        qInfo() << "║  等待 Client 连接...                   ║";
+        qInfo() << "║  监听端口：9527                        ║";
+        qInfo() << "║  心跳：每 2 秒 PING/PONG              ║";
+        qInfo() << "║  等待 Client 连接...                  ║";
         qInfo() << "╚════════════════════════════════════════╝\n";
     } else {
-        qCritical() << "[Host] 监听失败！端口 9527 可能被占用";
+        qCritical() << "[Host] 监听失败！端口可能被占用";
     }
 }
 
@@ -196,9 +245,8 @@ static void runAsClient(const QString& nickname, const QString& hostIp) {
     QObject::connect(&lobby, &LobbyManager::peerJoined, [](const QString& name) {
         qInfo() << "\n[Client 大厅] ✓ 进入房间，房主：" << name;
         qInfo() << "[Client 大厅] 提示：等待双方点击准备...";
-        // 模拟 Client 自动准备（1.5秒后）
         QTimer::singleShot(1500, []() {
-            qInfo() << "[Client 大厅] 玩家点击准备！";
+            qInfo() << "[Client 大厅] 玩家自动准备！";
             lobby.setReady();
         });
     });
@@ -207,47 +255,69 @@ static void runAsClient(const QString& nickname, const QString& hostIp) {
         qInfo() << "[Client 大厅] 房主已准备 ✓";
     });
 
-    // ─── 游戏开始（收到 Host 广播的 GAME_START） ───
+    // ─── 游戏开始 ───
     QObject::connect(&lobby, &LobbyManager::gameStarted, [](quint32 seed) {
-        qInfo() << "\n[Client] ===================================================";
-        qInfo() << "[Client] ===== 游戏开始！随机种子 =" << seed << "=====";
-        qInfo() << "[Client] ===================================================\n";
-        qInfo() << "[Client 游戏] 等待 Host 广播轮次数据...";
+        qInfo() << "\n[Client] ═══════════════════════════════════════";
+        qInfo() << "[Client] 游戏开始！随机种子 =" << seed;
+        qInfo() << "[Client] ═══════════════════════════════════════\n";
+
+        // Client 也用相同 seed 初始化 RNG
+        g_rng.seed(seed);
+        qInfo() << "[Client] 已用 seed 初始化本地 RNG，等待 WAVE_START...";
     });
 
-    // ─── 轮次：收到数据，处理后 ack ───
-    QObject::connect(&round, &RoundManager::valueReceived, [](const QByteArray& value) {
-        qInfo() << "\n[Client 游戏] 收到本轮数据：" << value;
-        qInfo() << "[Client 游戏] 模拟处理耗时 800ms...";
-        QTimer::singleShot(800, []() {
-            qInfo() << "[Client 游戏] 本地处理完成 → localAck()";
-            round.localAck();
+    // ─── 轮次：收到 WAVE_START，处理 ───
+    QObject::connect(&round, &RoundManager::valueReceived,
+        [](const QByteArray& value) {
+            qInfo() << "\n[Client 游戏] 收到本轮数据：";
+            dumpWavePacket(value);
+
+            Deserializer d(value);
+            WaveStartPayload p;
+            if (d.decode(p)) {
+                qInfo() << "[Client 游戏] 用 seed+waveId 生成怪物序列中...";
+                // g_rng() 返回相同序列（因为 Client 侧用相同 seed 初始化）
+                // 即便两边分别计算，结果也完全一致
+            }
+
+            qInfo() << "[Client 游戏] 模拟处理耗时 800ms...";
+            QTimer::singleShot(800, []() {
+                qInfo() << "[Client 游戏] 本地处理完成 → localAck()";
+                round.localAck();
+            });
         });
-    });
 
     QObject::connect(&round, &RoundManager::roundComplete, []() {
         qInfo() << "[Client 游戏] 本轮完成 ✓，等待下一轮...";
     });
 
-    // ─── 连接成功 → 发送 JOIN_ROOM ───
+    // ─── 心跳日志 ───
+    QObject::connect(&client, &GameClient::packetReceived,
+        [](MsgType type, const QByteArray&) {
+            if (type == MsgType::PONG) {
+                qInfo() << "[Client 心跳] ✓ PONG 收到，连接正常";
+            }
+        });
+
+    // ─── 连接成功 ───
     QObject::connect(&client, &GameClient::connected, []() {
         qInfo() << "[Client] TCP 连接成功，发送加入请求...";
         lobby.onPeerConnected();
     });
 
     QObject::connect(&client, &GameClient::disconnected, []() {
-        qInfo() << "[Client] 与服务器断开连接";
+        qCritical() << "[Client] ⚠ 与服务器断开连接";
     });
 
     QObject::connect(&client, &GameClient::errorOccurred, [](const QString& msg) {
         qCritical() << "[Client] 错误：" << msg;
     });
 
-    // 发起连接
     qInfo() << "╔════════════════════════════════════════╗";
-    qInfo() << "║         CLIENT 模式启动                 ║";
+    qInfo() << "║         CLIENT 模式启动                ║";
     qInfo() << "║  昵称：" << nickname;
     qInfo() << "║  连接目标：" << hostIp << ":9527";
+    qInfo() << "║  心跳：每 2 秒 PING/PONG              ║";
     qInfo() << "╚════════════════════════════════════════╝\n";
     client.connectToHost(hostIp, 9527);
 }
@@ -270,6 +340,11 @@ int main(int argc, char* argv[]) {
         qInfo() << "示例（局域网两台电脑）：";
         qInfo() << "  Host电脑: ./NetworkTest server 房主";
         qInfo() << "  另一台:   ./NetworkTest client 玩家2 192.168.x.x";
+        qInfo() << "";
+        qInfo() << "测试内容：";
+        qInfo() << "  - WAVE_START 用 WaveStartPayload 二进制格式";
+        qInfo() << "  - Serializer/Deserializer 完整序列化演示";
+        qInfo() << "  - PING/PONG 心跳自动检测断线";
         return 1;
     }
 

@@ -41,6 +41,7 @@ public:
     // ═══════════════════════════════════════════════════════════
     ConnectionState state() const { return m_state; }
     QString serverIp() const { return m_serverIp; }
+    quint16 serverPort() const { return m_serverPort; }
 
 signals:
     // ═══════════════════════════════════════════════════════════

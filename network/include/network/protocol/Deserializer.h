@@ -86,6 +86,66 @@ public:
         return true;
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // 反序列化业务结构体（失败返回 false，数据不完整自动截断）
+    // ═══════════════════════════════════════════════════════════
+
+    // WaveStartPayload → 4 字节
+    bool decode(WaveStartPayload& out) {
+        if (!hasData(4)) return false;
+        out.waveId = static_cast<quint8>(m_data[m_pos]);
+        std::memcpy(out.reserved, m_data.constData() + m_pos + 1, 3);
+        m_pos += 4;
+        return true;
+    }
+
+    // DeployPayload → 4 字节
+    bool decode(DeployPayload& out) {
+        if (!hasData(4)) return false;
+        out.cardKind = static_cast<quint8>(m_data[m_pos]);
+        out.row      = static_cast<quint8>(m_data[m_pos + 1]);
+        out.col      = static_cast<quint8>(m_data[m_pos + 2]);
+        out.unitId   = static_cast<quint8>(m_data[m_pos + 3]);
+        m_pos += 4;
+        return true;
+    }
+
+    // UpgradePayload → 2 字节
+    bool decode(UpgradePayload& out) {
+        if (!hasData(2)) return false;
+        out.unitId      = static_cast<quint8>(m_data[m_pos]);
+        out.targetLevel = static_cast<quint8>(m_data[m_pos + 1]);
+        m_pos += 2;
+        return true;
+    }
+
+    // RecallPayload → 1 字节
+    bool decode(RecallPayload& out) {
+        return decodeUint8(out.unitId);
+    }
+
+    // CoreHpPayload → 4 字节
+    bool decode(CoreHpPayload& out) {
+        return decodeUint32(out.hp);
+    }
+
+    // ResourcePayload → 4 字节
+    bool decode(ResourcePayload& out) {
+        return decodeUint32(out.amount);
+    }
+
+    // ─── 大厅消息快捷反序列化 ───
+
+    // JOIN_ROOM body: nickname
+    bool decodeJoinRoom(QString& nickname) { return decodeString(nickname); }
+
+    // JOIN_ACK body: hostname
+    bool decodeJoinAck(QString& hostname) { return decodeString(hostname); }
+
+    // GAME_START / SYNC_SEED body: seed
+    bool decodeGameStart(quint32& seed) { return decodeUint32(seed); }
+    bool decodeSyncSeed(quint32& seed) { return decodeUint32(seed); }
+
 private:
     const QByteArray& m_data;
     size_t m_pos;

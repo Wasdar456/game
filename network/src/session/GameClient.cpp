@@ -190,9 +190,17 @@ void GameClient::tryParsePackets() {
         MsgType type = static_cast<MsgType>(header.msgType);
 
         if (type == MsgType::PING) {
-            // 收到 PING，回复 PONG（用 PING 作为心跳响应）
+            // 收到 PING，立即回 PONG
+            sendPacket(MsgType::PONG);
             m_lastPongTime = QDateTime::currentMSecsSinceEpoch();
-            qDebug() << "[GameClient] 收到心跳";
+            qDebug() << "[GameClient] 收到PING，回PONG";
+            continue;
+        }
+
+        if (type == MsgType::PONG) {
+            // 收到 PONG，更新时间戳
+            m_lastPongTime = QDateTime::currentMSecsSinceEpoch();
+            qDebug() << "[GameClient] 收到PONG ✓";
             continue;
         }
 

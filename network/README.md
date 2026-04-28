@@ -44,7 +44,8 @@
 | `ROUND_VALUE` | 0x60 | S→C | Host 广播值（测试用字符串） |
 | `ROUND_ACK` | 0x61 | C→S | Client 确认本轮处理完毕 |
 | `ROUND_COMPLETE` | 0x62 | S→C | 本轮完成（双方 ack 后广播） |
-| `PING` | 0xFE | 双向 | 心跳 |
+| `PING` | 0xFE | 双向 | 心跳请求（发 PING 的一方用） |
+| `PONG` | 0xFD | 双向 | 心跳响应（收到 PING 后回 PONG） |
 | `DISCONNECT` | 0xFF | 双向 | 主动断开 |
 
 ---
@@ -57,7 +58,7 @@
 | `GameClient.h/cpp` | Client 端：QTcpSocket 连接 + 粘包处理 |
 | `LobbyManager.h/cpp` | 大厅握手流程（加入房间→双方准备→游戏开始） |
 | `RoundManager.h/cpp` | 广播 + 双方确认机制（Host 广播→双方 ack→下一轮） |
-| `NetworkManager.h/cpp` | 网络状态机（Idle/Connecting/Handshaking/InGame） |
+| `NetworkManager.h/cpp` | 网络状态机（Disconnected/Connecting/Connected/Negotiating/Ready/**Reconnecting**/Error） |
 
 ---
 
@@ -74,16 +75,23 @@
 
 ### 1.4 测试程序（net_test/）
 
-**可独立运行，无需 UI / core 模块：**
+**可独立运行，无需 UI / core 模块（v2 版本）：**
 
 ```
 net_test/
-├── main.cpp              # 完整流程测试脚本
+├── main.cpp              # 完整流程测试脚本（v2）
 ├── CMakeLists.txt        # 构建配置
 └── build/                # 编译产物（Qt Creator Build 后生成）
     └── Qt_6_11_0_for_macOS-Debug/
         └── NetworkTest   # 可执行文件
 ```
+
+**v2 升级内容**：
+- WAVE_START 改用 `WaveStartPayload` 二进制格式（4 字节）
+- `Serializer::serialize()` / `Deserializer::decode()` 完整实现
+- PING/PONG 心跳逻辑修复（收到 PING → 回 PONG；收到 PONG → 重置计时器）
+- 新增 `Reconnecting` 状态 + 断线重连功能
+- Lobby 大厅消息辅助函数（`buildJoinRoom` / `buildJoinAck` / `buildGameStart` / `buildSyncSeed`）
 
 ---
 
@@ -164,10 +172,12 @@ cd /Users/wangzihan/Desktop/Study/C++/game/net_test/build/Qt_6_11_0_for_macOS-De
 2. Host 回复 JOIN_ACK
 3. ~1秒后双方自动点"准备"（PLAYER_READY）
 4. Host 检测双方都 ready → 广播 GAME_START（含种子）
-5. Host 广播第 1 轮 ROUND_VALUE（当前是字符串模拟）
-6. 双方处理后各自 localAck()
-7. Host 收到双方 ack → 广播 ROUND_COMPLETE → 下一轮
-8. 无限循环下一轮...
+5. Host 广播第 1 轮 WAVE_START（WaveStartPayload 二进制，4字节）
+6. 双方用种子 + waveId 独立生成相同怪物序列
+7. 双方处理后各自 localAck()
+8. Host 收到双方 ack → 广播 ROUND_COMPLETE → 下一波
+9. 无限循环下一波...
+10. 心跳：每 2 秒 PING/PONG 自动保活
 ```
 
 ### 3.4 局域网测试（两台电脑）
@@ -253,12 +263,12 @@ struct ResourcePayload {
 
 | 任务 | 优先级 | 说明 |
 |:---|:---:|:---|
-| Serializer/Deserializer 实现 | 🔴 高 | 目前只有头文件，需要补充 `struct → bytes` 和 `bytes → struct` 的完整实现 |
-| `RoundManager` 正式版替换 | 🟡 中 | 当前 ROUND_VALUE 用字符串模拟，正式版换成 `WaveStartPayload` |
+| Serializer/Deserializer 实现 | ✅ 完成 | v2：所有 struct 的 serialize/decode 方法已实现 |
+| `RoundManager` 正式版替换 | ✅ 完成 | v2：WAVE_START 改用 `WaveStartPayload` 二进制格式 |
 | `ClashSync` 拼点逻辑 | 🟡 中 | 框架已搭，需要填入拼点公式和冲突处理 |
 | `StateValidator` 状态校验 | 🟡 中 | 防止客户端作弊，当前只有框架 |
-| 断线重连 | 🟢 低 | 断线后重新加入房间的流程 |
-| PING 心跳保活 | 🟢 低 | `NetworkManager` 需要定时发 PING，检测断线 |
+| 断线重连 | ✅ 完成 | v2：`Reconnecting` 状态 + `reconnect()` 方法已实现 |
+| PING 心跳保活 | ✅ 完成 | v2：Server 发 PING，Client 回 PONG，超时判定断线 |
 
 ### 5.3 UI 层对接（交给 UI 组）
 
@@ -334,6 +344,7 @@ net_test/                                # 独立测试程序
 | `readyRead` 触发但数据不完整 | TCP 粘包，不能在 slot 里直接 parse | 用 `m_buffer` 缓冲，按 `bodyLen` 判断完整性再处理 |
 | 改了 `ProtocolDef.h` 后测试没变化 | Qt Creator 没有重新 Build | 修改协议头文件后必须 Rebuild（Ctrl+Shift+B） |
 | 怪物两边不一致 | 双方 RNG 种子不同步 | GAME_START 时 Host 生成 seed 广播，两边都用同一 seed 初始化 |
+| `QByteArray::push_back(3, '\0')` 编译报错 | `QByteArray::push_back(char)` 不接受双参数 | 改用 `append(count, value)` |
 
 ---
 

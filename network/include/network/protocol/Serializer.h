@@ -68,6 +68,73 @@ public:
         result.append(utf8);
         return result;
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // 序列化业务结构体
+    // ═══════════════════════════════════════════════════════════
+
+    // WaveStartPayload → 4 字节
+    static QByteArray serialize(const WaveStartPayload& p) {
+        QByteArray d;
+        d.push_back(static_cast<char>(p.waveId));
+        d.append(3, '\0');  // reserved[3]
+        return d;
+    }
+
+    // DeployPayload → 4 字节
+    static QByteArray serialize(const DeployPayload& p) {
+        QByteArray d;
+        d.push_back(static_cast<char>(p.cardKind));
+        d.push_back(static_cast<char>(p.row));
+        d.push_back(static_cast<char>(p.col));
+        d.push_back(static_cast<char>(p.unitId));
+        return d;
+    }
+
+    // UpgradePayload → 2 字节
+    static QByteArray serialize(const UpgradePayload& p) {
+        QByteArray d;
+        d.push_back(static_cast<char>(p.unitId));
+        d.push_back(static_cast<char>(p.targetLevel));
+        return d;
+    }
+
+    // RecallPayload → 1 字节
+    static QByteArray serialize(const RecallPayload& p) {
+        return encodeUint8(p.unitId);
+    }
+
+    // CoreHpPayload → 4 字节
+    static QByteArray serialize(const CoreHpPayload& p) {
+        return encodeUint32(p.hp);
+    }
+
+    // ResourcePayload → 4 字节
+    static QByteArray serialize(const ResourcePayload& p) {
+        return encodeUint32(p.amount);
+    }
+
+    // ─── 大厅消息快捷序列化 ───
+
+    // JOIN_ROOM body: nickname（字符串）
+    static QByteArray buildJoinRoom(const QString& nickname) {
+        return encodeString(nickname);
+    }
+
+    // JOIN_ACK body: hostname（字符串）
+    static QByteArray buildJoinAck(const QString& hostname) {
+        return encodeString(hostname);
+    }
+
+    // GAME_START body: seed（4字节大端序）
+    static QByteArray buildGameStart(quint32 seed) {
+        return encodeUint32(seed);
+    }
+
+    // SYNC_SEED body: seed（4字节大端序）
+    static QByteArray buildSyncSeed(quint32 seed) {
+        return encodeUint32(seed);
+    }
 };
 
 } // namespace network

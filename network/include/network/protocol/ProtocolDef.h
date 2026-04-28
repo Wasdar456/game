@@ -47,7 +47,8 @@ enum class MsgType : uint8_t {
     ROUND_COMPLETE = 0x62,   // 双方都确认，本轮完成
 
     // ─── 系统 ───
-    PING           = 0xFE,   // 心跳检测
+    PING           = 0xFE,   // 心跳请求（发PING的一方用）
+    PONG           = 0xFD,   // 心跳响应（收到PING后回PONG）
     DISCONNECT     = 0xFF    // 主动断开
 };
 
@@ -80,6 +81,7 @@ inline const char* msgTypeName(MsgType type) {
         case MsgType::ROUND_ACK:      return "ROUND_ACK";
         case MsgType::ROUND_COMPLETE: return "ROUND_COMPLETE";
         case MsgType::PING:           return "PING";
+        case MsgType::PONG:           return "PONG";
         case MsgType::DISCONNECT:     return "DISCONNECT";
         default:                      return "UNKNOWN";
     }

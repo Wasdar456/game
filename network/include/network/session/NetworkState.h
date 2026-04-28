@@ -15,6 +15,7 @@ enum class ConnectionState {
     Connected,       // 已连接
     Negotiating,     // 协商中（版本验证等）
     Ready,           // 准备就绪（可以开始游戏）
+    Reconnecting,   // 断线重连中
     Error           // 发生错误
 };
 
@@ -37,6 +38,7 @@ inline const char* connectionStateName(ConnectionState state) {
         case ConnectionState::Connected:      return "Connected";
         case ConnectionState::Negotiating:    return "Negotiating";
         case ConnectionState::Ready:          return "Ready";
+        case ConnectionState::Reconnecting: return "Reconnecting";
         case ConnectionState::Error:          return "Error";
         default:                              return "Unknown";
     }
