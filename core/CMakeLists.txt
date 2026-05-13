@@ -1,0 +1,71 @@
+add_library(game_core STATIC)
+
+target_sources(game_core
+    PRIVATE
+        src/base/Entity.cpp
+        src/base/GameObject.cpp
+        src/combat/Buff.cpp
+        src/combat/BuffManager.cpp
+        src/combat/DamageCalculator.cpp
+        src/combat/Projectile.cpp
+        src/combat/TargetSelector.cpp
+        src/map/AStar.cpp
+        src/map/Map.cpp
+        src/map/MapGrid.cpp
+        src/map/MapPosition.cpp
+        src/snapshot/BattleSnapshot.cpp
+        src/snapshot/MapSnapshot.cpp
+        src/snapshot/MonsterSnapshot.cpp
+        src/snapshot/UnitSnapshot.cpp
+        src/systems/BattleManager.cpp
+        src/systems/CardSystem.cpp
+        src/systems/ResourceManager.cpp
+        src/systems/SkillSystem.cpp
+        src/systems/WaveSpawner.cpp
+        src/units/AttackUnit.cpp
+        src/units/Card.cpp
+        src/units/HealUnit.cpp
+        src/units/Monster.cpp
+        src/units/ProduceUnit.cpp
+    PUBLIC
+        include/core/base/Constants.h
+        include/core/base/CoreTypes.h
+        include/core/base/Entity.h
+        include/core/base/GameObject.h
+        include/core/combat/Buff.h
+        include/core/combat/BuffManager.h
+        include/core/combat/DamageCalculator.h
+        include/core/combat/Projectile.h
+        include/core/combat/TargetSelector.h
+        include/core/map/AStar.h
+        include/core/map/Map.h
+        include/core/map/MapGrid.h
+        include/core/map/MapPosition.h
+        include/core/snapshot/BattleSnapshot.h
+        include/core/snapshot/MapSnapshot.h
+        include/core/snapshot/MonsterSnapshot.h
+        include/core/snapshot/UnitSnapshot.h
+        include/core/systems/BattleManager.h
+        include/core/systems/CardSystem.h
+        include/core/systems/ResourceManager.h
+        include/core/systems/SkillSystem.h
+        include/core/systems/WaveSpawner.h
+        include/core/units/AttackUnit.h
+        include/core/units/Card.h
+        include/core/units/HealUnit.h
+        include/core/units/Monster.h
+        include/core/units/MonsterTypes.h
+        include/core/units/ProduceUnit.h
+)
+
+target_include_directories(game_core
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_compile_features(game_core
+    PUBLIC
+        cxx_std_17
+)
+
+add_library(GameProject::core ALIAS game_core)
