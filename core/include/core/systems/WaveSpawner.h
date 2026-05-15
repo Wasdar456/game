@@ -1,0 +1,57 @@
+#ifndef GAMEPROJECT_CORE_SYSTEMS_WAVESPAWNER_H
+#define GAMEPROJECT_CORE_SYSTEMS_WAVESPAWNER_H
+
+#include "core/units/MonsterTypes.h"
+#include <cstdint>
+#include <memory>
+#include <random>
+#include <utility>
+#include <vector>
+
+namespace game::core {
+
+// 单波怪物配置。后续 data_manager 读取 level_config.txt 后可直接生成此结构。
+struct WaveConfig {
+    int waveId = 1;
+    MonsterKind kind = MonsterKind::AtkNormal;
+    int count = 5;
+    double intervalSeconds = 1.0;
+    double healthMultiplier = 1.0;
+};
+
+// 波次生成器。
+//
+// 支持两种模式：
+// 1. spawnWave(config)：按外部配置生成；
+// 2. spawnDeterministicWave(waveId)：用同步 RNG 生成 PVP 可复现波次。
+class WaveSpawner {
+public:
+    explicit WaveSpawner(int firstMonsterId = 1000);
+
+    void setSeed(std::uint32_t seed);
+    void setSpawnPoint(MapPosition spawnPoint) { spawnPoint_ = spawnPoint; }
+    void setDefaultPath(std::vector<MapPosition> path) { defaultPath_ = std::move(path); }
+
+    // 按指定配置生成怪物，并给每只怪设置默认路径。
+    std::vector<std::shared_ptr<Monster>> spawnWave(const WaveConfig& config);
+
+    // 根据 waveId 和 rng_ 生成确定性波次，适合 PVP 双端同步。
+    std::vector<std::shared_ptr<Monster>> spawnDeterministicWave(int waveId);
+
+private:
+    // 按波次阶段随机选择怪物类型。
+    MonsterKind randomMonsterKind(int waveId);
+
+    // 下一个怪物 id。
+    int nextMonsterId_;
+    // 怪物出生点。
+    MapPosition spawnPoint_;
+    // 当前关卡默认行走路径。
+    std::vector<MapPosition> defaultPath_;
+    // 同步随机数引擎。网络层同步 seed 后应调用 setSeed。
+    std::mt19937 rng_;
+};
+
+} // namespace game::core
+
+#endif // GAMEPROJECT_CORE_SYSTEMS_WAVESPAWNER_H

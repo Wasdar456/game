@@ -1,3 +1,6 @@
+cmake_minimum_required(VERSION 3.16)
+project(GameCore LANGUAGES CXX)
+
 add_library(game_core STATIC)
 
 target_sources(game_core
