@@ -1,0 +1,35 @@
+# Build output
+build/
+
+# IDE config
+.qtcreator/
+.vscode/
+
+# Compiled objects
+*.obj
+*.o
+*.exe
+*.pdb
+
+# Qt generated
+moc_*
+ui_*
+qrc_*
+*.autogen/
+
+# CMake generated
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+.ninja_deps
+.ninja_log
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temp files
+*.log
+*.tmp
