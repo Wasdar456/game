@@ -141,4 +141,3 @@ QStringList StateValidator::compareWith(const QMap<int, UnitSnapshot>& other) co
 
 } // namespace network
 } // namespace game
-#include "StateValidator.moc"

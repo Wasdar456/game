@@ -62,4 +62,3 @@ quint32 RandomSynchronizer::parseSeedFromBody(const QByteArray& body) {
 
 } // namespace network
 } // namespace game
-#include "RandomSynchronizer.moc"

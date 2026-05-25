@@ -199,4 +199,3 @@ void NetworkManager::connectClientSignals() {
 
 } // namespace network
 } // namespace game
-#include "NetworkManager.moc"

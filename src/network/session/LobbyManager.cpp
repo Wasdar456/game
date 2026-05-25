@@ -188,4 +188,3 @@ void LobbyManager::setState(LobbyState s) {
 
 } // namespace network
 } // namespace game
-#include "LobbyManager.moc"

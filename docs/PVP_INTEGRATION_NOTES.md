@@ -7,6 +7,8 @@
 - AOE 卡牌具备 1 格溅射半径，UI 会显示占位范围圈。
 - 攻击型怪物会在射程内攻击双方防御塔，目前表现为紫色投射物。
 - PVP 战斗阶段禁用部署、移动、升级、撤回，战斗只观看。
+- `BATTLE_STATE` 已从 `BattlePage` 抽离到 `BattleStateCodec`，联机快照编码/解码/checksum 不再混在页面里。
+- 清理了网络 `.cpp` 中无效的手写 `.moc` include，构建时不再刷 AutoMoc warning。
 
 ## 测试方法
 
@@ -27,6 +29,7 @@
    - 双方点击开战。
    - 战斗阶段底部卡牌应不可用，点击地图单位不应弹出操作菜单。
    - 子弹、怪物血量、双方单位血量应通过 Host 快照同步显示。
+   - 控制台不应再出现 `includes the moc file ... but does not contain Q_OBJECT` 这类 AutoMoc warning。
 
 4. 怪物攻击塔测试：
    - 把塔部署在怪物路径附近 1 格内。
@@ -39,6 +42,7 @@
 - 波次生成已经是 `seed + waveId` 确定性规则；单机关卡如果需要固定体验，应调用 `BattleManager::setRandomSeed(seed)`。
 - UI 不应直接改怪物/单位血量，只读 `BattleSnapshot`。
 - 投射物展示读取 `BattleSnapshot::projectiles`，不需要单机 UI 自己计算弹道。
+- 联机快照协议由 `src/network/protocol/BattleStateCodec.*` 维护，后续改字段优先改这里，不要再把序列化逻辑塞回页面。
 
 ## 给美术部分的资源约定
 
@@ -62,4 +66,4 @@
 - 怪物攻击目前是“边走边打”，还没有停步攻击/拆塔 AI。
 - 投射物命中没有正式爆炸动画，只是占位圆点和范围圈。
 - 地图仍是代码硬编码测试图，还未接入配置文件。
-- PVP 仍是 Host 权威快照，后续应增加阶段首尾 checksum 校验。
+- PVP 仍是 Host 权威快照；当前已有帧快照 checksum，后续还应增加阶段首尾 checksum 校验。

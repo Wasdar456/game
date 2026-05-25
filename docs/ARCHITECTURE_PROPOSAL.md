@@ -59,7 +59,7 @@ GameProject/
 
 3. `ui` 当前页面偏大。
    - `BattlePage.cpp` 同时负责页面、绘制、输入、网络快照解析。
-   - 后续更应该先拆 `BattleView`、`EffectRenderer`、`RadialMenuWidget`，再迁移目录。
+   - 已先把 `BATTLE_STATE` 编码/解码/checksum 抽到 `BattleStateCodec`，后续更应该继续拆 `BattleView`、`EffectRenderer`、`RadialMenuWidget`，再迁移目录。
 
 4. `network` 可以较早拆。
    - 网络层已经有 `session/protocol/sync` 目录，边界相对清晰。
@@ -85,6 +85,7 @@ GameProject/
 
 目标：低风险模块化。
 
+- 当前已完成一小步：`BattleStateCodec` 已进入 `src/network/protocol`，`BattlePage` 不再直接维护战斗快照协议。
 - 移动 `src/network` 到：
   - `network/include/network`
   - `network/src`
@@ -134,6 +135,12 @@ GameProject/
 - 不要现在把 `BattlePage.cpp` 拆成十几个文件。
 - 不要在 `main` 分支做大规模目录迁移。
 - 不要边修联机逻辑边改 CMake 模块化，否则出问题很难定位。
+
+## 已完成的低风险解耦
+
+- `BATTLE_STATE` 序列化、反序列化、checksum 已移动到 `src/network/protocol/BattleStateCodec.*`。
+- `BattlePage` 只负责发送/接收和页面状态更新，不再直接维护快照包体格式。
+- 网络模块无 `Q_OBJECT` 的 `.cpp` 已移除手写 `.moc` include，减少构建噪音。
 
 ## 给组员的统一说法
 

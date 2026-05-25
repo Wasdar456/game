@@ -145,4 +145,3 @@ void RoundManager::checkAllAcked() {
 
 } // namespace network
 } // namespace game
-#include "RoundManager.moc"

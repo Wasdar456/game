@@ -221,9 +221,6 @@ private:
     void sendMoveAction(int unitId, game::core::MapPosition target);
     void sendRecallAction(int unitId);
     void completePvpWave();
-    QByteArray serializeBattleState(const game::core::BattleSnapshot& snapshot) const;
-    bool parseBattleState(const QByteArray& body, game::core::BattleSnapshot& snapshot) const;
-    quint32 battleStateChecksum(const game::core::BattleSnapshot& snapshot) const;
     void sendBattleState(const game::core::BattleSnapshot& snapshot);
     void handleRemoteBattleState(const game::core::BattleSnapshot& snapshot);
 

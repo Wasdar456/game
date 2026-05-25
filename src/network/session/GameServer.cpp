@@ -242,4 +242,3 @@ void GameServer::reset() {
 
 } // namespace network
 } // namespace game
-#include "GameServer.moc"

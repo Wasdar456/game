@@ -116,4 +116,3 @@ QVector<DeployInfo> DeploymentSync::parseDeploySyncPacket(const QByteArray& body
 
 } // namespace network
 } // namespace game
-#include "DeploymentSync.moc"
