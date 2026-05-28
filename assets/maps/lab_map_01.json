@@ -4,9 +4,11 @@
   "mode": "PVE",
   "image": "lab_map_01.png",
   "grid": {
-    "rows": 12,
-    "cols": 29,
-    "cellSize": 19
+    "rows": 17,
+    "cols": 28,
+    "cellSize": 19,
+    "cellSizeX": 19,
+    "cellSizeY": 19
   },
   "legend": {
     "EMPTY": "空地/普通地块",
@@ -253,12 +255,16 @@
     {
       "row": 3,
       "col": 16,
-      "type": "SPAWN_A"
+      "type": "SPAWN_A",
+      "routeIndexA": 0,
+      "routeLabelA": "A1:0"
     },
     {
       "row": 4,
       "col": 2,
-      "type": "SPAWN_A"
+      "type": "SPAWN_A",
+      "routeIndexA": 0,
+      "routeLabelA": "A2:0"
     },
     {
       "row": 4,
@@ -283,19 +289,19 @@
     {
       "row": 4,
       "col": 16,
-      "type": "PATH_A",
-      "routeIndexA": 1,
-      "routeLabelA": "A2:1"
-    },
-    {
-      "row": 5,
-      "col": 2,
       "type": "PATH_A",
       "routeIndexA": 1,
       "routeLabelA": "A1:1"
     },
     {
       "row": 5,
+      "col": 2,
+      "type": "PATH_A",
+      "routeIndexA": 1,
+      "routeLabelA": "A2:1"
+    },
+    {
+      "row": 5,
       "col": 4,
       "type": "DEPLOY_A"
     },
@@ -324,7 +330,7 @@
       "col": 16,
       "type": "PATH_A",
       "routeIndexA": 2,
-      "routeLabelA": "A2:2"
+      "routeLabelA": "A1:2"
     },
     {
       "row": 5,
@@ -341,81 +347,81 @@
       "col": 2,
       "type": "PATH_A",
       "routeIndexA": 2,
-      "routeLabelA": "A1:2"
+      "routeLabelA": "A2:2"
     },
     {
       "row": 6,
       "col": 3,
-      "type": "PATH_A",
-      "routeIndexA": 3,
-      "routeLabelA": "A1:3"
-    },
-    {
-      "row": 6,
-      "col": 4,
-      "type": "PATH_A",
-      "routeIndexA": 4,
-      "routeLabelA": "A1:4"
-    },
-    {
-      "row": 6,
-      "col": 5,
-      "type": "PATH_A",
-      "routeIndexA": 5,
-      "routeLabelA": "A1:5"
-    },
-    {
-      "row": 6,
-      "col": 6,
-      "type": "PATH_A",
-      "routeIndexA": 6,
-      "routeLabelA": "A1:6"
-    },
-    {
-      "row": 6,
-      "col": 7,
-      "type": "PATH_A",
-      "routeIndexA": 7,
-      "routeLabelA": "A1:7"
-    },
-    {
-      "row": 6,
-      "col": 8,
-      "type": "DEPLOY_A"
-    },
-    {
-      "row": 6,
-      "col": 9,
-      "type": "DEPLOY_A"
-    },
-    {
-      "row": 6,
-      "col": 10,
-      "type": "DEPLOY_A"
-    },
-    {
-      "row": 6,
-      "col": 14,
-      "type": "DEPLOY_A"
-    },
-    {
-      "row": 6,
-      "col": 15,
-      "type": "DEPLOY_A"
-    },
-    {
-      "row": 6,
-      "col": 16,
       "type": "PATH_A",
       "routeIndexA": 3,
       "routeLabelA": "A2:3"
     },
     {
       "row": 6,
-      "col": 17,
+      "col": 4,
       "type": "PATH_A",
       "routeIndexA": 4,
       "routeLabelA": "A2:4"
+    },
+    {
+      "row": 6,
+      "col": 5,
+      "type": "PATH_A",
+      "routeIndexA": 5,
+      "routeLabelA": "A2:5"
+    },
+    {
+      "row": 6,
+      "col": 6,
+      "type": "PATH_A",
+      "routeIndexA": 6,
+      "routeLabelA": "A2:6"
+    },
+    {
+      "row": 6,
+      "col": 7,
+      "type": "PATH_A",
+      "routeIndexA": 7,
+      "routeLabelA": "A2:7"
+    },
+    {
+      "row": 6,
+      "col": 8,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 9,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 10,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 14,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 15,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 16,
+      "type": "PATH_A",
+      "routeIndexA": 3,
+      "routeLabelA": "A1:3"
+    },
+    {
+      "row": 6,
+      "col": 17,
+      "type": "PATH_A",
+      "routeIndexA": 4,
+      "routeLabelA": "A1:4"
     },
     {
       "row": 6,
@@ -472,7 +478,7 @@
       "col": 7,
       "type": "PATH_A",
       "routeIndexA": 8,
-      "routeLabelA": "A1:8"
+      "routeLabelA": "A2:8"
     },
     {
       "row": 7,
@@ -508,55 +514,57 @@
       "row": 7,
       "col": 17,
       "type": "PATH_A",
-      "routeIndexA": 5,
-      "routeLabelA": "A2:5"
+      "routeIndexA": 22,
+      "routeLabelA": "A2:22"
     },
     {
       "row": 7,
       "col": 18,
       "type": "PATH_A",
-      "routeIndexA": 6,
-      "routeLabelA": "A2:6"
+      "routeIndexA": 23,
+      "routeLabelA": "A2:23"
     },
     {
       "row": 7,
       "col": 19,
       "type": "PATH_A",
-      "routeIndexA": 7,
-      "routeLabelA": "A2:7"
+      "routeIndexA": 24,
+      "routeLabelA": "A2:24"
     },
     {
       "row": 7,
       "col": 20,
       "type": "PATH_A",
-      "routeIndexA": 8,
-      "routeLabelA": "A2:8"
+      "routeIndexA": 25,
+      "routeLabelA": "A2:25"
     },
     {
       "row": 7,
       "col": 21,
       "type": "PATH_A",
-      "routeIndexA": 9,
-      "routeLabelA": "A2:9"
+      "routeIndexA": 26,
+      "routeLabelA": "A2:26"
     },
     {
       "row": 7,
       "col": 22,
       "type": "PATH_A",
       "routeIndexA": 27,
-      "routeLabelA": "A1:27"
+      "routeLabelA": "A2:27"
     },
     {
       "row": 7,
       "col": 23,
       "type": "PATH_A",
-      "routeIndexA": 10,
-      "routeLabelA": "A2:10"
+      "routeIndexA": 28,
+      "routeLabelA": "A2:28"
     },
     {
       "row": 7,
       "col": 24,
-      "type": "CORE_A"
+      "type": "CORE_A",
+      "routeIndexA": 29,
+      "routeLabelA": "A2:29"
     },
     {
       "row": 8,
@@ -573,7 +581,7 @@
       "col": 7,
       "type": "PATH_A",
       "routeIndexA": 9,
-      "routeLabelA": "A1:9"
+      "routeLabelA": "A2:9"
     },
     {
       "row": 8,
@@ -610,7 +618,7 @@
       "col": 17,
       "type": "PATH_A",
       "routeIndexA": 21,
-      "routeLabelA": "A1:21"
+      "routeLabelA": "A2:21"
     },
     {
       "row": 8,
@@ -652,77 +660,77 @@
       "col": 7,
       "type": "PATH_A",
       "routeIndexA": 10,
-      "routeLabelA": "A1:10"
+      "routeLabelA": "A2:10"
     },
     {
       "row": 9,
       "col": 8,
       "type": "PATH_A",
       "routeIndexA": 11,
-      "routeLabelA": "A1:11"
+      "routeLabelA": "A2:11"
     },
     {
       "row": 9,
       "col": 9,
       "type": "PATH_A",
       "routeIndexA": 12,
-      "routeLabelA": "A1:12"
+      "routeLabelA": "A2:12"
     },
     {
       "row": 9,
       "col": 10,
       "type": "PATH_A",
       "routeIndexA": 13,
-      "routeLabelA": "A1:13"
+      "routeLabelA": "A2:13"
     },
     {
       "row": 9,
       "col": 11,
       "type": "PATH_A",
       "routeIndexA": 14,
-      "routeLabelA": "A1:14"
+      "routeLabelA": "A2:14"
     },
     {
       "row": 9,
       "col": 12,
       "type": "PATH_A",
       "routeIndexA": 15,
-      "routeLabelA": "A1:15"
+      "routeLabelA": "A2:15"
     },
     {
       "row": 9,
       "col": 13,
       "type": "PATH_A",
       "routeIndexA": 16,
-      "routeLabelA": "A1:16"
+      "routeLabelA": "A2:16"
     },
     {
       "row": 9,
       "col": 14,
       "type": "PATH_A",
       "routeIndexA": 17,
-      "routeLabelA": "A1:17"
+      "routeLabelA": "A2:17"
     },
     {
       "row": 9,
       "col": 15,
       "type": "PATH_A",
       "routeIndexA": 18,
-      "routeLabelA": "A1:18"
+      "routeLabelA": "A2:18"
     },
     {
       "row": 9,
       "col": 16,
       "type": "PATH_A",
       "routeIndexA": 19,
-      "routeLabelA": "A1:19"
+      "routeLabelA": "A2:19"
     },
     {
       "row": 9,
       "col": 17,
       "type": "PATH_A",
       "routeIndexA": 20,
-      "routeLabelA": "A1:20"
+      "routeLabelA": "A2:20"
     },
     {
       "row": 9,
@@ -872,11 +880,6 @@
     {
       "row": 10,
       "col": 27,
-      "type": "DEPLOY_A"
-    },
-    {
-      "row": 10,
-      "col": 28,
       "type": "DEPLOY_A"
     },
     {

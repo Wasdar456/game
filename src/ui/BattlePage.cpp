@@ -131,6 +131,12 @@ BattleView::BattleView(QWidget *parent)
     , m_hoverCol(-1)
     , m_mapRows(game::core::constants::DefaultMapRows)
     , m_mapCols(game::core::constants::DefaultMapCols)
+    , m_imageCropX(0)
+    , m_imageCropY(0)
+    , m_imageCropW(0)
+    , m_imageCropH(0)
+    , m_imageOffsetX(0)
+    , m_imageOffsetY(0)
 {
     setMapSize(m_mapRows, m_mapCols);
 
@@ -206,9 +212,13 @@ void BattleView::setMapSize(int rows, int cols)
     m_mapRows = rows;
     m_mapCols = cols;
     if (!m_backgroundImage.isNull()) {
-        this->setFixedSize(m_backgroundImage.size().scaled(MaxBattleImageWidth,
-                                                           MaxBattleImageHeight,
-                                                           Qt::KeepAspectRatio));
+        QSize imageSize = m_backgroundImage.size();
+        if (m_imageCropW > 0 && m_imageCropH > 0) {
+            imageSize = QSize(m_imageCropW, m_imageCropH);
+        }
+        this->setFixedSize(imageSize.scaled(MaxBattleImageWidth,
+                                            MaxBattleImageHeight,
+                                            Qt::KeepAspectRatio));
     } else {
         this->setFixedSize(cols * CELL_SIZE, rows * CELL_SIZE);
     }
@@ -225,9 +235,13 @@ bool BattleView::setBackgroundImage(const QString& path)
 
     m_backgroundImage = image;
     if (m_mapRows > 0 && m_mapCols > 0) {
-        this->setFixedSize(m_backgroundImage.size().scaled(MaxBattleImageWidth,
-                                                           MaxBattleImageHeight,
-                                                           Qt::KeepAspectRatio));
+        QSize imageSize = m_backgroundImage.size();
+        if (m_imageCropW > 0 && m_imageCropH > 0) {
+            imageSize = QSize(m_imageCropW, m_imageCropH);
+        }
+        this->setFixedSize(imageSize.scaled(MaxBattleImageWidth,
+                                            MaxBattleImageHeight,
+                                            Qt::KeepAspectRatio));
     }
     update();
     return true;
@@ -242,14 +256,38 @@ void BattleView::clearBackgroundImage()
     update();
 }
 
+void BattleView::setImageCrop(int x, int y, int w, int h)
+{
+    m_imageCropX = x;
+    m_imageCropY = y;
+    m_imageCropW = w;
+    m_imageCropH = h;
+}
+
+void BattleView::setImageOffset(int x, int y)
+{
+    m_imageOffsetX = x;
+    m_imageOffsetY = y;
+}
+
 double BattleView::cellWidth() const
 {
-    return m_mapCols > 0 ? static_cast<double>(width()) / m_mapCols : CELL_SIZE;
+    if (m_mapCols <= 0) return CELL_SIZE;
+    if (!m_backgroundImage.isNull() && m_imageCropW > 0 && m_imageCropH > 0) {
+        const double imgScale = static_cast<double>(width()) / m_imageCropW;
+        return (m_imageCropW * imgScale) / m_mapCols;
+    }
+    return static_cast<double>(width()) / m_mapCols;
 }
 
 double BattleView::cellHeight() const
 {
-    return m_mapRows > 0 ? static_cast<double>(height()) / m_mapRows : CELL_SIZE;
+    if (m_mapRows <= 0) return CELL_SIZE;
+    if (!m_backgroundImage.isNull() && m_imageCropW > 0 && m_imageCropH > 0) {
+        const double imgScale = static_cast<double>(height()) / m_imageCropH;
+        return (m_imageCropH * imgScale) / m_mapRows;
+    }
+    return static_cast<double>(height()) / m_mapRows;
 }
 
 double BattleView::cellExtent() const
@@ -261,7 +299,9 @@ QRectF BattleView::cellRect(int row, int col) const
 {
     const double cw = cellWidth();
     const double ch = cellHeight();
-    return QRectF(col * cw, row * ch, cw, ch);
+    const double ox = m_backgroundImage.isNull() ? 0.0 : m_imageOffsetX;
+    const double oy = m_backgroundImage.isNull() ? 0.0 : m_imageOffsetY;
+    return QRectF(ox + col * cw, oy + row * ch, cw, ch);
 }
 
 QPointF BattleView::cellCenter(int row, int col) const
@@ -272,13 +312,17 @@ QPointF BattleView::cellCenter(int row, int col) const
 int BattleView::rowAtPixel(int y) const
 {
     const double ch = cellHeight();
-    return ch > 0.0 ? static_cast<int>(std::floor(y / ch)) : -1;
+    if (ch <= 0.0) return -1;
+    const double oy = m_backgroundImage.isNull() ? 0.0 : m_imageOffsetY;
+    return static_cast<int>(std::floor((y - oy) / ch));
 }
 
 int BattleView::colAtPixel(int x) const
 {
     const double cw = cellWidth();
-    return cw > 0.0 ? static_cast<int>(std::floor(x / cw)) : -1;
+    if (cw <= 0.0) return -1;
+    const double ox = m_backgroundImage.isNull() ? 0.0 : m_imageOffsetX;
+    return static_cast<int>(std::floor((x - ox) / cw));
 }
 
 // ========== updateFromSnapshot() —— 从快照更新渲染数据 ==========
@@ -317,22 +361,36 @@ void BattleView::paintEvent(QPaintEvent *event)
 // ========== drawTerrain() —— 绘制地形（渐变+纹理感） ==========
 void BattleView::drawTerrain(QPainter &painter)
 {
-    if (!m_backgroundImage.isNull()) {
-        painter.drawPixmap(rect(), m_backgroundImage);
-        return;
+    const bool hasImage = !m_backgroundImage.isNull();
+
+    // 绘制背景图片（支持裁剪）
+    if (hasImage) {
+        if (m_imageCropW > 0 && m_imageCropH > 0) {
+            QRect src(m_imageCropX, m_imageCropY, m_imageCropW, m_imageCropH);
+            painter.drawPixmap(rect(), m_backgroundImage, src);
+        } else {
+            painter.drawPixmap(rect(), m_backgroundImage);
+        }
     }
 
     for (const auto &grid : m_snapshot.map.grids) {
         QRectF cellRect = this->cellRect(grid.row, grid.col);
 
-        // 每种地形用渐变填充，增加质感
+        // 有背景图片时只绘制网格线，跳过不透明的地形填充
+        if (hasImage) {
+            painter.setPen(QPen(QColor(0, 0, 0, 25), 1));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawRect(cellRect);
+            continue;
+        }
+
+        // 无背景图片时绘制地形色块
         switch (grid.terrain) {
         case game::core::TerrainType::Path: {
             QLinearGradient grad(cellRect.topLeft(), cellRect.bottomRight());
             grad.setColorAt(0, QColor(155, 135, 115));
             grad.setColorAt(1, QColor(125, 105, 85));
             painter.fillRect(cellRect, grad);
-            // 路径纹理：小点
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(100, 80, 60, 40));
             for (int dx = 8; dx < CELL_SIZE; dx += 12) {
@@ -347,7 +405,6 @@ void BattleView::drawTerrain(QPainter &painter)
             grad.setColorAt(0, QColor(62, 95, 40));
             grad.setColorAt(1, QColor(48, 78, 28));
             painter.fillRect(cellRect, grad);
-            // 草地纹理：随机小线条
             painter.setPen(QPen(QColor(80, 120, 50, 50), 1));
             for (int i = 0; i < 3; ++i) {
                 int sx = static_cast<int>(cellRect.x()) + 10 + i * 12;
@@ -361,7 +418,6 @@ void BattleView::drawTerrain(QPainter &painter)
             grad.setColorAt(0, QColor(95, 117, 57));
             grad.setColorAt(1, QColor(75, 97, 37));
             painter.fillRect(cellRect, grad);
-            // 高台标记：右上角三角 + 箭头
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(255, 255, 255, 50));
             QPolygon tri;
@@ -382,7 +438,6 @@ void BattleView::drawTerrain(QPainter &painter)
             grad.setColorAt(0, QColor(180, 60, 60));
             grad.setColorAt(1, QColor(140, 40, 40));
             painter.fillRect(cellRect, grad);
-            // 绘制 S 标记
             painter.setPen(QColor(255, 255, 255));
             QFont font("Microsoft YaHei", 14, QFont::Bold);
             painter.setFont(font);
@@ -394,7 +449,6 @@ void BattleView::drawTerrain(QPainter &painter)
             grad.setColorAt(0, QColor(60, 100, 220));
             grad.setColorAt(1, QColor(40, 70, 180));
             painter.fillRect(cellRect, grad);
-            // 绘制 A 标记
             painter.setPen(QColor(255, 255, 255));
             QFont font("Microsoft YaHei", 14, QFont::Bold);
             painter.setFont(font);
@@ -406,7 +460,6 @@ void BattleView::drawTerrain(QPainter &painter)
             grad.setColorAt(0, QColor(220, 60, 60));
             grad.setColorAt(1, QColor(180, 40, 40));
             painter.fillRect(cellRect, grad);
-            // 绘制 B 标记
             painter.setPen(QColor(255, 255, 255));
             QFont font("Microsoft YaHei", 14, QFont::Bold);
             painter.setFont(font);
@@ -1236,6 +1289,15 @@ void BattlePage::setupPveMap()
         m_battleView->setMapSize(map.rows(), map.cols());
         m_battleView->m_spawnPos = spawnPos;
         m_battleView->m_corePos = corePos;
+
+        // 设置图片裁剪和偏移（在加载图片前设置，用于计算控件尺寸）
+        if (mapConfig.imageCrop.width > 0 && mapConfig.imageCrop.height > 0) {
+            m_battleView->setImageCrop(mapConfig.imageCrop.x, mapConfig.imageCrop.y,
+                                       mapConfig.imageCrop.width, mapConfig.imageCrop.height);
+        }
+        if (mapConfig.imageOffset.x != 0 || mapConfig.imageOffset.y != 0) {
+            m_battleView->setImageOffset(mapConfig.imageOffset.x, mapConfig.imageOffset.y);
+        }
 
         if (!mapConfig.image.empty()) {
             QString imagePath = QFileInfo(mapPath).dir().filePath(QString::fromStdString(mapConfig.image));

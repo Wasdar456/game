@@ -77,9 +77,25 @@ bool MapConfigLoader::loadFromJson(const std::string& path, LoadedMapConfig& con
     loaded.rows = grid.value("rows").toInt();
     loaded.cols = grid.value("cols").toInt();
     loaded.cellSize = grid.value("cellSize").toInt();
+    loaded.cellSizeX = grid.value("cellSizeX").toInt(loaded.cellSize);
+    loaded.cellSizeY = grid.value("cellSizeY").toInt(loaded.cellSize);
     if (loaded.rows <= 0 || loaded.cols <= 0) {
         if (error) *error = "grid.rows/grid.cols must be positive";
         return false;
+    }
+
+    const QJsonObject imageCropObj = root.value("imageCrop").toObject();
+    if (!imageCropObj.isEmpty()) {
+        loaded.imageCrop.x = imageCropObj.value("x").toInt();
+        loaded.imageCrop.y = imageCropObj.value("y").toInt();
+        loaded.imageCrop.width = imageCropObj.value("width").toInt();
+        loaded.imageCrop.height = imageCropObj.value("height").toInt();
+    }
+
+    const QJsonObject imageOffsetObj = root.value("imageOffset").toObject();
+    if (!imageOffsetObj.isEmpty()) {
+        loaded.imageOffset.x = imageOffsetObj.value("x").toInt();
+        loaded.imageOffset.y = imageOffsetObj.value("y").toInt();
     }
 
     const QJsonArray tiles = root.value("tiles").toArray();

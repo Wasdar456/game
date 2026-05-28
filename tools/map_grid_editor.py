@@ -97,6 +97,7 @@ class MapGridEditor(tk.Tk):
         self.rows_var = tk.IntVar(value=rows)
         self.cols_var = tk.IntVar(value=cols)
         self.cell_size_var = tk.IntVar(value=cell_size)
+        self.cell_size_y_var = tk.IntVar(value=cell_size)
         self.map_mode = tk.StringVar(value="PVE")
         self.selected_type = tk.StringVar(value="PATH_A")
         self.paint_mode = tk.StringVar(value="type")
@@ -209,11 +210,13 @@ class MapGridEditor(tk.Tk):
         grid_box.pack(fill="x", pady=6)
         self._spinbox_row(grid_box, "行数", self.rows_var, 1, 200, self._resize_grid_from_controls)
         self._spinbox_row(grid_box, "列数", self.cols_var, 1, 200, self._resize_grid_from_controls)
-        self._spinbox_row(grid_box, "格子像素", self.cell_size_var, 8, 160, self._redraw_all)
+        self._spinbox_row(grid_box, "格子像素 X", self.cell_size_var, 8, 160, self._redraw_all)
+        self._spinbox_row(grid_box, "格子像素 Y", self.cell_size_y_var, 8, 160, self._redraw_all)
         ttk.Checkbutton(grid_box, text="显示网格线", variable=self.show_grid, command=self._redraw_all).pack(anchor="w", padx=8)
         ttk.Checkbutton(grid_box, text="显示路径序号", variable=self.show_labels, command=self._redraw_all).pack(anchor="w", padx=8)
         ttk.Checkbutton(grid_box, text="加载底图后自动适配", variable=self.auto_fit_image).pack(anchor="w", padx=8)
-        ttk.Button(grid_box, text="适配左侧窗口显示全图", command=self._fit_image_to_view).pack(fill="x", padx=8, pady=(6, 2))
+        ttk.Button(grid_box, text="适应图片（自动计算格子大小）", command=self._fit_grid_to_image_exact).pack(fill="x", padx=8, pady=(6, 2))
+        ttk.Button(grid_box, text="适配左侧窗口显示全图", command=self._fit_image_to_view).pack(fill="x", padx=8, pady=(2, 2))
         ttk.Button(grid_box, text="恢复原图尺寸", command=self._use_original_image_size).pack(fill="x", padx=8, pady=(2, 6))
 
         type_box = ttk.LabelFrame(side, text="地块类型")
@@ -309,6 +312,22 @@ class MapGridEditor(tk.Tk):
         cols = self._safe_int(self.cols_var.get(), 1)
         fitted = max(8, min(self.background_image.width() // cols, self.background_image.height() // rows))
         self.cell_size_var.set(fitted)
+        self.cell_size_y_var.set(fitted)
+
+    def _fit_grid_to_image_exact(self) -> None:
+        """自动计算 cellSizeX / cellSizeY 使网格精确覆盖整张图片。"""
+        if not self.source_background_image:
+            return
+        rows = self._safe_int(self.rows_var.get(), 1)
+        cols = self._safe_int(self.cols_var.get(), 1)
+        img_w = self.source_background_image.width()
+        img_h = self.source_background_image.height()
+        self.cell_size_var.set(max(8, img_w // cols))
+        self.cell_size_y_var.set(max(8, img_h // rows))
+        self.image_downsample = 1
+        self.background_image = self.source_background_image
+        self._redraw_all()
+        self.status_var.set(f"已适配图片 {img_w}x{img_h}，格子 {img_w // cols}x{img_h // rows} px")
 
     def _reset_grid(self) -> None:
         rows = self._safe_int(self.rows_var.get(), 1)
@@ -342,11 +361,12 @@ class MapGridEditor(tk.Tk):
         self.cell_items.clear()
         self.text_items.clear()
 
-        cell_size = self._safe_int(self.cell_size_var.get(), 32)
+        cell_w = self._safe_int(self.cell_size_var.get(), 32)
+        cell_h = self._safe_int(self.cell_size_y_var.get(), 32)
         rows = len(self.grid)
         cols = len(self.grid[0]) if rows else 0
-        width = cols * cell_size
-        height = rows * cell_size
+        width = cols * cell_w
+        height = rows * cell_h
 
         if self.background_image:
             self.background_item = self.canvas.create_image(0, 0, image=self.background_image, anchor="nw")
@@ -364,11 +384,12 @@ class MapGridEditor(tk.Tk):
         if row >= len(self.grid) or col >= len(self.grid[row]):
             return
 
-        cell_size = self._safe_int(self.cell_size_var.get(), 32)
-        x1 = col * cell_size
-        y1 = row * cell_size
-        x2 = x1 + cell_size
-        y2 = y1 + cell_size
+        cell_w = self._safe_int(self.cell_size_var.get(), 32)
+        cell_h = self._safe_int(self.cell_size_y_var.get(), 32)
+        x1 = col * cell_w
+        y1 = row * cell_h
+        x2 = x1 + cell_w
+        y2 = y1 + cell_h
         cell = self.grid[row][col]
         is_empty = cell.tile_type == "EMPTY" and cell.route_index_a is None and cell.route_index_b is None
         color = "" if is_empty else TYPE_COLORS.get(cell.tile_type, "#ffffff")
@@ -408,7 +429,7 @@ class MapGridEditor(tk.Tk):
                     (y1 + y2) / 2,
                     text=label,
                     fill="#111111",
-                    font=("", max(8, min(12, cell_size // 3)), "bold"),
+                    font=("", max(8, min(12, cell_w // 3)), "bold"),
                     tags=("cell-label",),
                 )
                 self.text_items[(row, col)] = text_item
@@ -468,11 +489,12 @@ class MapGridEditor(tk.Tk):
         self._update_status_summary()
 
     def _event_to_cell(self, event: tk.Event) -> Optional[Tuple[int, int]]:
-        cell_size = self._safe_int(self.cell_size_var.get(), 32)
+        cell_w = self._safe_int(self.cell_size_var.get(), 32)
+        cell_h = self._safe_int(self.cell_size_y_var.get(), 32)
         x = int(self.canvas.canvasx(event.x))
         y = int(self.canvas.canvasy(event.y))
-        col = x // cell_size
-        row = y // cell_size
+        col = x // cell_w
+        row = y // cell_h
         if row < 0 or col < 0 or row >= len(self.grid) or col >= len(self.grid[row]):
             return None
         return row, col
@@ -594,11 +616,14 @@ class MapGridEditor(tk.Tk):
         rows = int(grid_data.get("rows", data.get("rows", 12)))
         cols = int(grid_data.get("cols", data.get("cols", 16)))
         cell_size = int(grid_data.get("cellSize", self.cell_size_var.get()))
+        cell_size_x = int(grid_data.get("cellSizeX", cell_size))
+        cell_size_y = int(grid_data.get("cellSizeY", cell_size))
         self.map_mode.set(str(data.get("mode", data.get("mapMode", "PVE"))).upper())
 
         self.rows_var.set(rows)
         self.cols_var.set(cols)
-        self.cell_size_var.set(cell_size)
+        self.cell_size_var.set(cell_size_x)
+        self.cell_size_y_var.set(cell_size_y)
         image = data.get("image")
         if image:
             candidate = self._resolve_image_path(path, str(image))
@@ -703,6 +728,8 @@ class MapGridEditor(tk.Tk):
                 "rows": len(self.grid),
                 "cols": len(self.grid[0]) if self.grid else 0,
                 "cellSize": self._safe_int(self.cell_size_var.get(), 32),
+                "cellSizeX": self._safe_int(self.cell_size_var.get(), 32),
+                "cellSizeY": self._safe_int(self.cell_size_y_var.get(), 32),
             },
             "legend": {code: TYPE_LABELS[code] for code in TYPE_CODES},
             "routes": {

@@ -72,6 +72,8 @@ public:
     void setMapSize(int rows, int cols);
     bool setBackgroundImage(const QString& path);
     void clearBackgroundImage();
+    void setImageCrop(int x, int y, int w, int h);
+    void setImageOffset(int x, int y);
     void hideRadialMenu();
 
     // ========== 交互状态 ==========
@@ -121,6 +123,12 @@ private:
     QPixmap m_backgroundImage;
     int m_mapRows;
     int m_mapCols;
+    int m_imageCropX;
+    int m_imageCropY;
+    int m_imageCropW;
+    int m_imageCropH;
+    int m_imageOffsetX;
+    int m_imageOffsetY;
 
     void showRadialMenu(int unitId, int pixelX, int pixelY);
     int findUnitAt(int row, int col) const;

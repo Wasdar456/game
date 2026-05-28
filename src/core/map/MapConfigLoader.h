@@ -13,6 +13,18 @@ struct LoadedMapTile {
     std::string type;
 };
 
+struct ImageCrop {
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+};
+
+struct ImageOffset {
+    int x = 0;
+    int y = 0;
+};
+
 struct LoadedMapConfig {
     std::string name;
     std::string mode = "PVE";
@@ -20,6 +32,10 @@ struct LoadedMapConfig {
     int rows = 0;
     int cols = 0;
     int cellSize = 0;
+    int cellSizeX = 0;
+    int cellSizeY = 0;
+    ImageCrop imageCrop;
+    ImageOffset imageOffset;
     std::vector<LoadedMapTile> tiles;
     std::vector<std::vector<MapPosition>> routesA;
     std::vector<std::vector<MapPosition>> routesB;
