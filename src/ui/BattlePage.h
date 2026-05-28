@@ -43,6 +43,7 @@
 #include <QPainter>
 #include <QPaintEvent>
 #include <QMouseEvent>
+#include <QPixmap>
 
 // ========== 核心层头文件 ==========
 #include "core/systems/BattleManager.h"     // 战斗总管理器
@@ -69,6 +70,8 @@ public:
 
     void updateFromSnapshot(const game::core::BattleSnapshot &snapshot);
     void setMapSize(int rows, int cols);
+    bool setBackgroundImage(const QString& path);
+    void clearBackgroundImage();
     void hideRadialMenu();
 
     // ========== 交互状态 ==========
@@ -115,6 +118,7 @@ protected:
 
 private:
     game::core::BattleSnapshot m_snapshot;
+    QPixmap m_backgroundImage;
     int m_mapRows;
     int m_mapCols;
 
@@ -122,6 +126,13 @@ private:
     int findUnitAt(int row, int col) const;
     QVector<game::core::MapPosition> getDeployableCells() const;
     QVector<game::core::MapPosition> getMovableCells(int unitId) const;
+    double cellWidth() const;
+    double cellHeight() const;
+    double cellExtent() const;
+    QRectF cellRect(int row, int col) const;
+    QPointF cellCenter(int row, int col) const;
+    int rowAtPixel(int y) const;
+    int colAtPixel(int x) const;
 
     // ========== 增强绘制方法 ==========
     void drawTerrain(QPainter &painter);           ///< 绘制地形（渐变+纹理感）

@@ -34,7 +34,11 @@
 #include <QMessageBox>
 #include <QDebug>
 #include <QtEndian>
+#include <QCoreApplication>
+#include <QFileInfo>
+#include <QDir>
 #include <algorithm>
+#include <cmath>
 
 // ========== 引入 MainWindow 头文件以获取 BattleManager ==========
 #include "ui/MainWindow.h"
@@ -43,10 +47,67 @@
 #include "core/systems/ResourceManager.h"  // 资源管理
 #include "network/protocol/BattleStateCodec.h"
 #include "core/base/Constants.h"           // 游戏常量
+#include "core/map/MapConfigLoader.h"
 
 // ========== 引入网络模块头文件 ==========
 #include "network/session/GameServer.h"
 #include "network/session/GameClient.h"
+
+namespace {
+
+constexpr int MaxBattleImageWidth = 1180;
+constexpr int MaxBattleImageHeight = 560;
+
+QString findProjectFile(const QString& relativePath)
+{
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString cwd = QDir::currentPath();
+    const QStringList candidates = {
+        QDir(cwd).filePath(relativePath),
+        QDir(appDir).filePath(relativePath),
+        QDir(appDir).filePath("../" + relativePath),
+        QDir(appDir).filePath("../../" + relativePath),
+        QDir(appDir).filePath("../../../" + relativePath)
+    };
+
+    for (const QString& candidate : candidates) {
+        QFileInfo info(candidate);
+        if (info.exists() && info.isFile()) {
+            return info.absoluteFilePath();
+        }
+    }
+    return {};
+}
+
+game::core::TerrainType terrainFromMapTile(const std::string& type)
+{
+    if (type == "PATH_A" || type == "PATH_B" || type == "PATH_SHARED") {
+        return game::core::TerrainType::Path;
+    }
+    if (type == "SPAWN_A" || type == "SPAWN_B") {
+        return game::core::TerrainType::SpawnPoint;
+    }
+    if (type == "CORE_A") {
+        return game::core::TerrainType::CoreA;
+    }
+    if (type == "CORE_B") {
+        return game::core::TerrainType::CoreB;
+    }
+    if (type == "DEPLOY_A" || type == "DEPLOY_B" || type == "DEPLOY_NEUTRAL") {
+        return game::core::TerrainType::FlatLand;
+    }
+    if (type == "HIGH_GROUND") {
+        return game::core::TerrainType::HighGround;
+    }
+    return game::core::TerrainType::NoDeploy;
+}
+
+int terrainHeightFromMapTile(const std::string& type)
+{
+    return type == "HIGH_GROUND" ? 1 : 0;
+}
+
+} // namespace
 
 // ============================================================================
 // BattleView 实现
@@ -144,7 +205,80 @@ void BattleView::setMapSize(int rows, int cols)
 {
     m_mapRows = rows;
     m_mapCols = cols;
-    this->setFixedSize(cols * CELL_SIZE, rows * CELL_SIZE);
+    if (!m_backgroundImage.isNull()) {
+        this->setFixedSize(m_backgroundImage.size().scaled(MaxBattleImageWidth,
+                                                           MaxBattleImageHeight,
+                                                           Qt::KeepAspectRatio));
+    } else {
+        this->setFixedSize(cols * CELL_SIZE, rows * CELL_SIZE);
+    }
+}
+
+bool BattleView::setBackgroundImage(const QString& path)
+{
+    QPixmap image(path);
+    if (image.isNull()) {
+        m_backgroundImage = QPixmap();
+        update();
+        return false;
+    }
+
+    m_backgroundImage = image;
+    if (m_mapRows > 0 && m_mapCols > 0) {
+        this->setFixedSize(m_backgroundImage.size().scaled(MaxBattleImageWidth,
+                                                           MaxBattleImageHeight,
+                                                           Qt::KeepAspectRatio));
+    }
+    update();
+    return true;
+}
+
+void BattleView::clearBackgroundImage()
+{
+    m_backgroundImage = QPixmap();
+    if (m_mapRows > 0 && m_mapCols > 0) {
+        this->setFixedSize(m_mapCols * CELL_SIZE, m_mapRows * CELL_SIZE);
+    }
+    update();
+}
+
+double BattleView::cellWidth() const
+{
+    return m_mapCols > 0 ? static_cast<double>(width()) / m_mapCols : CELL_SIZE;
+}
+
+double BattleView::cellHeight() const
+{
+    return m_mapRows > 0 ? static_cast<double>(height()) / m_mapRows : CELL_SIZE;
+}
+
+double BattleView::cellExtent() const
+{
+    return std::min(cellWidth(), cellHeight());
+}
+
+QRectF BattleView::cellRect(int row, int col) const
+{
+    const double cw = cellWidth();
+    const double ch = cellHeight();
+    return QRectF(col * cw, row * ch, cw, ch);
+}
+
+QPointF BattleView::cellCenter(int row, int col) const
+{
+    return cellRect(row, col).center();
+}
+
+int BattleView::rowAtPixel(int y) const
+{
+    const double ch = cellHeight();
+    return ch > 0.0 ? static_cast<int>(std::floor(y / ch)) : -1;
+}
+
+int BattleView::colAtPixel(int x) const
+{
+    const double cw = cellWidth();
+    return cw > 0.0 ? static_cast<int>(std::floor(x / cw)) : -1;
 }
 
 // ========== updateFromSnapshot() —— 从快照更新渲染数据 ==========
@@ -183,8 +317,13 @@ void BattleView::paintEvent(QPaintEvent *event)
 // ========== drawTerrain() —— 绘制地形（渐变+纹理感） ==========
 void BattleView::drawTerrain(QPainter &painter)
 {
+    if (!m_backgroundImage.isNull()) {
+        painter.drawPixmap(rect(), m_backgroundImage);
+        return;
+    }
+
     for (const auto &grid : m_snapshot.map.grids) {
-        QRect cellRect(grid.col * CELL_SIZE, grid.row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        QRectF cellRect = this->cellRect(grid.row, grid.col);
 
         // 每种地形用渐变填充，增加质感
         switch (grid.terrain) {
@@ -211,8 +350,8 @@ void BattleView::drawTerrain(QPainter &painter)
             // 草地纹理：随机小线条
             painter.setPen(QPen(QColor(80, 120, 50, 50), 1));
             for (int i = 0; i < 3; ++i) {
-                int sx = cellRect.x() + 10 + i * 12;
-                int sy = cellRect.bottom() - 8;
+                int sx = static_cast<int>(cellRect.x()) + 10 + i * 12;
+                int sy = static_cast<int>(cellRect.bottom()) - 8;
                 painter.drawLine(sx, sy, sx - 2, sy - 8);
             }
             break;
@@ -226,7 +365,7 @@ void BattleView::drawTerrain(QPainter &painter)
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(255, 255, 255, 50));
             QPolygon tri;
-            int x = cellRect.right(), y = cellRect.top();
+            int x = static_cast<int>(cellRect.right()), y = static_cast<int>(cellRect.top());
             tri << QPoint(x, y) << QPoint(x - 10, y) << QPoint(x, y + 10);
             painter.drawPolygon(tri);
             break;
@@ -286,12 +425,11 @@ void BattleView::drawTerrain(QPainter &painter)
 // ========== drawSpawnMarker() —— 绘制出生点（旋转传送门） ==========
 void BattleView::drawSpawnMarker(QPainter &painter)
 {
-    int sx = m_spawnPos.col * CELL_SIZE + CELL_SIZE / 2;
-    int sy = m_spawnPos.row * CELL_SIZE + CELL_SIZE / 2;
-    int r = CELL_SIZE / 2 - 2;
+    QPointF center = cellCenter(m_spawnPos.row, m_spawnPos.col);
+    int r = static_cast<int>(cellExtent() / 2.0) - 2;
 
     painter.save();
-    painter.translate(sx, sy);
+    painter.translate(center);
 
     // 旋转的锥形渐变（传送门效果）
     qreal angle = m_animFrame * 6.0;  // 每帧旋转6度
@@ -334,9 +472,10 @@ void BattleView::drawSpawnMarker(QPainter &painter)
 // ========== drawCoreMarker() —— 绘制核心（脉冲发光） ==========
 void BattleView::drawCoreMarker(QPainter &painter)
 {
-    int cx = m_corePos.col * CELL_SIZE + CELL_SIZE / 2;
-    int cy = m_corePos.row * CELL_SIZE + CELL_SIZE / 2;
-    int r = CELL_SIZE / 2 - 2;
+    QPointF center = cellCenter(m_corePos.row, m_corePos.col);
+    const double cx = center.x();
+    const double cy = center.y();
+    int r = static_cast<int>(cellExtent() / 2.0) - 2;
 
     // 脉冲大小
     qreal pulseScale = 1.0 + 0.08 * qSin(m_animFrame * 0.12);
@@ -376,7 +515,7 @@ void BattleView::drawHighlights(QPainter &painter)
         QVector<game::core::MapPosition> deployable = getDeployableCells();
         qreal pulse = 0.5 + 0.3 * qSin(m_animFrame * 0.15);
         for (const auto &pos : deployable) {
-            QRect r(pos.col * CELL_SIZE, pos.row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            QRectF r = cellRect(pos.row, pos.col);
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(0, 255, 100, int(pulse * 60)));
             painter.fillRect(r, painter.brush());
@@ -389,7 +528,7 @@ void BattleView::drawHighlights(QPainter &painter)
         QVector<game::core::MapPosition> movable = getMovableCells(m_selectedUnitId);
         qreal pulse = 0.5 + 0.3 * qSin(m_animFrame * 0.15);
         for (const auto &pos : movable) {
-            QRect r(pos.col * CELL_SIZE, pos.row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            QRectF r = cellRect(pos.row, pos.col);
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(0, 150, 255, int(pulse * 60)));
             painter.fillRect(r, painter.brush());
@@ -404,8 +543,8 @@ void BattleView::drawHighlights(QPainter &painter)
 void BattleView::drawUnits(QPainter &painter)
 {
     for (const auto &unit : m_snapshot.units) {
-        QRect unitRect(unit.col * CELL_SIZE, unit.row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-        QRect innerRect = unitRect.adjusted(4, 4, -4, -4);
+        QRectF unitRect = cellRect(unit.row, unit.col);
+        QRectF innerRect = unitRect.adjusted(4, 4, -4, -4);
 
         // Host 快照中 Host 单位为 1-999，Client 单位为 1000+。
         // Client 观看 Host 权威快照时需要反过来判断敌我。
@@ -479,12 +618,12 @@ void BattleView::drawUnits(QPainter &painter)
             painter.drawRoundedRect(innerRect.adjusted(-1, -1, 1, 1), 7, 7);
 
             // 发光光晕
-            QRadialGradient glowGrad(innerRect.center(), CELL_SIZE / 2);
+            QRadialGradient glowGrad(innerRect.center(), cellExtent() / 2.0);
             glowGrad.setColorAt(0, QColor(0, 212, 255, int(pulse * 50)));
             glowGrad.setColorAt(1, QColor(0, 212, 255, 0));
             painter.setPen(Qt::NoPen);
             painter.setBrush(glowGrad);
-            painter.drawEllipse(innerRect.center(), CELL_SIZE / 2, CELL_SIZE / 2);
+            painter.drawEllipse(innerRect.center(), cellExtent() / 2.0, cellExtent() / 2.0);
         }
 
         // 单位标签和等级
@@ -501,10 +640,10 @@ void BattleView::drawUnits(QPainter &painter)
         painter.drawText(innerRect, Qt::AlignCenter, label);
 
         // 血量条（渐变）
-        int barWidth = CELL_SIZE - 10;
+        int barWidth = std::max(1, static_cast<int>(innerRect.width()) - 2);
         int barHeight = 4;
-        int barX = innerRect.x() + 1;
-        int barY = innerRect.bottom() - 7;
+        int barX = static_cast<int>(innerRect.x()) + 1;
+        int barY = static_cast<int>(innerRect.bottom()) - 7;
 
         // 血量条背景
         painter.setPen(Qt::NoPen);
@@ -532,13 +671,12 @@ void BattleView::drawUnits(QPainter &painter)
 
         // 攻击范围指示（选中时）
         if (unit.id == m_selectedUnitId) {
-            int centerX = unit.col * CELL_SIZE + CELL_SIZE / 2;
-            int centerY = unit.row * CELL_SIZE + CELL_SIZE / 2;
-            int rangeRadius = unit.range * CELL_SIZE;
+            QPointF center = cellCenter(unit.row, unit.col);
+            int rangeRadius = static_cast<int>(unit.range * cellExtent());
             qreal pulse = 0.5 + 0.3 * qSin(m_animFrame * 0.1);
             painter.setPen(QPen(QColor(0, 212, 255, int(pulse * 100)), 1, Qt::DashLine));
             painter.setBrush(QColor(0, 212, 255, int(pulse * 12)));
-            painter.drawEllipse(QPoint(centerX, centerY), rangeRadius, rangeRadius);
+            painter.drawEllipse(center, rangeRadius, rangeRadius);
         }
     }
 }
@@ -547,8 +685,8 @@ void BattleView::drawUnits(QPainter &painter)
 void BattleView::drawMonsters(QPainter &painter)
 {
     for (const auto &monster : m_snapshot.monsters) {
-        QRect mRect(monster.col * CELL_SIZE, monster.row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-        QRect innerRect = mRect.adjusted(6, 6, -6, -6);
+        QRectF mRect = cellRect(monster.row, monster.col);
+        QRectF innerRect = mRect.adjusted(6, 6, -6, -6);
 
         // 底部阴影
         painter.setPen(Qt::NoPen);
@@ -564,10 +702,10 @@ void BattleView::drawMonsters(QPainter &painter)
         painter.drawRoundedRect(innerRect, 4, 4);
 
         // 怪物血量条
-        int barWidth = CELL_SIZE - 16;
+        int barWidth = std::max(1, static_cast<int>(innerRect.width()));
         int barHeight = 3;
-        int barX = innerRect.x();
-        int barY = innerRect.bottom() - 5;
+        int barX = static_cast<int>(innerRect.x());
+        int barY = static_cast<int>(innerRect.bottom()) - 5;
 
         painter.setPen(Qt::NoPen);
         painter.setBrush(QColor(40, 10, 10, 180));
@@ -590,10 +728,12 @@ void BattleView::drawProjectiles(QPainter &painter)
 {
     for (const auto &projectile : m_snapshot.projectiles) {
         const double progress = std::clamp(projectile.progress, 0.0, 1.0);
-        const double startX = projectile.fromCol * CELL_SIZE + CELL_SIZE / 2.0;
-        const double startY = projectile.fromRow * CELL_SIZE + CELL_SIZE / 2.0;
-        const double endX = projectile.toCol * CELL_SIZE + CELL_SIZE / 2.0;
-        const double endY = projectile.toRow * CELL_SIZE + CELL_SIZE / 2.0;
+        const QPointF start = cellCenter(projectile.fromRow, projectile.fromCol);
+        const QPointF end = cellCenter(projectile.toRow, projectile.toCol);
+        const double startX = start.x();
+        const double startY = start.y();
+        const double endX = end.x();
+        const double endY = end.y();
         const double x = startX + (endX - startX) * progress;
         const double y = startY + (endY - startY) * progress;
 
@@ -625,7 +765,7 @@ void BattleView::drawProjectiles(QPainter &painter)
         painter.drawEllipse(QPointF(x, y), radius, radius);
 
         if (projectile.kind == game::core::ProjectileKind::Aoe && projectile.splashRadius > 0) {
-            const double splashPixels = projectile.splashRadius * CELL_SIZE;
+            const double splashPixels = projectile.splashRadius * cellExtent();
             QColor splashColor(color.red(), color.green(), color.blue(), 35);
             painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 80), 1, Qt::DashLine));
             painter.setBrush(splashColor);
@@ -640,7 +780,7 @@ void BattleView::drawHoverCell(QPainter &painter)
     if (m_hoverRow < 0 || m_hoverCol < 0) return;
     if (m_hoverRow >= m_mapRows || m_hoverCol >= m_mapCols) return;
 
-    QRect hoverRect(m_hoverCol * CELL_SIZE, m_hoverRow * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    QRectF hoverRect = cellRect(m_hoverRow, m_hoverCol);
     painter.setPen(QPen(QColor(0, 212, 255, 70), 2));
     painter.setBrush(QColor(0, 212, 255, 18));
     painter.drawRect(hoverRect);
@@ -649,8 +789,8 @@ void BattleView::drawHoverCell(QPainter &painter)
 // ========== mouseMoveEvent() —— 鼠标移动追踪 ==========
 void BattleView::mouseMoveEvent(QMouseEvent *event)
 {
-    int col = event->pos().x() / CELL_SIZE;
-    int row = event->pos().y() / CELL_SIZE;
+    int col = colAtPixel(event->pos().x());
+    int row = rowAtPixel(event->pos().y());
 
     if (row != m_hoverRow || col != m_hoverCol) {
         m_hoverRow = row;
@@ -669,8 +809,8 @@ void BattleView::mousePressEvent(QMouseEvent *event)
     }
 
     // 像素坐标 → 网格坐标
-    int col = event->pos().x() / CELL_SIZE;
-    int row = event->pos().y() / CELL_SIZE;
+    int col = colAtPixel(event->pos().x());
+    int row = rowAtPixel(event->pos().y());
 
     // 边界检查
     if (row < 0 || row >= m_mapRows || col < 0 || col >= m_mapCols) return;
@@ -682,7 +822,8 @@ void BattleView::mousePressEvent(QMouseEvent *event)
         if (unitId >= 0) {
             m_selectedUnitId = unitId;
             m_mode = InteractionMode::RADIAL_MENU;
-            showRadialMenu(unitId, col * CELL_SIZE + CELL_SIZE / 2, row * CELL_SIZE + CELL_SIZE / 2);
+            const QPointF center = cellCenter(row, col);
+            showRadialMenu(unitId, static_cast<int>(center.x()), static_cast<int>(center.y()));
             update();
         }
         break;
@@ -760,9 +901,10 @@ void BattleView::showRadialMenu(int unitId, int pixelX, int pixelY)
 
     int btnWidth = 70, btnHeight = 36;
 
-    m_btnUpgrade->setGeometry(pixelX - btnWidth / 2, pixelY - CELL_SIZE - btnHeight - 5, btnWidth, btnHeight);
-    m_btnMove->setGeometry(pixelX - CELL_SIZE - btnWidth - 5, pixelY + 10, btnWidth, btnHeight);
-    m_btnRetreat->setGeometry(pixelX + CELL_SIZE + 5, pixelY + 10, btnWidth, btnHeight);
+    const int menuOffset = static_cast<int>(cellExtent());
+    m_btnUpgrade->setGeometry(pixelX - btnWidth / 2, pixelY - menuOffset - btnHeight - 5, btnWidth, btnHeight);
+    m_btnMove->setGeometry(pixelX - menuOffset - btnWidth - 5, pixelY + 10, btnWidth, btnHeight);
+    m_btnRetreat->setGeometry(pixelX + menuOffset + 5, pixelY + 10, btnWidth, btnHeight);
 
     // 升级按钮状态
     m_btnUpgrade->setEnabled(level < game::core::constants::MaxCardLevel);
@@ -1052,6 +1194,77 @@ void BattlePage::setupPveMap()
 {
     auto& map = m_battleManager->map();
 
+    game::core::LoadedMapConfig mapConfig;
+    std::string loadError;
+    const QString mapPath = findProjectFile("assets/maps/lab_map_01.json");
+    if (!mapPath.isEmpty() &&
+        game::core::MapConfigLoader::loadFromJson(mapPath.toStdString(), mapConfig, &loadError)) {
+        map.resize(mapConfig.rows, mapConfig.cols, game::core::TerrainType::NoDeploy, 0);
+
+        for (const auto& tile : mapConfig.tiles) {
+            map.setGrid({tile.row, tile.col},
+                        terrainFromMapTile(tile.type),
+                        terrainHeightFromMapTile(tile.type));
+        }
+
+        for (const auto& route : mapConfig.routesA) {
+            for (const auto& pos : route) {
+                const game::core::MapGrid* grid = map.gridAt(pos);
+                if (grid && grid->terrainType() == game::core::TerrainType::NoDeploy) {
+                    map.setGrid(pos, game::core::TerrainType::Path, 0);
+                }
+            }
+        }
+
+        if (!mapConfig.routesA.empty()) {
+            m_battleManager->setPaths(mapConfig.routesA);
+        } else if (!mapConfig.spawnA.empty()) {
+            m_battleManager->setSpawnPoint(mapConfig.spawnA.front());
+        }
+
+        const game::core::MapPosition spawnPos = !mapConfig.spawnA.empty()
+                                                    ? mapConfig.spawnA.front()
+                                                    : (!mapConfig.routesA.empty() && !mapConfig.routesA.front().empty()
+                                                           ? mapConfig.routesA.front().front()
+                                                           : game::core::MapPosition(1, 1));
+        const game::core::MapPosition corePos = !mapConfig.coreA.empty()
+                                                   ? mapConfig.coreA.front()
+                                                   : (!mapConfig.routesA.empty() && !mapConfig.routesA.front().empty()
+                                                          ? mapConfig.routesA.front().back()
+                                                          : game::core::MapPosition(map.rows() - 2, map.cols() - 2));
+
+        m_battleView->setMapSize(map.rows(), map.cols());
+        m_battleView->m_spawnPos = spawnPos;
+        m_battleView->m_corePos = corePos;
+
+        if (!mapConfig.image.empty()) {
+            QString imagePath = QFileInfo(mapPath).dir().filePath(QString::fromStdString(mapConfig.image));
+            if (!m_battleView->setBackgroundImage(imagePath)) {
+                qWarning() << "[BattlePage] failed to load PVE map image:" << imagePath;
+            }
+        } else {
+            m_battleView->clearBackgroundImage();
+        }
+
+        qDebug() << "[BattlePage] loaded PVE map from" << mapPath
+                 << "size" << map.rows() << "x" << map.cols()
+                 << "routesA" << static_cast<int>(mapConfig.routesA.size());
+        return;
+    }
+
+    if (!mapPath.isEmpty()) {
+        qWarning() << "[BattlePage] failed to load PVE map:" << QString::fromStdString(loadError)
+                   << "path:" << mapPath;
+    } else {
+        qWarning() << "[BattlePage] PVE map JSON not found, using fallback hardcoded map.";
+    }
+
+    map.resize(game::core::constants::DefaultMapRows,
+               game::core::constants::DefaultMapCols,
+               game::core::TerrainType::FlatLand,
+               0);
+    m_battleView->clearBackgroundImage();
+
     game::core::MapPosition spawnPos(1, 1);
     game::core::MapPosition corePos(10, 16);
 
@@ -1105,6 +1318,7 @@ void BattlePage::setupPveMap()
 void BattlePage::setupPvpMap()
 {
     auto& map = m_battleManager->map();
+    m_battleView->clearBackgroundImage();
 
     // 新 PVP 地图布局（12x18）
     // 出怪口在上方 (1,6) 和 (1,11)

@@ -14,6 +14,12 @@ bool Map::inBounds(MapPosition position) const {
            position.col >= 0 && position.col < cols_;
 }
 
+void Map::resize(int rows, int cols, TerrainType terrain, int height) {
+    rows_ = std::max(1, rows);
+    cols_ = std::max(1, cols);
+    grids_.assign(static_cast<std::size_t>(rows_ * cols_), MapGrid(terrain, height));
+}
+
 MapGrid* Map::gridAt(MapPosition position) {
     if (!inBounds(position)) return nullptr;
     return &grids_[static_cast<std::size_t>(position.row * cols_ + position.col)];
