@@ -486,6 +486,24 @@ DeployPage::DeployPage(QWidget *parent)
     connectSignals();
 }
 
+void DeployPage::paintEvent(QPaintEvent *event)
+{
+    Q_UNUSED(event);
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    static QPixmap bg(":/images/ui/scene_lab_02.png");
+    if (!bg.isNull()) {
+        QSize scaled = bg.size();
+        scaled.scale(size(), Qt::KeepAspectRatioByExpanding);
+        QRect target(QPoint((width() - scaled.width()) / 2,
+                            (height() - scaled.height()) / 2), scaled);
+        painter.drawPixmap(target, bg);
+    } else {
+        painter.fillRect(rect(), QColor(37, 30, 34));
+    }
+    painter.fillRect(rect(), QColor(35, 24, 21, 118));
+}
+
 void DeployPage::setNetworkContext(const NetworkContext& ctx)
 {
     m_netCtx = ctx;
@@ -500,6 +518,7 @@ void DeployPage::setDeck(const QVector<game::core::CardKind>& deck)
 
 void DeployPage::initUI()
 {
+    setAutoFillBackground(false);
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
@@ -511,8 +530,8 @@ void DeployPage::initUI()
         barContainer->setStyleSheet(
             "QWidget {"
             "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "    stop:0 rgba(10,20,38,0.96), stop:1 rgba(14,28,52,0.92));"
-            "  border-bottom: 2px solid rgba(0,212,255,0.40);"
+            "    stop:0 rgba(73,50,39,0.96), stop:1 rgba(43,31,28,0.94));"
+            "  border-bottom: 2px solid rgba(255,210,126,0.42);"
             "}"
         );
         QHBoxLayout *layout = new QHBoxLayout(barContainer);
@@ -521,20 +540,20 @@ void DeployPage::initUI()
         m_btnBack = new QPushButton("← 返回", barContainer);
         m_btnBack->setFixedSize(80, 36);
         m_btnBack->setStyleSheet(
-            "QPushButton { background-color: transparent; color: #8AB4F8;"
-            "  border: 1px solid rgba(0,212,255,0.3); border-radius: 8px; font-size: 14px; }"
-            "QPushButton:hover { color: #00D4FF; border: 1px solid #00D4FF; }"
+            "QPushButton { background-color: rgba(225,176,99,0.86); color: #3A2418;"
+            "  border: 2px solid rgba(76,48,31,0.82); border-radius: 8px; font-size: 14px; font-weight: bold; }"
+            "QPushButton:hover { border: 2px solid #FFD27E; }"
         );
         m_btnBack->setCursor(Qt::PointingHandCursor);
 
         m_titleLabel = new QLabel("迷雾部署阶段", barContainer);
-        m_titleLabel->setStyleSheet("color: #FFFFFF; font-size: 18px; font-weight: bold;");
+        m_titleLabel->setStyleSheet("color: #FFF0C8; font-size: 18px; font-weight: bold;");
 
         m_deployCountLabel = new QLabel("已部署: 0 个单位", barContainer);
         m_deployCountLabel->setStyleSheet("color: #FFD54F; font-size: 16px; font-weight: bold;");
 
         m_opponentLabel = new QLabel("对手: 等待中...", barContainer);
-        m_opponentLabel->setStyleSheet("color: #8AB4F8; font-size: 16px;");
+        m_opponentLabel->setStyleSheet("color: #9EE0C7; font-size: 16px;");
 
         layout->addWidget(m_btnBack);
         layout->addSpacing(20);
@@ -562,8 +581,8 @@ void DeployPage::initUI()
         barContainer->setStyleSheet(
             "QWidget {"
             "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "    stop:0 rgba(14,28,52,0.92), stop:1 rgba(10,20,38,0.96));"
-            "  border-top: 2px solid rgba(0,212,255,0.40);"
+            "    stop:0 rgba(43,31,28,0.92), stop:1 rgba(73,50,39,0.96));"
+            "  border-top: 2px solid rgba(255,210,126,0.42);"
             "}"
         );
         QHBoxLayout *layout = new QHBoxLayout(barContainer);
@@ -578,16 +597,16 @@ void DeployPage::initUI()
             cardBtn->setStyleSheet(
                 "QPushButton {"
                 "  background-color: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                "    stop:0 rgba(22,50,90,0.90), stop:1 rgba(12,30,55,0.85));"
-                "  color: #FFFFFF;"
-                "  border: 2px solid rgba(0,212,255,0.55); border-radius: 10px;"
+                "    stop:0 rgba(225,176,99,0.95), stop:1 rgba(123,82,50,0.92));"
+                "  color: #3A2418;"
+                "  border: 2px solid rgba(76,48,31,0.82); border-radius: 8px;"
                 "  font-size: 11px; font-weight: bold;"
                 "}"
                 "QPushButton:hover {"
-                "  border: 2px solid #00D4FF;"
-                "  background-color: rgba(0,212,255,0.18);"
+                "  border: 2px solid #FFD27E;"
+                "  background-color: rgba(255,213,127,0.40);"
                 "}"
-                "QPushButton:disabled { color: #555; border-color: rgba(0,212,255,0.2); }"
+                "QPushButton:disabled { color: #7E6B55; border-color: rgba(76,48,31,0.25); }"
             );
             cardBtn->setCursor(Qt::PointingHandCursor);
             cardBtn->setEnabled(false);
@@ -603,12 +622,12 @@ void DeployPage::initUI()
         m_btnStartBattle->setFixedSize(120, 50);
         m_btnStartBattle->setStyleSheet(
             "QPushButton {"
-            "  background-color: rgba(255,82,82,0.2); color: #FF5252;"
-            "  border: 2px solid rgba(255,82,82,0.6); border-radius: 10px;"
+            "  background-color: rgba(225,176,99,0.92); color: #3A2418;"
+            "  border: 2px solid rgba(76,48,31,0.82); border-radius: 10px;"
             "  font-size: 18px; font-weight: bold;"
             "}"
-            "QPushButton:hover { background-color: rgba(255,82,82,0.4); }"
-            "QPushButton:disabled { color: #555; border-color: rgba(255,82,82,0.2); }"
+            "QPushButton:hover { border: 2px solid #FFD27E; }"
+            "QPushButton:disabled { color: #7E6B55; border-color: rgba(76,48,31,0.25); }"
         );
         m_btnStartBattle->setCursor(Qt::PointingHandCursor);
         layout->addWidget(m_btnStartBattle);
@@ -617,7 +636,7 @@ void DeployPage::initUI()
     }
 
     // 页面背景
-    this->setStyleSheet("DeployPage { background-color: #0B1622; }");
+    this->setStyleSheet("DeployPage { background: transparent; }");
 
     // 设置卡牌按钮连接（只一次）
     setupCardButtonConnections();
@@ -777,18 +796,18 @@ void DeployPage::setupCardButtonConnections()
                 m_cardButtons[j]->setStyleSheet(
                     "QPushButton {"
                     "  background-color: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                    "    stop:0 rgba(22,50,90,0.90), stop:1 rgba(12,30,55,0.85));"
-                    "  color: #FFFFFF;"
-                    "  border: 2px solid rgba(0,212,255,0.55); border-radius: 10px;"
+                    "    stop:0 rgba(225,176,99,0.95), stop:1 rgba(123,82,50,0.92));"
+                    "  color: #3A2418;"
+                    "  border: 2px solid rgba(76,48,31,0.82); border-radius: 8px;"
                     "  font-size: 11px; font-weight: bold;"
                     "}"
                 );
             }
             m_cardButtons[i]->setStyleSheet(
                 "QPushButton {"
-                "  background-color: rgba(0,212,255,0.3);"
-                "  color: #00E5FF;"
-                "  border: 2px solid #00D4FF; border-radius: 10px;"
+                "  background-color: rgba(255,213,127,0.56);"
+                "  color: #24150D;"
+                "  border: 2px solid #FFD27E; border-radius: 8px;"
                 "  font-size: 11px; font-weight: bold;"
                 "}"
             );

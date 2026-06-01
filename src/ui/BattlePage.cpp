@@ -737,9 +737,15 @@ void BattleView::drawUnits(QPainter &painter)
 // ========== drawMonsters() —— 绘制怪物 ==========
 void BattleView::drawMonsters(QPainter &painter)
 {
+    static const QPixmap tomatoA(":/images/characters/tomato_gunner_cutout.png");
+    static const QPixmap tomatoB(":/images/characters/tomato_variant_01_cutout.png");
+    static const QPixmap tomatoC(":/images/characters/tomato_variant_02_cutout.png");
+    const QPixmap* monsterSprites[] = { &tomatoA, &tomatoB, &tomatoC };
+
     for (const auto &monster : m_snapshot.monsters) {
         QRectF mRect = cellRect(monster.row, monster.col);
         QRectF innerRect = mRect.adjusted(6, 6, -6, -6);
+        const qreal bob = qSin((m_animFrame + monster.id * 13) * 0.18) * 2.0;
 
         // 底部阴影
         painter.setPen(Qt::NoPen);
@@ -747,12 +753,26 @@ void BattleView::drawMonsters(QPainter &painter)
         painter.drawRoundedRect(innerRect.adjusted(2, 2, 2, 2), 4, 4);
 
         // 怪物方块（红色渐变）
-        QLinearGradient monsterGrad(innerRect.topLeft(), innerRect.bottomRight());
-        monsterGrad.setColorAt(0, QColor(240, 70, 70));
-        monsterGrad.setColorAt(1, QColor(180, 30, 30));
-        painter.setPen(QPen(QColor(255, 100, 100, 120), 1));
-        painter.setBrush(monsterGrad);
-        painter.drawRoundedRect(innerRect, 4, 4);
+        const QPixmap& sprite = *monsterSprites[std::abs(monster.id) % 3];
+        if (!sprite.isNull()) {
+            painter.setBrush(QColor(42, 24, 18, 85));
+            painter.drawEllipse(QRectF(innerRect.left() + innerRect.width() * 0.12,
+                                       innerRect.bottom() - innerRect.height() * 0.18,
+                                       innerRect.width() * 0.78,
+                                       innerRect.height() * 0.26));
+            QRectF spriteRect = innerRect.adjusted(-innerRect.width() * 0.35,
+                                                   -innerRect.height() * 0.62 + bob,
+                                                   innerRect.width() * 0.35,
+                                                   innerRect.height() * 0.08 + bob);
+            painter.drawPixmap(spriteRect.toRect(), sprite, sprite.rect());
+        } else {
+            QLinearGradient monsterGrad(innerRect.topLeft(), innerRect.bottomRight());
+            monsterGrad.setColorAt(0, QColor(240, 70, 70));
+            monsterGrad.setColorAt(1, QColor(180, 30, 30));
+            painter.setPen(QPen(QColor(255, 100, 100, 120), 1));
+            painter.setBrush(monsterGrad);
+            painter.drawRoundedRect(innerRect, 4, 4);
+        }
 
         // 怪物血量条
         int barWidth = std::max(1, static_cast<int>(innerRect.width()));
@@ -1072,25 +1092,25 @@ void BattlePage::initUI()
         barContainer->setStyleSheet(
             "QWidget {"
             "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "    stop:0 rgba(10,20,38,0.96), stop:1 rgba(14,28,52,0.92));"
-            "  border-bottom: 2px solid rgba(0,212,255,0.40);"
+            "    stop:0 rgba(73,50,39,0.96), stop:1 rgba(43,31,28,0.94));"
+            "  border-bottom: 2px solid rgba(255,210,126,0.42);"
             "}"
         );
         QHBoxLayout *layout = new QHBoxLayout(barContainer);
         layout->setContentsMargins(20, 0, 20, 0);
 
         m_waveLabel = new QLabel("🌊 波次: 0", barContainer);
-        m_waveLabel->setStyleSheet("color: #FFFFFF; font-size: 16px; font-weight: bold; background: transparent;");
+        m_waveLabel->setStyleSheet("color: #FFF0C8; font-size: 16px; font-weight: bold; background: transparent;");
 
         m_coreHpLabel = new QLabel("🏰 核心: 10", barContainer);
-        m_coreHpLabel->setStyleSheet("color: #00E5FF; font-size: 16px; font-weight: bold; background: transparent;");
+        m_coreHpLabel->setStyleSheet("color: #9EE0C7; font-size: 16px; font-weight: bold; background: transparent;");
 
         m_resourceLabel = new QLabel("💰 资源: 100", barContainer);
-        m_resourceLabel->setStyleSheet("color: #FFD54F; font-size: 16px; font-weight: bold; background: transparent;");
+        m_resourceLabel->setStyleSheet("color: #FFD36F; font-size: 16px; font-weight: bold; background: transparent;");
 
         // 对手信息标签（PVP 模式显示）
         m_opponentLabel = new QLabel("对手资源: --", barContainer);
-        m_opponentLabel->setStyleSheet("color: #FF8A80; font-size: 16px; font-weight: bold; background: transparent;");
+        m_opponentLabel->setStyleSheet("color: #FFAC8E; font-size: 16px; font-weight: bold; background: transparent;");
         m_opponentLabel->setVisible(false);  // 默认隐藏，PVP 模式下显示
 
         // 退出按钮
@@ -1098,13 +1118,13 @@ void BattlePage::initUI()
         m_btnExit->setFixedSize(80, 36);
         m_btnExit->setStyleSheet(
             "QPushButton {"
-            "  background-color: rgba(255,82,82,0.2); color: #FF5252;"
-            "  border: 2px solid rgba(255,82,82,0.5); border-radius: 8px;"
+            "  background-color: rgba(121,57,44,0.68); color: #FFE5C2;"
+            "  border: 2px solid rgba(255,190,124,0.45); border-radius: 8px;"
             "  font-size: 14px; font-weight: bold;"
             "}"
             "QPushButton:hover {"
-            "  background-color: rgba(255,82,82,0.4);"
-            "  border: 2px solid #FF5252;"
+            "  background-color: rgba(162,76,55,0.82);"
+            "  border: 2px solid #FFD27E;"
             "}"
         );
         m_btnExit->setCursor(Qt::PointingHandCursor);
@@ -1136,8 +1156,8 @@ void BattlePage::initUI()
         barContainer->setStyleSheet(
             "QWidget {"
             "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "    stop:0 rgba(14,28,52,0.92), stop:1 rgba(10,20,38,0.96));"
-            "  border-top: 2px solid rgba(0,212,255,0.40);"
+            "    stop:0 rgba(43,31,28,0.92), stop:1 rgba(73,50,39,0.96));"
+            "  border-top: 2px solid rgba(255,210,126,0.42);"
             "}"
         );
         QHBoxLayout *layout = new QHBoxLayout(barContainer);
@@ -1165,17 +1185,17 @@ void BattlePage::initUI()
             cardBtn->setStyleSheet(
                 "QPushButton {"
                 "  background-color: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                "    stop:0 rgba(22,50,90,0.90), stop:1 rgba(12,30,55,0.85));"
-                "  color: #FFFFFF;"
-                "  border: 2px solid rgba(0,212,255,0.55); border-radius: 10px;"
+                "    stop:0 rgba(225,176,99,0.95), stop:1 rgba(123,82,50,0.92));"
+                "  color: #3A2418;"
+                "  border: 2px solid rgba(76,48,31,0.82); border-radius: 8px;"
                 "  font-size: 11px; font-weight: bold;"
                 "}"
                 "QPushButton:hover {"
-                "  border: 2px solid #00D4FF;"
-                "  background-color: rgba(0,212,255,0.18);"
-                "  color: #00E5FF;"
+                "  border: 2px solid #FFD27E;"
+                "  background-color: rgba(255,213,127,0.40);"
+                "  color: #23150D;"
                 "}"
-                "QPushButton:pressed { background-color: rgba(0,212,255,0.30); }"
+                "QPushButton:pressed { background-color: rgba(100,62,38,0.75); }"
             );
             cardBtn->setCursor(Qt::PointingHandCursor);
 
@@ -1197,9 +1217,9 @@ void BattlePage::initUI()
         m_btnPause = new QPushButton("⏸", barContainer);
         m_btnPause->setFixedSize(50, 45);
         m_btnPause->setStyleSheet(
-            "QPushButton { background-color: rgba(22,50,90,0.85); color: #FFFFFF;"
-            "  border: 2px solid rgba(0,212,255,0.50); border-radius: 10px; font-size: 16px; }"
-            "QPushButton:hover { color: #00E5FF; border: 2px solid #00D4FF; }"
+            "QPushButton { background-color: rgba(225,176,99,0.88); color: #3A2418;"
+            "  border: 2px solid rgba(76,48,31,0.82); border-radius: 9px; font-size: 16px; font-weight: bold; }"
+            "QPushButton:hover { color: #23150D; border: 2px solid #FFD27E; }"
         );
         layout->addWidget(m_btnPause);
 
@@ -1214,8 +1234,8 @@ void BattlePage::initUI()
         m_btnSkill->setFixedSize(50, 45);
         m_btnSkill->setEnabled(false);
         m_btnSkill->setStyleSheet(
-            "QPushButton { background-color: rgba(22,40,70,0.60); color: #7AACCC;"
-            "  border: 2px solid rgba(0,212,255,0.25); border-radius: 10px; font-size: 16px; }"
+            "QPushButton { background-color: rgba(107,85,65,0.62); color: #D1B991;"
+            "  border: 2px solid rgba(76,48,31,0.45); border-radius: 9px; font-size: 16px; }"
         );
         m_btnSkill->setToolTip("技能为自动释放");
         layout->addWidget(m_btnSkill);
@@ -1224,7 +1244,7 @@ void BattlePage::initUI()
     }
 
     // 页面背景
-    this->setStyleSheet("BattlePage { background-color: #0B1622; }");
+    this->setStyleSheet("BattlePage { background-color: #211A1D; }");
 
     // 游戏主循环定时器（约 60FPS）
     m_gameTimer = new QTimer(this);
@@ -1249,7 +1269,9 @@ void BattlePage::setupPveMap()
 
     game::core::LoadedMapConfig mapConfig;
     std::string loadError;
-    const QString mapPath = findProjectFile("assets/maps/lab_map_01.json");
+    const QString selectedMapId = m_netCtx.pveMapId.isEmpty() ? QString("lab_map_01") : m_netCtx.pveMapId;
+    const QString safeMapId = (selectedMapId == "lab_map_02") ? selectedMapId : QString("lab_map_01");
+    const QString mapPath = findProjectFile(QString("assets/maps/%1.json").arg(safeMapId));
     if (!mapPath.isEmpty() &&
         game::core::MapConfigLoader::loadFromJson(mapPath.toStdString(), mapConfig, &loadError)) {
         map.resize(mapConfig.rows, mapConfig.cols, game::core::TerrainType::NoDeploy, 0);

@@ -1,0 +1,23 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="images/ui/scene_lab_01.png">../assets/ui/scene_lab_01.png</file>
+        <file alias="images/ui/scene_lab_02.png">../assets/ui/scene_lab_02.png</file>
+        <file alias="images/ui/scene_lab_03.png">../assets/ui/scene_lab_03.png</file>
+        <file alias="images/ui/scene_lab_04.png">../assets/ui/scene_lab_04.png</file>
+        <file alias="images/ui/scene_lab_05.png">../assets/ui/scene_lab_05.png</file>
+        <file alias="images/ui/scene_lab_06.png">../assets/ui/scene_lab_06.png</file>
+        <file alias="images/ui/card_frame_tall.png">../assets/ui/card_frame_tall.png</file>
+        <file alias="images/ui/panel_scroll.png">../assets/ui/panel_scroll.png</file>
+        <file alias="images/ui/sign_lobby.png">../assets/ui/sign_lobby.png</file>
+        <file alias="images/ui/sign_battle.png">../assets/ui/sign_battle.png</file>
+        <file alias="images/ui/sign_banner.png">../assets/ui/sign_banner.png</file>
+        <file alias="images/characters/tomato_gunner.png">../assets/characters/tomato_gunner.png</file>
+        <file alias="images/characters/tomato_variant_01.png">../assets/characters/tomato_variant_01.png</file>
+        <file alias="images/characters/tomato_variant_02.png">../assets/characters/tomato_variant_02.png</file>
+        <file alias="images/characters/tomato_gunner_cutout.png">../assets/characters/tomato_gunner_cutout.png</file>
+        <file alias="images/characters/tomato_variant_01_cutout.png">../assets/characters/tomato_variant_01_cutout.png</file>
+        <file alias="images/characters/tomato_variant_02_cutout.png">../assets/characters/tomato_variant_02_cutout.png</file>
+        <file alias="images/maps/lab_map_01.png">../assets/maps/lab_map_01.png</file>
+        <file alias="images/maps/lab_map_02.png">../assets/maps/lab_map_02.png</file>
+    </qresource>
+</RCC>

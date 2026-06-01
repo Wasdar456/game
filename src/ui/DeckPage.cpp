@@ -23,6 +23,8 @@
 #include <QGridLayout>
 #include <QFont>
 #include <QFrame>
+#include <QPainter>
+#include <QPaintEvent>
 
 // ========== 引入核心层头文件 ==========
 // 用于获取卡牌的详细属性
@@ -59,6 +61,24 @@ DeckPage::DeckPage(QWidget *parent)
 
     initUI();
     connectSignals();
+}
+
+void DeckPage::paintEvent(QPaintEvent *event)
+{
+    Q_UNUSED(event);
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    static QPixmap bg(":/images/ui/scene_lab_03.png");
+    if (!bg.isNull()) {
+        QSize scaled = bg.size();
+        scaled.scale(size(), Qt::KeepAspectRatioByExpanding);
+        QRect target(QPoint((width() - scaled.width()) / 2,
+                            (height() - scaled.height()) / 2), scaled);
+        painter.drawPixmap(target, bg);
+    } else {
+        painter.fillRect(rect(), QColor(37, 30, 34));
+    }
+    painter.fillRect(rect(), QColor(38, 26, 23, 126));
 }
 
 // ========== createCardPoolData() —— 创建卡牌展示数据 ==========
@@ -218,6 +238,7 @@ void DeckPage::createCardPoolData()
 // ========== initUI() —— 初始化界面 ==========
 void DeckPage::initUI()
 {
+    setAutoFillBackground(false);
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(40, 25, 40, 25);
     mainLayout->setSpacing(15);
@@ -228,14 +249,14 @@ void DeckPage::initUI()
     m_btnBack = new QPushButton("← 返回", this);
     m_btnBack->setFixedSize(100, 40);
     m_btnBack->setStyleSheet(
-        "QPushButton { background-color: rgba(20,40,70,0.70); color: #8AB4F8;"
-        "  border: 2px solid rgba(0,212,255,0.50); border-radius: 8px; font-size: 14px; }"
-        "QPushButton:hover { color: #00E5FF; border: 2px solid #00D4FF; }"
+        "QPushButton { background-color: rgba(225,176,99,0.86); color: #3A2418;"
+        "  border: 2px solid rgba(76,48,31,0.82); border-radius: 8px; font-size: 14px; font-weight: bold; }"
+        "QPushButton:hover { border: 2px solid #FFD27E; }"
     );
     m_btnBack->setCursor(Qt::PointingHandCursor);
 
     m_titleLabel = new QLabel("📖 战前编队 & 图鉴", this);
-    m_titleLabel->setStyleSheet("color: #FFFFFF; font-size: 22px; font-weight: bold;");
+    m_titleLabel->setStyleSheet("color: #FFF0C8; font-size: 22px; font-weight: bold;");
 
     topBar->addWidget(m_btnBack);
     topBar->addStretch();
@@ -249,16 +270,16 @@ void DeckPage::initUI()
     // ----- 左侧：卡池 -----
     QVBoxLayout *cardPoolLayout = new QVBoxLayout();
     QLabel *poolLabel = new QLabel("🗂️ 全图鉴卡池（点击选择出战卡牌）", this);
-    poolLabel->setStyleSheet("color: #E3F2FD; font-size: 15px; font-weight: bold;");
+    poolLabel->setStyleSheet("color: #FFF0C8; font-size: 15px; font-weight: bold;");
     cardPoolLayout->addWidget(poolLabel);
 
     m_cardPoolScroll = new QScrollArea(this);
     m_cardPoolScroll->setWidgetResizable(true);
     m_cardPoolScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_cardPoolScroll->setStyleSheet(
-        "QScrollArea { background-color: transparent; border: 2px solid rgba(0,212,255,0.35); border-radius: 8px; }"
+        "QScrollArea { background-color: rgba(49,35,30,0.58); border: 2px solid rgba(255,210,126,0.40); border-radius: 8px; }"
         "QScrollBar:vertical { width: 8px; background: transparent; }"
-        "QScrollBar::handle:vertical { background: rgba(0,212,255,0.5); border-radius: 4px; min-height: 30px; }"
+        "QScrollBar::handle:vertical { background: rgba(255,210,126,0.55); border-radius: 4px; min-height: 30px; }"
     );
 
     // 卡池内容容器（网格布局，每行4张）
@@ -355,7 +376,7 @@ void DeckPage::initUI()
     // ===== 下半部分：出战卡槽 =====
     QVBoxLayout *deckLayout = new QVBoxLayout();
     QLabel *slotLabel = new QLabel("🎯 出战卡槽（点击已选卡牌可移除）", this);
-    slotLabel->setStyleSheet("color: #E3F2FD; font-size: 15px; font-weight: bold;");
+    slotLabel->setStyleSheet("color: #FFF0C8; font-size: 15px; font-weight: bold;");
     deckLayout->addWidget(slotLabel);
 
     QHBoxLayout *slotRow = new QHBoxLayout();
@@ -414,14 +435,7 @@ void DeckPage::initUI()
     mainLayout->addLayout(deckLayout, 1);
 
     // 页面背景
-    this->setStyleSheet(
-        "DeckPage {"
-        "  background: qlineargradient("
-        "    x1:0, y1:0, x2:1, y2:1,"
-        "    stop:0 #0B1622, stop:0.5 #0F1B2D, stop:1 #162544"
-        "  );"
-        "}"
-    );
+    this->setStyleSheet("DeckPage { background: transparent; }");
 }
 
 // ========== refreshDeckSlotsDisplay() —— 刷新卡槽显示 ==========

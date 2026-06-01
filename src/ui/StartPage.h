@@ -9,6 +9,8 @@
 #include <QWidget>
 #include <QPushButton>
 #include <QLabel>
+#include <QKeyEvent>
+#include <QMouseEvent>
 #include <QTimer>
 #include <QVector>
 
@@ -56,11 +58,17 @@ signals:
     void signalExitClicked();
 
 protected:
+    void paintEvent(QPaintEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
     void showEvent(QShowEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
 
 private:
+    bool        m_splashActive;
+    QWidget    *m_menuLayer;
     ParticleWidget *m_particles;
+    QLabel      *m_pressHint;
     QLabel      *m_titleLabel;
     QLabel      *m_subtitleLabel;
     TechButton  *m_btnPve;
@@ -70,6 +78,7 @@ private:
     TechButton  *m_btnExit;
 
     void initUI();
+    void revealMenu();
     TechButton* createMenuButton(const QString &text, const QString &icon,
                                   const QColor &accent = QColor(0, 212, 255));
 };

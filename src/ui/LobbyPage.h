@@ -51,6 +51,7 @@ namespace game::network {
 struct NetworkContext {
     bool isPvp = false;                           ///< 是否为 PVP 模式
     bool isHost = false;                          ///< 是否为 Host 端
+    QString pveMapId = "lab_map_01";              ///< PVE selected map config id
     quint32 seed = 0;                             ///< 随机数种子（PVP 同步用）
     game::network::GameServer* server = nullptr;  ///< Host 端服务器指针
     game::network::GameClient* client = nullptr;  ///< Client 端客户端指针
@@ -75,9 +76,12 @@ public:
     void setMode(Mode mode);
 
 signals:
-    void signalConfigDone();  ///< 配置完成，进入选卡页面（PVE）
+    void signalConfigDone(const QString& mapId);  ///< 配置完成，进入选卡页面（PVE）
     void signalPvpReady(const NetworkContext& ctx);  ///< PVP 配置完成，携带网络上下文
     void signalBack();        ///< 返回上一页
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
 
 private:
     Mode m_currentMode;       ///< 当前显示的模式

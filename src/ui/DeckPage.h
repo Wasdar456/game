@@ -71,6 +71,9 @@ signals:
      */
     void signalDeckSelected(const QVector<game::core::CardKind> &selectedKinds);
 
+protected:
+    void paintEvent(QPaintEvent *event) override;
+
 private:
     // ========== UI 组件 ==========
     QPushButton *m_btnBack;

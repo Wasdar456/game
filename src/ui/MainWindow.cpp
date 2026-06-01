@@ -1,29 +1,29 @@
-/**
+﻿/**
  * @file MainWindow.cpp
- * @brief 主窗口类实现文件
+ * @brief 涓荤獥鍙ｇ被瀹炵幇鏂囦欢
  *
- * 核心逻辑：
- *   1. 创建 BattleManager 实例（游戏核心逻辑管理器）
- *   2. initUI() —— 创建 QStackedWidget 和所有子页面，按顺序添加
- *   3. connectSignals() —— 将每个页面的导航信号连接到页面切换的槽函数
- *   4. 页面切换通过 setCurrentWidget() 实现
+ * 鏍稿績閫昏緫锛?
+ *   1. 鍒涘缓 BattleManager 瀹炰緥锛堟父鎴忔牳蹇冮€昏緫绠＄悊鍣級
+ *   2. initUI() 鈥斺€?鍒涘缓 QStackedWidget 鍜屾墍鏈夊瓙椤甸潰锛屾寜椤哄簭娣诲姞
+ *   3. connectSignals() 鈥斺€?灏嗘瘡涓〉闈㈢殑瀵艰埅淇″彿杩炴帴鍒伴〉闈㈠垏鎹㈢殑妲藉嚱鏁?
+ *   4. 椤甸潰鍒囨崲閫氳繃 setCurrentWidget() 瀹炵幇
  *
- * 关于 BattleManager 的生命周期：
- *   - BattleManager 在 MainWindow 构造时创建，析构时销毁
- *   - 一局战斗结束后调用 clearBattle() 清空状态，而不是销毁重建
- *   - 新战斗开始时通过 BattleManager 的接口重新初始化
+ * 鍏充簬 BattleManager 鐨勭敓鍛藉懆鏈燂細
+ *   - BattleManager 鍦?MainWindow 鏋勯€犳椂鍒涘缓锛屾瀽鏋勬椂閿€姣?
+ *   - 涓€灞€鎴樻枟缁撴潫鍚庤皟鐢?clearBattle() 娓呯┖鐘舵€侊紝鑰屼笉鏄攢姣侀噸寤?
+ *   - 鏂版垬鏂楀紑濮嬫椂閫氳繃 BattleManager 鐨勬帴鍙ｉ噸鏂板垵濮嬪寲
  */
 
 #include "ui/MainWindow.h"
 #include <QApplication>
 #include <QPropertyAnimation>
 
-// ========== 引入核心层头文件 ==========
-// BattleManager 是 core 层对 UI 暴露的主要入口
-// 它组合了 Map、ResourceManager、CardSystem、SkillSystem、WaveSpawner
+// ========== 寮曞叆鏍稿績灞傚ご鏂囦欢 ==========
+// BattleManager 鏄?core 灞傚 UI 鏆撮湶鐨勪富瑕佸叆鍙?
+// 瀹冪粍鍚堜簡 Map銆丷esourceManager銆丆ardSystem銆丼killSystem銆乄aveSpawner
 #include "core/systems/BattleManager.h"
 
-// ========== 引入各子页面的完整头文件 ==========
+// ========== 寮曞叆鍚勫瓙椤甸潰鐨勫畬鏁村ご鏂囦欢 ==========
 #include "ui/StartPage.h"
 #include "ui/LobbyPage.h"
 #include "ui/DeckPage.h"
@@ -31,7 +31,7 @@
 #include "ui/BattlePage.h"
 #include "ui/SettingsPage.h"
 
-// ========== 构造函数 ==========
+// ========== 鏋勯€犲嚱鏁?==========
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , m_battleManager(nullptr)
@@ -44,40 +44,40 @@ MainWindow::MainWindow(QWidget *parent)
     , m_settingsPage(nullptr)
     , m_previousPage(nullptr)
 {
-    // ----- 创建 BattleManager -----
-    // BattleManager 是游戏核心逻辑的总管理器
-    // 它内部管理 Map、ResourceManager、CardSystem、SkillSystem、WaveSpawner
-    // UI 层通过它的接口进行：部署卡牌、升级、移动、撤回、推进波次
-    // 并通过 snapshot() 获取只读快照来渲染界面
+    // ----- 鍒涘缓 BattleManager -----
+    // BattleManager 鏄父鎴忔牳蹇冮€昏緫鐨勬€荤鐞嗗櫒
+    // 瀹冨唴閮ㄧ鐞?Map銆丷esourceManager銆丆ardSystem銆丼killSystem銆乄aveSpawner
+    // UI 灞傞€氳繃瀹冪殑鎺ュ彛杩涜锛氶儴缃插崱鐗屻€佸崌绾с€佺Щ鍔ㄣ€佹挙鍥炪€佹帹杩涙尝娆?
+    // 骞堕€氳繃 snapshot() 鑾峰彇鍙蹇収鏉ユ覆鏌撶晫闈?
     m_battleManager = new game::core::BattleManager();
 
-    // 设置窗口基本属性
-    this->setWindowTitle("塔防对战");
+    // 璁剧疆绐楀彛鍩烘湰灞炴€?
+    this->setWindowTitle("濉旈槻瀵规垬");
     this->setMinimumSize(1280, 720);
     this->resize(1280, 720);
 
-    // 初始化 UI 和信号连接
+    // 鍒濆鍖?UI 鍜屼俊鍙疯繛鎺?
     initUI();
     connectSignals();
 }
 
-// ========== 析构函数 ==========
+// ========== 鏋愭瀯鍑芥暟 ==========
 MainWindow::~MainWindow()
 {
-    // BattleManager 不在 Qt 对象树中，需要手动释放
+    // BattleManager 涓嶅湪 Qt 瀵硅薄鏍戜腑锛岄渶瑕佹墜鍔ㄩ噴鏀?
     delete m_battleManager;
 }
 
-// ========== initUI() —— 初始化所有 UI 组件 ==========
+// ========== initUI() 鈥斺€?鍒濆鍖栨墍鏈?UI 缁勪欢 ==========
 void MainWindow::initUI()
 {
-    // ----- 创建 QStackedWidget -----
-    // QStackedWidget 在同一位置堆叠多个 Widget，但同一时刻只显示其中一个
+    // ----- 鍒涘缓 QStackedWidget -----
+    // QStackedWidget 鍦ㄥ悓涓€浣嶇疆鍫嗗彔澶氫釜 Widget锛屼絾鍚屼竴鏃跺埢鍙樉绀哄叾涓竴涓?
     m_stackWidget = new QStackedWidget(this);
 
-    // ----- 创建所有子页面 -----
-    // 每个子页面都需要获取 BattleManager 的访问权限
-    // 通过传入 this（MainWindow 指针），子页面可调用 battleManager() 获取核心层接口
+    // ----- 鍒涘缓鎵€鏈夊瓙椤甸潰 -----
+    // 姣忎釜瀛愰〉闈㈤兘闇€瑕佽幏鍙?BattleManager 鐨勮闂潈闄?
+    // 閫氳繃浼犲叆 this锛圡ainWindow 鎸囬拡锛夛紝瀛愰〉闈㈠彲璋冪敤 battleManager() 鑾峰彇鏍稿績灞傛帴鍙?
 
     m_startPage    = new StartPage(this);
     m_lobbyPage    = new LobbyPage(this);
@@ -86,7 +86,7 @@ void MainWindow::initUI()
     m_battlePage   = new BattlePage(this);
     m_settingsPage = new SettingsPage(this);
 
-    // ----- 将所有页面按顺序添加到堆叠窗口 -----
+    // ----- 灏嗘墍鏈夐〉闈㈡寜椤哄簭娣诲姞鍒板爢鍙犵獥鍙?-----
     m_stackWidget->addWidget(m_startPage);      // index 0
     m_stackWidget->addWidget(m_lobbyPage);      // index 1
     m_stackWidget->addWidget(m_deckPage);       // index 2
@@ -94,20 +94,20 @@ void MainWindow::initUI()
     m_stackWidget->addWidget(m_battlePage);     // index 4
     m_stackWidget->addWidget(m_settingsPage);   // index 5
 
-    // ----- 设置堆叠窗口为主窗口的中央控件 -----
+    // ----- 璁剧疆鍫嗗彔绐楀彛涓轰富绐楀彛鐨勪腑澶帶浠?-----
     this->setCentralWidget(m_stackWidget);
 
-    // ----- 默认显示起始页 -----
+    // ----- 榛樿鏄剧ず璧峰椤?-----
     m_stackWidget->setCurrentWidget(m_startPage);
 }
 
-// ========== 带淡入淡出效果的页面切换 ==========
+// ========== 甯︽贰鍏ユ贰鍑烘晥鏋滅殑椤甸潰鍒囨崲 ==========
 void MainWindow::fadeToPage(QWidget *page)
 {
     QWidget *current = m_stackWidget->currentWidget();
     if (current == page) return;
 
-    // 淡出当前页
+    // 娣″嚭褰撳墠椤?
     QGraphicsOpacityEffect *outEffect = new QGraphicsOpacityEffect(current);
     current->setGraphicsEffect(outEffect);
     QPropertyAnimation *outAnim = new QPropertyAnimation(outEffect, "opacity");
@@ -116,7 +116,7 @@ void MainWindow::fadeToPage(QWidget *page)
     outAnim->setEndValue(0.0);
     outAnim->setEasingCurve(QEasingCurve::OutCubic);
 
-    // 淡入目标页
+    // 娣″叆鐩爣椤?
     QGraphicsOpacityEffect *inEffect = new QGraphicsOpacityEffect(page);
     page->setGraphicsEffect(inEffect);
     QPropertyAnimation *inAnim = new QPropertyAnimation(inEffect, "opacity");
@@ -125,7 +125,7 @@ void MainWindow::fadeToPage(QWidget *page)
     inAnim->setEndValue(1.0);
     inAnim->setEasingCurve(QEasingCurve::InCubic);
 
-    // 淡出完成后切换页面并开始淡入
+    // 娣″嚭瀹屾垚鍚庡垏鎹㈤〉闈㈠苟寮€濮嬫贰鍏?
     connect(outAnim, &QPropertyAnimation::finished, this, [this, page, inAnim]() {
         m_stackWidget->setCurrentWidget(page);
         inAnim->start(QAbstractAnimation::DeleteWhenStopped);
@@ -134,53 +134,54 @@ void MainWindow::fadeToPage(QWidget *page)
     outAnim->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
-// ========== connectSignals() —— 连接信号与槽 ==========
+// ========== connectSignals() 鈥斺€?杩炴帴淇″彿涓庢Ы ==========
 void MainWindow::connectSignals()
 {
-    // ===== 起始页 (StartPage) 的信号连接 =====
+    // ===== 璧峰椤?(StartPage) 鐨勪俊鍙疯繛鎺?=====
 
-    // 点击 [单人PVE] → 切换到大厅页，并设置模式为 PVE
+    // 鐐瑰嚮 [鍗曚汉PVE] 鈫?鍒囨崲鍒板ぇ鍘呴〉锛屽苟璁剧疆妯″紡涓?PVE
     connect(m_startPage, &StartPage::signalPveClicked,
             this, [this]() {
                 m_lobbyPage->setMode(LobbyPage::Mode::PVE);
                 fadeToPage(m_lobbyPage);
             });
 
-    // 点击 [多人PVP] → 切换到大厅页，并设置模式为 PVP
+    // 鐐瑰嚮 [澶氫汉PVP] 鈫?鍒囨崲鍒板ぇ鍘呴〉锛屽苟璁剧疆妯″紡涓?PVP
     connect(m_startPage, &StartPage::signalPvpClicked,
             this, [this]() {
                 m_lobbyPage->setMode(LobbyPage::Mode::PVP);
                 fadeToPage(m_lobbyPage);
             });
 
-    // 点击 [图鉴/仓库] → 切换到选卡页（记录来源：起始页）
+    // 鐐瑰嚮 [鍥鹃壌/浠撳簱] 鈫?鍒囨崲鍒伴€夊崱椤碉紙璁板綍鏉ユ簮锛氳捣濮嬮〉锛?
     connect(m_startPage, &StartPage::signalAtlasClicked,
             this, [this]() {
                 m_previousPage = m_startPage;
                 fadeToPage(m_deckPage);
             });
 
-    // 点击 [设置] → 切换到设置页
+    // 鐐瑰嚮 [璁剧疆] 鈫?鍒囨崲鍒拌缃〉
     connect(m_startPage, &StartPage::signalSettingsClicked,
             this, [this]() {
                 fadeToPage(m_settingsPage);
             });
 
-    // 点击 [退出] → 关闭整个应用程序
+    // 鐐瑰嚮 [閫€鍑篯 鈫?鍏抽棴鏁翠釜搴旂敤绋嬪簭
     connect(m_startPage, &StartPage::signalExitClicked,
             this, &QApplication::quit);
 
-    // ===== 大厅页 (LobbyPage) 的信号连接 =====
+    // ===== 澶у巺椤?(LobbyPage) 鐨勪俊鍙疯繛鎺?=====
 
-    // PVE 大厅配置完成 → 切换到选卡页（记录来源：大厅页）
+    // PVE 澶у巺閰嶇疆瀹屾垚 鈫?鍒囨崲鍒伴€夊崱椤碉紙璁板綍鏉ユ簮锛氬ぇ鍘呴〉锛?
     connect(m_lobbyPage, &LobbyPage::signalConfigDone,
-            this, [this]() {
-                m_networkContext = NetworkContext();  // 重置为默认（非PVP）
+            this, [this](const QString& mapId) {
+                m_networkContext = NetworkContext();  // 閲嶇疆涓洪粯璁わ紙闈濸VP锛?
+                m_networkContext.pveMapId = mapId;
                 m_previousPage = m_lobbyPage;
                 fadeToPage(m_deckPage);
             });
 
-    // PVP 大厅配置完成 → 保存网络上下文，切换到选卡页
+    // PVP 澶у巺閰嶇疆瀹屾垚 鈫?淇濆瓨缃戠粶涓婁笅鏂囷紝鍒囨崲鍒伴€夊崱椤?
     connect(m_lobbyPage, &LobbyPage::signalPvpReady,
             this, [this](const NetworkContext& ctx) {
                 m_networkContext = ctx;
@@ -188,32 +189,32 @@ void MainWindow::connectSignals()
                 fadeToPage(m_deckPage);
             });
 
-    // 点击 [返回] → 回到起始页
+    // 鐐瑰嚮 [杩斿洖] 鈫?鍥炲埌璧峰椤?
     connect(m_lobbyPage, &LobbyPage::signalBack,
             this, [this]() {
                 fadeToPage(m_startPage);
             });
 
-    // ===== 选卡页 (DeckPage) 的信号连接 =====
+    // ===== 閫夊崱椤?(DeckPage) 鐨勪俊鍙疯繛鎺?=====
 
-    // 卡组编满并点击 [开始战斗]
+    // 鍗＄粍缂栨弧骞剁偣鍑?[寮€濮嬫垬鏂梋
     connect(m_deckPage, &DeckPage::signalBattleStart,
             this, [this]() {
                 if (m_networkContext.isPvp) {
-                    // PVP 模式：进入迷雾部署页面
+                    // PVP 妯″紡锛氳繘鍏ヨ糠闆鹃儴缃查〉闈?
                     m_deployPage->setNetworkContext(m_networkContext);
                     m_deployPage->setDeck(m_deckPage->getSelectedKinds());
                     m_deployPage->initDeployment();
                     fadeToPage(m_deployPage);
                 } else {
-                    // PVE 模式：直接进入战斗
+                    // PVE 妯″紡锛氱洿鎺ヨ繘鍏ユ垬鏂?
                     m_battlePage->setNetworkContext(m_networkContext);
                     m_battlePage->startBattle();
                     fadeToPage(m_battlePage);
                 }
             });
 
-    // 选卡页返回
+    // 閫夊崱椤佃繑鍥?
     connect(m_deckPage, &DeckPage::signalBack,
             this, [this]() {
                 if (m_previousPage) {
@@ -223,7 +224,7 @@ void MainWindow::connectSignals()
                 }
             });
 
-    // 点击 [返回] → 回到上一页
+    // 鐐瑰嚮 [杩斿洖] 鈫?鍥炲埌涓婁竴椤?
     connect(m_deckPage, &DeckPage::signalBack,
             this, [this]() {
                 if (m_previousPage) {
@@ -233,9 +234,9 @@ void MainWindow::connectSignals()
                 }
             });
 
-    // ===== 部署页 (DeployPage) 的信号连接 =====
+    // ===== 閮ㄧ讲椤?(DeployPage) 鐨勪俊鍙疯繛鎺?=====
 
-    // 开战 → 切换到战斗页
+    // 寮€鎴?鈫?鍒囨崲鍒版垬鏂楅〉
     connect(m_deployPage, &DeployPage::signalBattleStart,
             this, [this]() {
                 m_battlePage->setNetworkContext(m_networkContext);
@@ -243,31 +244,31 @@ void MainWindow::connectSignals()
                 fadeToPage(m_battlePage);
             });
 
-    // 返回 → 回到选卡页
+    // 杩斿洖 鈫?鍥炲埌閫夊崱椤?
     connect(m_deployPage, &DeployPage::signalBack,
             this, [this]() {
                 fadeToPage(m_deckPage);
             });
 
-    // ===== 战斗页 (BattlePage) 的信号连接 =====
+    // ===== 鎴樻枟椤?(BattlePage) 鐨勪俊鍙疯繛鎺?=====
 
-    // 怪物清空 → 回到部署阶段
+    // 鎬墿娓呯┖ 鈫?鍥炲埌閮ㄧ讲闃舵
     connect(m_battlePage, &BattlePage::signalBackToDeploy,
             this, [this]() {
                 m_deployPage->reEnter();
                 fadeToPage(m_deployPage);
             });
 
-    // 战斗结束 → 回到起始页
+    // 鎴樻枟缁撴潫 鈫?鍥炲埌璧峰椤?
     connect(m_battlePage, &BattlePage::signalBattleEnd,
             this, [this]() {
                 m_battleManager->clearBattle();
                 fadeToPage(m_startPage);
             });
 
-    // ===== 设置页 (SettingsPage) 的信号连接 =====
+    // ===== 璁剧疆椤?(SettingsPage) 鐨勪俊鍙疯繛鎺?=====
 
-    // 点击 [返回] → 回到起始页
+    // 鐐瑰嚮 [杩斿洖] 鈫?鍥炲埌璧峰椤?
     connect(m_settingsPage, &SettingsPage::signalBack,
             this, [this]() {
                 fadeToPage(m_startPage);

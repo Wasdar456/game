@@ -134,6 +134,9 @@ signals:
     void signalBattleStart();  ///< 开战，进入战斗页面
     void signalBack();         ///< 返回
 
+protected:
+    void paintEvent(QPaintEvent *event) override;
+
 private:
     struct PendingDeploy {
         game::core::CardKind kind;
