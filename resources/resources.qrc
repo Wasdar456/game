@@ -19,5 +19,25 @@
         <file alias="images/characters/tomato_variant_02_cutout.png">../assets/characters/tomato_variant_02_cutout.png</file>
         <file alias="images/maps/lab_map_01.png">../assets/maps/lab_map_01.png</file>
         <file alias="images/maps/lab_map_02.png">../assets/maps/lab_map_02.png</file>
+        <file alias="images/lobby_demo/lobby_background.png">../assets/lobby_demo/lobby_background.png</file>
+        <file alias="images/lobby_demo/settings.png">../assets/lobby_demo/settings.png</file>
+        <file alias="images/lobby_demo/profile.png">../assets/lobby_demo/profile.png</file>
+        <file alias="images/lobby_demo/pve.png">../assets/lobby_demo/pve.png</file>
+        <file alias="images/lobby_demo/pvp.png">../assets/lobby_demo/pvp.png</file>
+        <file alias="images/lobby_demo/map_left.png">../assets/lobby_demo/map_left.png</file>
+        <file alias="images/lobby_demo/map_right.png">../assets/lobby_demo/map_right.png</file>
+        <file alias="images/lobby_demo/map_dropdown.png">../assets/lobby_demo/map_dropdown.png</file>
+        <file alias="images/lobby_demo/easy.png">../assets/lobby_demo/easy.png</file>
+        <file alias="images/lobby_demo/normal.png">../assets/lobby_demo/normal.png</file>
+        <file alias="images/lobby_demo/hard.png">../assets/lobby_demo/hard.png</file>
+        <file alias="images/lobby_demo/wave_minus.png">../assets/lobby_demo/wave_minus.png</file>
+        <file alias="images/lobby_demo/wave_plus.png">../assets/lobby_demo/wave_plus.png</file>
+        <file alias="images/lobby_demo/invite.png">../assets/lobby_demo/invite.png</file>
+        <file alias="images/lobby_demo/create_room.png">../assets/lobby_demo/create_room.png</file>
+        <file alias="images/lobby_demo/join.png">../assets/lobby_demo/join.png</file>
+        <file alias="images/lobby_demo/start.png">../assets/lobby_demo/start.png</file>
+        <file alias="images/lobby_demo/deck.png">../assets/lobby_demo/deck.png</file>
+        <file alias="images/lobby_demo/atlas.png">../assets/lobby_demo/atlas.png</file>
+        <file alias="images/lobby_demo/back.png">../assets/lobby_demo/back.png</file>
     </qresource>
 </RCC>

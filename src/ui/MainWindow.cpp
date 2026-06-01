@@ -17,6 +17,7 @@
 #include "ui/MainWindow.h"
 #include <QApplication>
 #include <QPropertyAnimation>
+#include <QTimer>
 
 // ========== 寮曞叆鏍稿績灞傚ご鏂囦欢 ==========
 // BattleManager 鏄?core 灞傚 UI 鏆撮湶鐨勪富瑕佸叆鍙?
@@ -105,7 +106,16 @@ void MainWindow::initUI()
 void MainWindow::fadeToPage(QWidget *page)
 {
     QWidget *current = m_stackWidget->currentWidget();
-    if (current == page) return;
+    if (!page || current == page) {
+        if (page) {
+            page->setGraphicsEffect(nullptr);
+            page->update();
+        }
+        return;
+    }
+
+    current->setGraphicsEffect(nullptr);
+    page->setGraphicsEffect(nullptr);
 
     // 娣″嚭褰撳墠椤?
     QGraphicsOpacityEffect *outEffect = new QGraphicsOpacityEffect(current);
@@ -116,18 +126,34 @@ void MainWindow::fadeToPage(QWidget *page)
     outAnim->setEndValue(0.0);
     outAnim->setEasingCurve(QEasingCurve::OutCubic);
 
-    // 娣″叆鐩爣椤?
-    QGraphicsOpacityEffect *inEffect = new QGraphicsOpacityEffect(page);
-    page->setGraphicsEffect(inEffect);
-    QPropertyAnimation *inAnim = new QPropertyAnimation(inEffect, "opacity");
-    inAnim->setDuration(200);
-    inAnim->setStartValue(0.0);
-    inAnim->setEndValue(1.0);
-    inAnim->setEasingCurve(QEasingCurve::InCubic);
-
     // 娣″嚭瀹屾垚鍚庡垏鎹㈤〉闈㈠苟寮€濮嬫贰鍏?
-    connect(outAnim, &QPropertyAnimation::finished, this, [this, page, inAnim]() {
+    connect(outAnim, &QPropertyAnimation::finished, this, [this, current, page]() {
+        QTimer::singleShot(0, current, [current]() {
+            current->setGraphicsEffect(nullptr);
+            current->update();
+        });
         m_stackWidget->setCurrentWidget(page);
+        page->show();
+        page->raise();
+        page->update();
+
+        // showEvent() may refresh page visuals, so attach the fade-in effect afterwards.
+        QGraphicsOpacityEffect *inEffect = new QGraphicsOpacityEffect(page);
+        inEffect->setOpacity(0.0);
+        page->setGraphicsEffect(inEffect);
+        QPropertyAnimation *inAnim = new QPropertyAnimation(inEffect, "opacity");
+        inAnim->setDuration(200);
+        inAnim->setStartValue(0.0);
+        inAnim->setEndValue(1.0);
+        inAnim->setEasingCurve(QEasingCurve::InCubic);
+
+        connect(inAnim, &QPropertyAnimation::finished, page, [page]() {
+            QTimer::singleShot(0, page, [page]() {
+                page->setGraphicsEffect(nullptr);
+                page->update();
+                page->repaint();
+            });
+        });
         inAnim->start(QAbstractAnimation::DeleteWhenStopped);
     });
 
@@ -215,16 +241,6 @@ void MainWindow::connectSignals()
             });
 
     // 閫夊崱椤佃繑鍥?
-    connect(m_deckPage, &DeckPage::signalBack,
-            this, [this]() {
-                if (m_previousPage) {
-                    fadeToPage(m_previousPage);
-                } else {
-                    fadeToPage(m_startPage);
-                }
-            });
-
-    // 鐐瑰嚮 [杩斿洖] 鈫?鍥炲埌涓婁竴椤?
     connect(m_deckPage, &DeckPage::signalBack,
             this, [this]() {
                 if (m_previousPage) {

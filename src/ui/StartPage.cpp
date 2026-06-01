@@ -1,23 +1,203 @@
 /**
  * @file StartPage.cpp
- * @brief Start page with scene_lab_03 splash, then the original simple menu.
+ * @brief Splash page plus image-cropped lobby buttons based on the UI demo.
  */
 
 #include "ui/StartPage.h"
 
-#include <QDebug>
-#include <QFont>
+#include <QEasingCurve>
 #include <QGraphicsOpacityEffect>
-#include <QHBoxLayout>
-#include <QMouseEvent>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QPropertyAnimation>
 #include <QRandomGenerator>
-#include <QVBoxLayout>
+#include <QShowEvent>
+#include <QVariantAnimation>
 #include <QtMath>
 #include <algorithm>
+#include <functional>
 #include <random>
+
+namespace {
+
+constexpr int kLobbyDesignWidth = 1672;
+constexpr int kLobbyDesignHeight = 941;
+constexpr qreal kHoverScale = 1.08;
+constexpr qreal kPressedScale = 0.97;
+
+struct LobbyButtonSpec {
+    const char *id;
+    const char *title;
+    QRect rect;
+    const char *asset;
+};
+
+const QVector<LobbyButtonSpec> kLobbyButtons = {
+    {"settings", "Settings", {1308, 30, 155, 58}, ":/images/lobby_demo/settings.png"},
+    {"profile", "Profile", {1485, 30, 151, 58}, ":/images/lobby_demo/profile.png"},
+    {"pve", "PVE", {140, 337, 233, 96}, ":/images/lobby_demo/pve.png"},
+    {"pvp", "PVP", {140, 458, 233, 96}, ":/images/lobby_demo/pvp.png"},
+    {"map_left", "Map Left", {462, 418, 41, 76}, ":/images/lobby_demo/map_left.png"},
+    {"map_right", "Map Right", {744, 418, 40, 76}, ":/images/lobby_demo/map_right.png"},
+    {"map_dropdown", "Jungle Ruins", {495, 610, 279, 50}, ":/images/lobby_demo/map_dropdown.png"},
+    {"easy", "Easy", {817, 356, 101, 51}, ":/images/lobby_demo/easy.png"},
+    {"normal", "Normal", {927, 361, 95, 42}, ":/images/lobby_demo/normal.png"},
+    {"hard", "Hard", {1032, 360, 88, 43}, ":/images/lobby_demo/hard.png"},
+    {"wave_minus", "Wave minus", {823, 474, 42, 41}, ":/images/lobby_demo/wave_minus.png"},
+    {"wave_plus", "Wave plus", {1056, 474, 39, 41}, ":/images/lobby_demo/wave_plus.png"},
+    {"invite", "Invite", {1204, 633, 78, 47}, ":/images/lobby_demo/invite.png"},
+    {"create_room", "Create Room", {1289, 633, 110, 47}, ":/images/lobby_demo/create_room.png"},
+    {"join", "Join", {1407, 633, 73, 47}, ":/images/lobby_demo/join.png"},
+    {"start", "Start", {425, 766, 190, 99}, ":/images/lobby_demo/start.png"},
+    {"deck", "Deck", {638, 770, 185, 96}, ":/images/lobby_demo/deck.png"},
+    {"atlas", "Atlas", {846, 771, 184, 95}, ":/images/lobby_demo/atlas.png"},
+    {"back", "Back", {1052, 770, 185, 96}, ":/images/lobby_demo/back.png"},
+};
+
+void drawCoverPixmap(QPainter &painter, const QPixmap &pixmap, const QRect &target)
+{
+    if (pixmap.isNull()) {
+        painter.fillRect(target, QColor(47, 37, 30));
+        return;
+    }
+
+    QSize scaled = pixmap.size();
+    scaled.scale(target.size(), Qt::KeepAspectRatioByExpanding);
+    const QRect drawRect(QPoint(target.x() + (target.width() - scaled.width()) / 2,
+                                target.y() + (target.height() - scaled.height()) / 2),
+                         scaled);
+    painter.drawPixmap(drawRect, pixmap);
+}
+
+} // namespace
+
+class StartImageButton final : public QWidget
+{
+public:
+    explicit StartImageButton(const LobbyButtonSpec &spec, QWidget *parent = nullptr)
+        : QWidget(parent)
+        , m_spec(spec)
+        , m_pixmap(QString::fromUtf8(spec.asset))
+        , m_animation(new QVariantAnimation(this))
+    {
+        setMouseTracking(true);
+        setCursor(Qt::PointingHandCursor);
+        setToolTip(QString::fromUtf8(spec.title));
+        setAttribute(Qt::WA_TranslucentBackground);
+
+        m_animation->setDuration(110);
+        m_animation->setEasingCurve(QEasingCurve::OutCubic);
+        connect(m_animation, &QVariantAnimation::valueChanged, this, [this](const QVariant &value) {
+            m_scale = value.toReal();
+            update();
+        });
+    }
+
+    void setClickHandler(std::function<void(QString, QString)> handler)
+    {
+        m_clickHandler = std::move(handler);
+    }
+
+    void setCanvasRect(const QRectF &rect)
+    {
+        const qreal xPad = rect.width() * (kHoverScale - 1.0) / 2.0 + 6.0;
+        const qreal yPad = rect.height() * (kHoverScale - 1.0) / 2.0 + 6.0;
+        setGeometry(rect.adjusted(-xPad, -yPad, xPad, yPad).toAlignedRect());
+        m_baseSize = rect.size();
+        update();
+    }
+
+    void refreshVisual()
+    {
+        m_animation->stop();
+        m_scale = 1.0;
+        m_pressed = false;
+        show();
+        raise();
+        update();
+    }
+
+protected:
+    void showEvent(QShowEvent *event) override
+    {
+        QWidget::showEvent(event);
+        refreshVisual();
+    }
+
+    void enterEvent(QEnterEvent *event) override
+    {
+        QWidget::enterEvent(event);
+        m_pressed = false;
+        animateTo(kHoverScale);
+    }
+
+    void leaveEvent(QEvent *event) override
+    {
+        QWidget::leaveEvent(event);
+        m_pressed = false;
+        animateTo(1.0);
+    }
+
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton) {
+            m_pressed = true;
+            animateTo(kPressedScale);
+            event->accept();
+            return;
+        }
+        QWidget::mousePressEvent(event);
+    }
+
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton && m_pressed) {
+            m_pressed = false;
+            const bool inside = rect().contains(event->pos());
+            animateTo(inside ? kHoverScale : 1.0);
+            if (inside && m_clickHandler) {
+                m_clickHandler(QString::fromUtf8(m_spec.id), QString::fromUtf8(m_spec.title));
+            }
+            event->accept();
+            return;
+        }
+        QWidget::mouseReleaseEvent(event);
+    }
+
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        QRectF drawRect(QPointF(0, 0), m_baseSize * m_scale);
+        drawRect.moveCenter(QRectF(rect()).center());
+
+        if (!m_pixmap.isNull()) {
+            painter.drawPixmap(drawRect, m_pixmap, QRectF(m_pixmap.rect()));
+        } else {
+            painter.setPen(QPen(Qt::red, 2));
+            painter.drawRect(drawRect);
+        }
+    }
+
+private:
+    void animateTo(qreal target)
+    {
+        m_animation->stop();
+        m_animation->setStartValue(m_scale);
+        m_animation->setEndValue(target);
+        m_animation->start();
+    }
+
+    LobbyButtonSpec m_spec;
+    QPixmap m_pixmap;
+    QVariantAnimation *m_animation;
+    std::function<void(QString, QString)> m_clickHandler;
+    QSizeF m_baseSize;
+    qreal m_scale = 1.0;
+    bool m_pressed = false;
+};
 
 ParticleWidget::ParticleWidget(QWidget *parent)
     : QWidget(parent)
@@ -100,6 +280,7 @@ StartPage::StartPage(QWidget *parent)
     , m_menuLayer(nullptr)
     , m_particles(nullptr)
     , m_pressHint(nullptr)
+    , m_clickHint(nullptr)
     , m_titleLabel(nullptr)
     , m_subtitleLabel(nullptr)
     , m_btnPve(nullptr)
@@ -116,30 +297,26 @@ void StartPage::paintEvent(QPaintEvent *event)
     Q_UNUSED(event);
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
-    static QPixmap bg(":/images/ui/scene_lab_03.png");
-    if (!bg.isNull()) {
-        QSize scaled = bg.size();
-        scaled.scale(size(), Qt::KeepAspectRatioByExpanding);
-        QRect target(QPoint((width() - scaled.width()) / 2,
-                            (height() - scaled.height()) / 2), scaled);
-        painter.drawPixmap(target, bg);
-    } else {
-        painter.fillRect(rect(), QColor(47, 37, 30));
+    if (m_splashActive) {
+        static QPixmap splash(":/images/ui/scene_lab_03.png");
+        drawCoverPixmap(painter, splash, rect());
+
+        QLinearGradient vignette(0, 0, 0, height());
+        vignette.setColorAt(0.0, QColor(34, 25, 20, 28));
+        vignette.setColorAt(0.55, QColor(34, 25, 20, 0));
+        vignette.setColorAt(1.0, QColor(23, 18, 15, 82));
+        painter.fillRect(rect(), vignette);
+        return;
     }
 
-    QLinearGradient vignette(0, 0, 0, height());
-    vignette.setColorAt(0.0, QColor(34, 25, 20, m_splashActive ? 28 : 70));
-    vignette.setColorAt(0.55, QColor(34, 25, 20, m_splashActive ? 0 : 18));
-    vignette.setColorAt(1.0, QColor(23, 18, 15, m_splashActive ? 82 : 132));
-    painter.fillRect(rect(), vignette);
-
-    if (!m_splashActive) {
-        QLinearGradient leftShade(0, 0, width() * 0.45, 0);
-        leftShade.setColorAt(0.0, QColor(25, 16, 12, 152));
-        leftShade.setColorAt(0.68, QColor(25, 16, 12, 72));
-        leftShade.setColorAt(1.0, QColor(25, 16, 12, 0));
-        painter.fillRect(rect(), leftShade);
+    painter.fillRect(rect(), QColor(27, 38, 29));
+    static QPixmap lobbyBackground(":/images/lobby_demo/lobby_background.png");
+    if (!lobbyBackground.isNull()) {
+        painter.drawPixmap(m_demoCanvasRect, lobbyBackground, QRectF(lobbyBackground.rect()));
+    } else {
+        drawCoverPixmap(painter, QPixmap(":/images/ui/scene_lab_02.png"), rect());
     }
 }
 
@@ -168,34 +345,33 @@ void StartPage::showEvent(QShowEvent *event)
     QWidget::showEvent(event);
     setFocus(Qt::OtherFocusReason);
     if (!m_splashActive) {
+        updateDemoLayout();
         playEnterAnimation();
     }
 }
 
 void StartPage::playEnterAnimation()
 {
-    QList<QWidget*> items = {m_titleLabel, m_subtitleLabel,
-                             m_btnPve, m_btnPvp, m_btnAtlas,
-                             m_btnSettings, m_btnExit};
-
-    for (QWidget *item : items) {
-        if (!item) {
-            continue;
-        }
-
-        item->setGraphicsEffect(nullptr);
-
-        QGraphicsOpacityEffect *opacityEffect = new QGraphicsOpacityEffect(item);
-        opacityEffect->setOpacity(0);
-        item->setGraphicsEffect(opacityEffect);
-
-        QPropertyAnimation *anim = new QPropertyAnimation(opacityEffect, "opacity");
-        anim->setDuration(400);
-        anim->setStartValue(0.0);
-        anim->setEndValue(1.0);
-        anim->setEasingCurve(QEasingCurve::OutCubic);
-        anim->start(QAbstractAnimation::DeleteWhenStopped);
+    if (!m_menuLayer) {
+        return;
     }
+
+    m_menuLayer->setGraphicsEffect(nullptr);
+    m_menuLayer->show();
+    m_menuLayer->raise();
+
+    for (StartImageButton *button : m_demoButtons) {
+        if (button) {
+            button->refreshVisual();
+        }
+    }
+
+    if (m_clickHint && m_clickHint->isVisible()) {
+        m_clickHint->raise();
+    }
+
+    m_menuLayer->update();
+    update();
 }
 
 void StartPage::initUI()
@@ -207,66 +383,28 @@ void StartPage::initUI()
     m_menuLayer->setAttribute(Qt::WA_TranslucentBackground);
     m_menuLayer->hide();
 
-    QHBoxLayout *pageLayout = new QHBoxLayout(m_menuLayer);
-    pageLayout->setContentsMargins(56, 42, 56, 42);
-    pageLayout->setSpacing(24);
+    for (const auto &spec : kLobbyButtons) {
+        auto *button = new StartImageButton(spec, m_menuLayer);
+        button->setClickHandler([this](const QString &id, const QString &title) {
+            handleDemoButton(id, title);
+        });
+        m_demoButtons.append(button);
+    }
 
-    QVBoxLayout *mainLayout = new QVBoxLayout();
-    mainLayout->setSpacing(12);
-    pageLayout->addLayout(mainLayout);
-    pageLayout->addStretch(1);
-
-    mainLayout->addStretch(1);
-
-    m_titleLabel = new QLabel("塔防对战", m_menuLayer);
-    QFont titleFont("Microsoft YaHei", 52, QFont::Bold);
-    m_titleLabel->setFont(titleFont);
-    m_titleLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    m_titleLabel->setStyleSheet(
+    m_clickHint = new QLabel(m_menuLayer);
+    m_clickHint->setAlignment(Qt::AlignCenter);
+    m_clickHint->setStyleSheet(
         "QLabel {"
-        "  color: #FFF0C2;"
-        "  padding: 5px;"
+        "  color: #2C210E;"
+        "  background-color: rgba(249,222,142,210);"
+        "  border: 2px solid rgba(74,43,19,210);"
+        "  border-radius: 10px;"
+        "  padding: 8px 18px;"
+        "  font-size: 15px;"
+        "  font-weight: 800;"
         "}"
     );
-    mainLayout->addWidget(m_titleLabel);
-
-    m_subtitleLabel = new QLabel("TOWER DEFENSE", m_menuLayer);
-    QFont subFont("Consolas", 16, QFont::Light);
-    m_subtitleLabel->setFont(subFont);
-    m_subtitleLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    m_subtitleLabel->setStyleSheet(
-        "QLabel { color: rgba(255,226,166,0.78); letter-spacing: 10px; }"
-    );
-    mainLayout->addWidget(m_subtitleLabel);
-    mainLayout->addSpacing(30);
-
-    m_btnPve      = createMenuButton("单人 PVE",  "");
-    m_btnPvp      = createMenuButton("多人 PVP",  "");
-    m_btnAtlas    = createMenuButton("图鉴 / 仓库", "");
-    m_btnSettings = createMenuButton("游戏设置",   "");
-    m_btnExit     = createMenuButton("退出游戏",   "", QColor(202, 86, 65));
-
-    mainLayout->addWidget(m_btnPve);
-    mainLayout->addSpacing(6);
-    mainLayout->addWidget(m_btnPvp);
-    mainLayout->addSpacing(6);
-    mainLayout->addWidget(m_btnAtlas);
-    mainLayout->addSpacing(6);
-    mainLayout->addWidget(m_btnSettings);
-    mainLayout->addSpacing(6);
-    mainLayout->addWidget(m_btnExit);
-
-    mainLayout->addStretch(2);
-
-    connect(m_btnPve,      &TechButton::clicked, this, &StartPage::signalPveClicked);
-    connect(m_btnPvp,      &TechButton::clicked, this, &StartPage::signalPvpClicked);
-    connect(m_btnAtlas,    &TechButton::clicked, this, &StartPage::signalAtlasClicked);
-    connect(m_btnSettings, &TechButton::clicked, this, &StartPage::signalSettingsClicked);
-    connect(m_btnExit,     &TechButton::clicked, this, &StartPage::signalExitClicked);
-
-    m_particles = new ParticleWidget(this);
-    m_particles->lower();
-    m_particles->hide();
+    m_clickHint->hide();
 
     m_pressHint = new QLabel("按任意键开始", this);
     m_pressHint->setAlignment(Qt::AlignCenter);
@@ -282,6 +420,8 @@ void StartPage::initUI()
         "}"
     );
     m_pressHint->setFixedSize(260, 58);
+
+    updateDemoLayout();
 }
 
 void StartPage::revealMenu()
@@ -294,34 +434,92 @@ void StartPage::revealMenu()
     if (m_pressHint) {
         m_pressHint->hide();
     }
-    if (m_particles) {
-        m_particles->show();
-        m_particles->lower();
-    }
     if (m_menuLayer) {
         m_menuLayer->show();
         m_menuLayer->raise();
     }
 
+    updateDemoLayout();
     update();
     playEnterAnimation();
+}
+
+void StartPage::updateDemoLayout()
+{
+    if (!m_menuLayer) {
+        return;
+    }
+
+    const qreal scale = qMin(width() / qreal(kLobbyDesignWidth),
+                             height() / qreal(kLobbyDesignHeight));
+    const QSizeF canvasSize(kLobbyDesignWidth * scale, kLobbyDesignHeight * scale);
+    const QPointF topLeft((width() - canvasSize.width()) / 2.0,
+                          (height() - canvasSize.height()) / 2.0);
+    m_demoCanvasRect = QRectF(topLeft, canvasSize);
+
+    for (int i = 0; i < m_demoButtons.size() && i < kLobbyButtons.size(); ++i) {
+        const QRect source = kLobbyButtons[i].rect;
+        const QRectF target(topLeft.x() + source.x() * scale,
+                            topLeft.y() + source.y() * scale,
+                            source.width() * scale,
+                            source.height() * scale);
+        m_demoButtons[i]->setCanvasRect(target);
+        m_demoButtons[i]->raise();
+        m_demoButtons[i]->update();
+    }
+
+    if (m_clickHint && m_clickHint->isVisible()) {
+        m_clickHint->move((width() - m_clickHint->width()) / 2,
+                          qRound(m_demoCanvasRect.bottom() - m_clickHint->height() - 24));
+        m_clickHint->raise();
+    }
+
+    update();
+}
+
+void StartPage::handleDemoButton(const QString &id, const QString &title)
+{
+    showDemoHint(title);
+
+    if (id == "settings") {
+        emit signalSettingsClicked();
+    } else if (id == "profile" || id == "deck" || id == "atlas") {
+        emit signalAtlasClicked();
+    } else if (id == "pve" || id == "start") {
+        emit signalPveClicked();
+    } else if (id == "pvp" || id == "invite" || id == "create_room" || id == "join") {
+        emit signalPvpClicked();
+    } else if (id == "back") {
+        emit signalExitClicked();
+    }
+}
+
+void StartPage::showDemoHint(const QString &text)
+{
+    if (!m_clickHint) {
+        return;
+    }
+
+    m_clickHint->setText(text);
+    m_clickHint->adjustSize();
+    m_clickHint->move((width() - m_clickHint->width()) / 2,
+                      qRound(m_demoCanvasRect.bottom() - m_clickHint->height() - 24));
+    m_clickHint->show();
+    m_clickHint->raise();
+    QTimer::singleShot(900, m_clickHint, &QLabel::hide);
 }
 
 TechButton* StartPage::createMenuButton(const QString &text, const QString &icon,
                                           const QColor &accent)
 {
     TechButton *btn = new TechButton("", m_menuLayer);
-
     btn->setFixedHeight(64);
     btn->setMinimumWidth(330);
     btn->setMaximumWidth(430);
-
     btn->setFontSize(18);
     btn->setAccentColor(accent);
     btn->setBorderRadius(8);
-
     btn->setText(icon.isEmpty() ? text : QString("%1  %2").arg(icon).arg(text));
-
     return btn;
 }
 
@@ -338,4 +536,5 @@ void StartPage::resizeEvent(QResizeEvent *event)
         m_pressHint->move((width() - m_pressHint->width()) / 2,
                           height() - m_pressHint->height() - 56);
     }
+    updateDemoLayout();
 }

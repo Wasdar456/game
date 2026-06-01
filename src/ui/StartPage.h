@@ -11,6 +11,7 @@
 #include <QLabel>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QRectF>
 #include <QTimer>
 #include <QVector>
 
@@ -42,6 +43,8 @@ private:
     void initParticles();
 };
 
+class StartImageButton;
+
 class StartPage : public QWidget
 {
     Q_OBJECT
@@ -69,6 +72,9 @@ private:
     QWidget    *m_menuLayer;
     ParticleWidget *m_particles;
     QLabel      *m_pressHint;
+    QLabel      *m_clickHint;
+    QRectF      m_demoCanvasRect;
+    QVector<StartImageButton*> m_demoButtons;
     QLabel      *m_titleLabel;
     QLabel      *m_subtitleLabel;
     TechButton  *m_btnPve;
@@ -79,6 +85,9 @@ private:
 
     void initUI();
     void revealMenu();
+    void updateDemoLayout();
+    void handleDemoButton(const QString &id, const QString &title);
+    void showDemoHint(const QString &text);
     TechButton* createMenuButton(const QString &text, const QString &icon,
                                   const QColor &accent = QColor(0, 212, 255));
 };

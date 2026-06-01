@@ -28,6 +28,8 @@
 #include "core/base/CoreTypes.h"     // CardKind, ObjectType 枚举
 #include "core/units/Card.h"         // Card 基类
 
+class QShowEvent;
+
 /**
  * @brief 卡牌展示信息
  * 用于选卡页面的 UI 展示，从 Card 类派生类的属性中提取
@@ -73,6 +75,7 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void showEvent(QShowEvent *event) override;
 
 private:
     // ========== UI 组件 ==========

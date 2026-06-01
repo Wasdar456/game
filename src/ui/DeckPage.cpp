@@ -25,6 +25,7 @@
 #include <QFrame>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QShowEvent>
 
 // ========== 引入核心层头文件 ==========
 // 用于获取卡牌的详细属性
@@ -79,6 +80,35 @@ void DeckPage::paintEvent(QPaintEvent *event)
         painter.fillRect(rect(), QColor(37, 30, 34));
     }
     painter.fillRect(rect(), QColor(38, 26, 23, 126));
+}
+
+void DeckPage::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+
+    refreshDeckSlotsDisplay();
+    updateStartBattleButton();
+
+    const auto buttons = findChildren<QPushButton*>();
+    for (QPushButton *button : buttons) {
+        button->show();
+        button->raise();
+        button->update();
+    }
+
+    if (m_cardPoolScroll) {
+        m_cardPoolScroll->show();
+        m_cardPoolScroll->update();
+        if (m_cardPoolScroll->viewport()) {
+            m_cardPoolScroll->viewport()->update();
+        }
+    }
+    if (m_detailPanel) {
+        m_detailPanel->show();
+        m_detailPanel->update();
+    }
+
+    update();
 }
 
 // ========== createCardPoolData() —— 创建卡牌展示数据 ==========
