@@ -23,12 +23,15 @@
 #include <QLabel>
 #include <QScrollArea>
 #include <QVector>
+#include <QRectF>
 
 // ========== 核心层头文件 ==========
 #include "core/base/CoreTypes.h"     // CardKind, ObjectType 枚举
 #include "core/units/Card.h"         // Card 基类
 
 class QShowEvent;
+class QResizeEvent;
+class ArtHotspot;
 
 /**
  * @brief 卡牌展示信息
@@ -76,6 +79,7 @@ signals:
 protected:
     void paintEvent(QPaintEvent *event) override;
     void showEvent(QShowEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     // ========== UI 组件 ==========
@@ -94,10 +98,15 @@ private:
 
     // ========== 卡池容器 ==========
     QScrollArea *m_cardPoolScroll;
+    QRectF m_canvasRect;
+    QVector<ArtHotspot*> m_cardHotspots;
+    ArtHotspot *m_backHotspot;
+    ArtHotspot *m_startHotspot;
 
     void initUI();
     void createCardPoolData();             ///< 创建卡牌展示数据
     void connectSignals();
+    void updateArtworkLayout();
     void refreshDeckSlotsDisplay();        ///< 刷新卡槽显示
     void refreshDetailPanel(int cardIndex);///< 刷新详细属性面板
     void updateStartBattleButton();        ///< 更新"开始战斗"按钮状态

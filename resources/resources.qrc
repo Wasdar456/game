@@ -11,6 +11,10 @@
         <file alias="images/ui/sign_lobby.png">../assets/ui/sign_lobby.png</file>
         <file alias="images/ui/sign_battle.png">../assets/ui/sign_battle.png</file>
         <file alias="images/ui/sign_banner.png">../assets/ui/sign_banner.png</file>
+        <file alias="images/artwork/main_menu.jpg">../assets/ui/artwork/main_menu.jpg</file>
+        <file alias="images/artwork/pve_setup.jpg">../assets/ui/artwork/pve_setup.jpg</file>
+        <file alias="images/artwork/pvp_setup.png">../assets/ui/artwork/pvp_setup.png</file>
+        <file alias="images/artwork/deck_atlas.png">../assets/ui/artwork/deck_atlas.png</file>
         <file alias="images/characters/tomato_gunner.png">../assets/characters/tomato_gunner.png</file>
         <file alias="images/characters/tomato_variant_01.png">../assets/characters/tomato_variant_01.png</file>
         <file alias="images/characters/tomato_variant_02.png">../assets/characters/tomato_variant_02.png</file>

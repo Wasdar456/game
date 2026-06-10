@@ -60,6 +60,14 @@ game project and renamed for stable code references:
 | `assets/characters/tomato_variant_02_cutout.png` | Transparent battle sprite |
 | `assets/maps/lab_map_02.png` | Playable map image copied from `scene_lab_06` |
 | `assets/maps/lab_map_02.json` | Grid/path/deployment config for map 02 |
+| `assets/ui/artwork/main_menu.jpg` | New full-art main menu |
+| `assets/ui/artwork/pve_setup.jpg` | New PVE map and difficulty screen |
+| `assets/ui/artwork/pvp_setup.png` | New PVP room and map screen |
+| `assets/ui/artwork/deck_atlas.png` | New interactive deck and atlas screen |
+
+The new full-page artwork is used as the visual base. Interactive regions are
+cropped from the same source image at runtime by `ArtHotspot`, so hover, press,
+selection glow, and responsive scaling stay aligned with the original art.
 
 ## Map Notes
 
@@ -119,3 +127,6 @@ benefit from separated UI art assets:
 - transparent animated sprites for monsters and player units
 - exact map route/deploy overlays if the art team wants pixel-perfect gameplay
   placement
+- a full playable `Office Panic` map image and JSON configuration; the current
+  artwork only contains its selection-card preview, so it temporarily falls
+  back to the Jungle Ruins gameplay map

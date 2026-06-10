@@ -16,16 +16,20 @@
  */
 
 #include "ui/LobbyPage.h"
+#include "ui/ArtHotspot.h"
 
-#include <QVBoxLayout>
-#include <QHBoxLayout>
 #include <QRadioButton>
 #include <QRegularExpressionValidator>
 #include <QNetworkInterface>
 #include <QHostAddress>
 #include <QDebug>
+#include <QLinearGradient>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QResizeEvent>
+#include <QShowEvent>
+#include <QTimer>
+#include <QToolTip>
 
 // ========== 寮曞叆缃戠粶妯″潡澶存枃浠?==========
 // dev 鍒嗘敮鐨?network 妯″潡锛屼綅浜?network/include/
@@ -33,15 +37,70 @@
 #include "network/session/GameClient.h"
 #include "network/session/LobbyManager.h"
 
+namespace {
+
+constexpr int kPveWidth = 1609;
+constexpr int kPveHeight = 906;
+constexpr int kPvpWidth = 1672;
+constexpr int kPvpHeight = 941;
+
+const QVector<QRect> kPveRects = {
+    {239, 282, 322, 384},
+    {583, 282, 314, 384},
+    {919, 282, 312, 384},
+    {1291, 390, 201, 76},
+    {1291, 480, 201, 76},
+    {1291, 570, 201, 74},
+    {25, 789, 221, 91},
+    {1271, 788, 313, 94},
+};
+
+const QVector<QRect> kPvpRects = {
+    {155, 368, 220, 82},
+    {155, 470, 220, 84},
+    {428, 292, 286, 388},
+    {730, 292, 272, 388},
+    {1013, 292, 261, 388},
+    {22, 807, 222, 91},
+    {1354, 806, 297, 93},
+};
+
+QRectF scaledRect(const QRect &source, const QRectF &canvas,
+                  int designWidth, int designHeight)
+{
+    const qreal sx = canvas.width() / designWidth;
+    const qreal sy = canvas.height() / designHeight;
+    return QRectF(canvas.left() + source.x() * sx,
+                  canvas.top() + source.y() * sy,
+                  source.width() * sx,
+                  source.height() * sy);
+}
+
+} // namespace
+
 // ========== 鏋勯€犲嚱鏁?==========
 LobbyPage::LobbyPage(QWidget *parent)
     : QWidget(parent)
     , m_currentMode(Mode::PVE)
+    , m_titleLabel(nullptr)
+    , m_btnBack(nullptr)
+    , m_pvePanel(nullptr)
+    , m_mapSelector(nullptr)
+    , m_difficultyGroup(nullptr)
+    , m_btnPveConfirm(nullptr)
+    , m_pvpPanel(nullptr)
+    , m_btnCreateRoom(nullptr)
+    , m_ipInput(nullptr)
+    , m_btnJoinRoom(nullptr)
     , m_btnReady(nullptr)
     , m_readyStatusLabel(nullptr)
+    , m_statusLog(nullptr)
     , m_server(nullptr)
     , m_client(nullptr)
     , m_lobbyManager(nullptr)
+    , m_panelStack(nullptr)
+    , m_selectedDifficulty(1)
+    , m_selectedPvpMap(0)
 {
     initUI();
     connectSignals();
@@ -51,273 +110,254 @@ void LobbyPage::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
     QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
-    static QPixmap bg(":/images/ui/scene_lab_05.png");
-    if (!bg.isNull()) {
-        QSize scaled = bg.size();
-        scaled.scale(size(), Qt::KeepAspectRatioByExpanding);
-        QRect target(QPoint((width() - scaled.width()) / 2,
-                            (height() - scaled.height()) / 2), scaled);
-        painter.drawPixmap(target, bg);
-    } else {
-        painter.fillRect(rect(), QColor(37, 30, 34));
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.fillRect(rect(), QColor(40, 51, 34));
+
+    static QPixmap pveArtwork(":/images/artwork/pve_setup.jpg");
+    static QPixmap pvpArtwork(":/images/artwork/pvp_setup.png");
+    const QPixmap &artwork = m_currentMode == Mode::PVE ? pveArtwork : pvpArtwork;
+    if (!artwork.isNull()) {
+        painter.drawPixmap(m_canvasRect, artwork, QRectF(artwork.rect()));
     }
-    painter.fillRect(rect(), QColor(35, 24, 21, 126));
+
+    QLinearGradient edgeShade(m_canvasRect.topLeft(), m_canvasRect.bottomRight());
+    edgeShade.setColorAt(0.0, QColor(32, 46, 27, 18));
+    edgeShade.setColorAt(0.55, QColor(32, 46, 27, 0));
+    edgeShade.setColorAt(1.0, QColor(24, 29, 18, 28));
+    painter.fillRect(m_canvasRect, edgeShade);
 }
 
-// ========== setMode() 鈥斺€?鍒囨崲 PVE/PVP 妯″紡 ==========
 void LobbyPage::setMode(Mode mode)
 {
     m_currentMode = mode;
-    if (mode == Mode::PVE) {
-        m_titleLabel->setText("PVE 配置");
-        m_panelStack->setCurrentWidget(m_pvePanel);
-    } else {
-        m_titleLabel->setText("PVP 大厅");
-        m_panelStack->setCurrentWidget(m_pvpPanel);
-    }
+    m_pvePanel->setVisible(mode == Mode::PVE);
+    m_pvpPanel->setVisible(mode == Mode::PVP);
+    updateArtworkLayout();
+    refreshSelectionVisuals();
+    update();
 }
 
-// ========== initUI() 鈥斺€?鍒濆鍖栫晫闈?==========
 void LobbyPage::initUI()
 {
     setAutoFillBackground(false);
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(40, 30, 40, 30);
-    mainLayout->setSpacing(20);
-
-    // ----- 椤堕儴瀵艰埅鏍?-----
-    QHBoxLayout *topBar = new QHBoxLayout();
-
-    m_btnBack = new QPushButton("返回", this);
-    m_btnBack->setFixedSize(100, 40);
-    m_btnBack->setStyleSheet(
-        "QPushButton {"
-        "  background-color: rgba(225,176,99,0.86); color: #3A2418; border: 2px solid rgba(76,48,31,0.82);"
-        "  border-radius: 8px; font-size: 14px; font-weight: bold;"
-        "}"
-        "QPushButton:hover { border: 2px solid #FFD27E; }"
-    );
-    m_btnBack->setCursor(Qt::PointingHandCursor);
-
-    m_titleLabel = new QLabel("PVE 配置", this);
-    m_titleLabel->setStyleSheet("color: #FFF0C8; font-size: 24px; font-weight: bold;");
-    m_titleLabel->setAlignment(Qt::AlignCenter);
-
-    topBar->addWidget(m_btnBack);
-    topBar->addStretch();
-    topBar->addWidget(m_titleLabel);
-    topBar->addStretch();
-    mainLayout->addLayout(topBar);
-
-    // ----- 鍐呴儴闈㈡澘鍫嗗彔绐楀彛 -----
-    m_panelStack = new QStackedWidget(this);
     createPvePanel();
     createPvpPanel();
-    m_panelStack->addWidget(m_pvePanel);   // index 0
-    m_panelStack->addWidget(m_pvpPanel);   // index 1
-    mainLayout->addWidget(m_panelStack, 1);
-
-    // 椤甸潰鑳屾櫙
-    this->setStyleSheet("LobbyPage { background: transparent; }");
+    m_pvpPanel->hide();
+    updateArtworkLayout();
 }
 
-// ========== createPvePanel() 鈥斺€?鍒涘缓 PVE 閰嶇疆闈㈡澘 ==========
 void LobbyPage::createPvePanel()
 {
     m_pvePanel = new QWidget(this);
-    QVBoxLayout *layout = new QVBoxLayout(m_pvePanel);
-    layout->setSpacing(25);
-    layout->setContentsMargins(20, 20, 20, 20);
-
-    // ----- 鍦板浘閫夋嫨 -----
-    QLabel *mapLabel = new QLabel("选择地图：", m_pvePanel);
-    mapLabel->setStyleSheet("color: #FFFFFF; font-size: 18px; font-weight: bold;");
-    layout->addWidget(mapLabel);
+    m_pvePanel->setAttribute(Qt::WA_TranslucentBackground);
 
     m_mapSelector = new QComboBox(m_pvePanel);
-    m_mapSelector->addItem("实验室通道 (01)", "lab_map_01");
-    m_mapSelector->addItem("海滩果汁湾 (06)", "lab_map_02");
-    m_mapSelector->setFixedHeight(45);
-    m_mapSelector->setStyleSheet(
-        "QComboBox {"
-        "  background-color: rgba(22,50,90,0.90); color: #FFFFFF;"
-        "  border: 2px solid rgba(0,212,255,0.50); border-radius: 8px;"
-        "  padding: 8px 15px; font-size: 16px;"
-        "}"
-        "QComboBox::drop-down { border: none; width: 30px; }"
-        "QComboBox QAbstractItemView {"
-        "  background-color: #0F1B2D; color: #FFFFFF;"
-        "  selection-background-color: rgba(0,212,255,0.3); border: 1px solid #00D4FF;"
-        "}"
-    );
-    layout->addWidget(m_mapSelector);
-    layout->addSpacing(20);
+    m_mapSelector->addItem("Sunny Beach", "lab_map_02");
+    m_mapSelector->addItem("Jungle Ruins", "lab_map_01");
+    m_mapSelector->addItem("Office Panic", "lab_map_01");
+    m_mapSelector->hide();
 
-    // ----- 闅惧害閫夋嫨 -----
-    QLabel *diffLabel = new QLabel("选择难度：", m_pvePanel);
-    diffLabel->setStyleSheet("color: #FFFFFF; font-size: 18px; font-weight: bold;");
-    layout->addWidget(diffLabel);
-
-    // QRadioButton + QButtonGroup 瀹炵幇浜掓枼閫夋嫨
     m_difficultyGroup = new QButtonGroup(this);
-    QHBoxLayout *diffLayout = new QHBoxLayout();
-    QStringList difficulties = {"简单", "普通", "困难"};
-
-    for (int i = 0; i < difficulties.size(); ++i) {
-        QRadioButton *radio = new QRadioButton(difficulties[i], m_pvePanel);
-        radio->setStyleSheet(
-            "QRadioButton { color: #FFFFFF; font-size: 16px; spacing: 8px;"
-            "  background-color: rgba(20,40,75,0.80); border: 2px solid rgba(0,212,255,0.50);"
-            "  border-radius: 8px; padding: 8px 16px; }"
-            "QRadioButton:hover { background-color: rgba(0,212,255,0.20); border: 2px solid #00D4FF; }"
-            "QRadioButton::indicator { width: 18px; height: 18px; border-radius: 9px;"
-            "  border: 2px solid rgba(0,212,255,0.7); }"
-            "QRadioButton::indicator:checked { background-color: #00D4FF; border: 2px solid #00D4FF; }"
-        );
+    for (int i = 0; i < 3; ++i) {
+        auto *radio = new QRadioButton(m_pvePanel);
         m_difficultyGroup->addButton(radio, i);
-        diffLayout->addWidget(radio);
+        radio->hide();
     }
-    m_difficultyGroup->button(1)->setChecked(true);  // 榛樿閫変腑"鏅€?
-    layout->addLayout(diffLayout);
-    layout->addSpacing(30);
+    m_difficultyGroup->button(1)->setChecked(true);
 
-    // ----- 纭鎸夐挳 -----
-    m_btnPveConfirm = new QPushButton("确认并选卡", m_pvePanel);
-    m_btnPveConfirm->setFixedSize(250, 55);
-    m_btnPveConfirm->setStyleSheet(
-        "QPushButton {"
-        "  background-color: rgba(0,212,255,0.18); color: #00D4FF;"
-        "  border: 2px solid rgba(0,212,255,0.6); border-radius: 12px;"
-        "  font-size: 18px; font-weight: bold;"
-        "}"
-        "QPushButton:hover { background-color: rgba(0,212,255,0.32); }"
-        "QPushButton:pressed { background-color: rgba(0,212,255,0.48); }"
-    );
-    m_btnPveConfirm->setCursor(Qt::PointingHandCursor);
+    m_btnBack = new QPushButton(m_pvePanel);
+    m_btnBack->hide();
+    m_btnPveConfirm = new QPushButton(m_pvePanel);
+    m_btnPveConfirm->hide();
 
-    QHBoxLayout *confirmLayout = new QHBoxLayout();
-    confirmLayout->addStretch();
-    confirmLayout->addWidget(m_btnPveConfirm);
-    confirmLayout->addStretch();
-    layout->addLayout(confirmLayout);
-    layout->addStretch();
+    const QString artwork = ":/images/artwork/pve_setup.jpg";
+    for (int i = 0; i < kPveRects.size(); ++i) {
+        auto *hotspot = new ArtHotspot(artwork, kPveRects[i], m_pvePanel);
+        hotspot->setGlowColor(QColor(255, 220, 128));
+        m_pveHotspots.append(hotspot);
+    }
+
+    for (int i = 0; i < 3; ++i) {
+        m_pveMapHotspots.append(m_pveHotspots[i]);
+        m_pveHotspots[i]->setClickHandler([this, i]() {
+            m_mapSelector->setCurrentIndex(i);
+            refreshSelectionVisuals();
+            if (i == 2) {
+                showStatus("Office Panic 地图逻辑尚缺，当前暂用 Jungle Ruins");
+            }
+        });
+    }
+    for (int i = 0; i < 3; ++i) {
+        m_pveDifficultyHotspots.append(m_pveHotspots[3 + i]);
+        m_pveHotspots[3 + i]->setClickHandler([this, i]() {
+            m_selectedDifficulty = i;
+            m_difficultyGroup->button(i)->setChecked(true);
+            refreshSelectionVisuals();
+        });
+    }
+    m_pveHotspots[6]->setClickHandler([this]() { m_btnBack->click(); });
+    m_pveHotspots[7]->setClickHandler([this]() { m_btnPveConfirm->click(); });
 }
 
-// ========== createPvpPanel() 鈥斺€?鍒涘缓 PVP 澶у巺闈㈡澘 ==========
 void LobbyPage::createPvpPanel()
 {
     m_pvpPanel = new QWidget(this);
-    QVBoxLayout *layout = new QVBoxLayout(m_pvpPanel);
-    layout->setSpacing(25);
-    layout->setContentsMargins(20, 20, 20, 20);
+    m_pvpPanel->setAttribute(Qt::WA_TranslucentBackground);
 
-    // ----- 鍒涘缓鎴块棿鎸夐挳 -----
-    m_btnCreateRoom = new QPushButton("创建房间 (Host)", m_pvpPanel);
-    m_btnCreateRoom->setFixedHeight(60);
-    m_btnCreateRoom->setStyleSheet(
-        "QPushButton {"
-        "  background-color: rgba(0,212,255,0.15); color: #00D4FF;"
-        "  border: 2px solid rgba(0,212,255,0.6); border-radius: 12px;"
-        "  font-size: 18px; font-weight: bold;"
-        "}"
-        "QPushButton:hover { background-color: rgba(0,212,255,0.3); }"
-        "QPushButton:pressed { background-color: rgba(0,212,255,0.45); }"
-    );
-    m_btnCreateRoom->setCursor(Qt::PointingHandCursor);
-    layout->addWidget(m_btnCreateRoom);
-    layout->addSpacing(15);
-
-    // ----- 鍒嗛殧绾?-----
-    QLabel *separator = new QLabel("或者", m_pvpPanel);
-    separator->setAlignment(Qt::AlignCenter);
-    separator->setStyleSheet("color: rgba(0,212,255,0.3); font-size: 14px;");
-    layout->addWidget(separator);
-    layout->addSpacing(15);
-
-    // ----- 鍔犲叆鎴块棿鍖哄煙 -----
-    QLabel *joinLabel = new QLabel("加入已有房间", m_pvpPanel);
-    joinLabel->setStyleSheet("color: #E3F2FD; font-size: 18px; font-weight: bold;");
-    layout->addWidget(joinLabel);
+    m_btnCreateRoom = new QPushButton(m_pvpPanel);
+    m_btnCreateRoom->hide();
+    m_btnJoinRoom = new QPushButton(m_pvpPanel);
+    m_btnJoinRoom->hide();
+    m_btnReady = new QPushButton(m_pvpPanel);
+    m_btnReady->setEnabled(false);
+    m_btnReady->hide();
 
     m_ipInput = new QLineEdit(m_pvpPanel);
-    m_ipInput->setPlaceholderText("输入 Host 的 IP 地址，例如 192.168.1.100");
-    m_ipInput->setFixedHeight(45);
+    m_ipInput->setPlaceholderText("输入 IP...");
     m_ipInput->setStyleSheet(
         "QLineEdit {"
-        "  background-color: rgba(22,37,66,0.75); color: #FFFFFF;"
-        "  border: 2px solid rgba(0,212,255,0.3); border-radius: 8px;"
-        "  padding: 8px 15px; font-size: 15px;"
+        " background-color: rgba(238, 218, 171, 0.94);"
+        " color: #3d2b1d;"
+        " border: 2px solid rgba(95, 67, 38, 0.70);"
+        " border-radius: 4px;"
+        " padding: 5px 12px;"
+        " font-family: 'Microsoft YaHei UI', 'PingFang SC', sans-serif;"
+        " font-size: 15px;"
         "}"
-        "QLineEdit:focus { border: 2px solid #00D4FF; }"
+        "QLineEdit:focus { border-color: #d18b32; }"
     );
-    // IP 鍦板潃姝ｅ垯楠岃瘉
     m_ipInput->setValidator(new QRegularExpressionValidator(
         QRegularExpression("^((25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$"),
         this
     ));
 
-    m_btnJoinRoom = new QPushButton("加入", m_pvpPanel);
-    m_btnJoinRoom->setFixedHeight(50);
-    m_btnJoinRoom->setStyleSheet(
-        "QPushButton {"
-        "  background-color: rgba(0,230,118,0.15); color: #00E676;"
-        "  border: 2px solid rgba(0,230,118,0.6); border-radius: 10px;"
-        "  font-size: 16px; font-weight: bold;"
-        "}"
-        "QPushButton:hover { background-color: rgba(0,230,118,0.3); }"
-        "QPushButton:pressed { background-color: rgba(0,230,118,0.45); }"
-    );
-    m_btnJoinRoom->setCursor(Qt::PointingHandCursor);
-
-    QHBoxLayout *joinLayout = new QHBoxLayout();
-    joinLayout->addWidget(m_ipInput, 3);
-    joinLayout->addSpacing(10);
-    joinLayout->addWidget(m_btnJoinRoom, 1);
-    layout->addLayout(joinLayout);
-    layout->addSpacing(20);
-
-    // ----- 鍑嗗鎸夐挳鍜岀姸鎬?-----
-    m_btnReady = new QPushButton("准备", m_pvpPanel);
-    m_btnReady->setFixedHeight(50);
-    m_btnReady->setStyleSheet(
-        "QPushButton {"
-        "  background-color: rgba(255,193,7,0.15); color: #FFC107;"
-        "  border: 2px solid rgba(255,193,7,0.6); border-radius: 10px;"
-        "  font-size: 18px; font-weight: bold;"
-        "}"
-        "QPushButton:hover { background-color: rgba(255,193,7,0.3); }"
-        "QPushButton:pressed { background-color: rgba(255,193,7,0.45); }"
-        "QPushButton:disabled { color: #666; border-color: rgba(255,193,7,0.2); }"
-    );
-    m_btnReady->setCursor(Qt::PointingHandCursor);
-    m_btnReady->setEnabled(false);  // 杩炴帴鎴愬姛鍚庢墠鍚敤
-    layout->addWidget(m_btnReady);
-
     m_readyStatusLabel = new QLabel("等待连接...", m_pvpPanel);
     m_readyStatusLabel->setAlignment(Qt::AlignCenter);
-    m_readyStatusLabel->setStyleSheet("color: #8AB4F8; font-size: 14px;");
-    layout->addWidget(m_readyStatusLabel);
-    layout->addSpacing(10);
-
-    // ----- 杩炴帴鐘舵€佹棩蹇?-----
-    QLabel *statusLabel = new QLabel("连接状态：", m_pvpPanel);
-    statusLabel->setStyleSheet("color: #8AB4F8; font-size: 14px;");
-    layout->addWidget(statusLabel);
+    m_readyStatusLabel->setStyleSheet(
+        "QLabel { color: #3d2b1d; background: rgb(242,222,176);"
+        " border: 1px solid rgba(94,66,37,0.45); border-radius: 4px;"
+        " padding: 5px; font-size: 13px; font-weight: 700; }"
+    );
 
     m_statusLog = new QTextEdit(m_pvpPanel);
     m_statusLog->setReadOnly(true);
-    m_statusLog->setMinimumHeight(120);
     m_statusLog->setStyleSheet(
         "QTextEdit {"
-        "  background-color: rgba(11,22,34,0.8); color: #8AB4F8;"
-        "  border: 1px solid rgba(0,212,255,0.2); border-radius: 8px;"
-        "  padding: 10px; font-family: Consolas, monospace; font-size: 13px;"
+        " background-color: rgb(239, 218, 171);"
+        " color: #39281c;"
+        " border: 1px solid rgba(94, 66, 37, 0.55);"
+        " border-radius: 4px;"
+        " padding: 8px;"
+        " font-family: 'Microsoft YaHei UI', 'PingFang SC', sans-serif;"
+        " font-size: 12px;"
         "}"
     );
-    m_statusLog->setPlainText("等待操作...\n请选择创建房间或加入已有房间。");
-    layout->addWidget(m_statusLog);
-    layout->addStretch();
+    m_statusLog->setPlainText("请选择创建房间或输入 IP 加入房间。");
+
+    const QString artwork = ":/images/artwork/pvp_setup.png";
+    for (int i = 0; i < kPvpRects.size(); ++i) {
+        auto *hotspot = new ArtHotspot(artwork, kPvpRects[i], m_pvpPanel);
+        hotspot->setGlowColor(QColor(255, 220, 128));
+        m_pvpHotspots.append(hotspot);
+    }
+    m_pvpHotspots[0]->setClickHandler([this]() { m_btnCreateRoom->click(); });
+    m_pvpHotspots[1]->setClickHandler([this]() { m_btnJoinRoom->click(); });
+    for (int i = 0; i < 3; ++i) {
+        m_pvpMapHotspots.append(m_pvpHotspots[2 + i]);
+        m_pvpHotspots[2 + i]->setClickHandler([this, i]() {
+            m_selectedPvpMap = i;
+            refreshSelectionVisuals();
+        });
+    }
+    m_pvpHotspots[5]->setClickHandler([this]() { emit signalBack(); });
+    m_pvpHotspots[6]->setClickHandler([this]() {
+        if (m_btnReady->isEnabled()) {
+            m_btnReady->click();
+        } else {
+            showStatus("请先创建或加入房间，并等待连接完成");
+        }
+    });
+}
+
+void LobbyPage::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateArtworkLayout();
+}
+
+void LobbyPage::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    setGraphicsEffect(nullptr);
+    updateArtworkLayout();
+    const auto &hotspots = m_currentMode == Mode::PVE ? m_pveHotspots : m_pvpHotspots;
+    for (ArtHotspot *hotspot : hotspots) {
+        hotspot->refreshVisual();
+    }
+    refreshSelectionVisuals();
+}
+
+void LobbyPage::updateArtworkLayout()
+{
+    const int designWidth = m_currentMode == Mode::PVE ? kPveWidth : kPvpWidth;
+    const int designHeight = m_currentMode == Mode::PVE ? kPveHeight : kPvpHeight;
+    const qreal scale = qMin(width() / qreal(designWidth),
+                             height() / qreal(designHeight));
+    const QSizeF canvasSize(designWidth * scale, designHeight * scale);
+    const QPointF topLeft((width() - canvasSize.width()) / 2.0,
+                          (height() - canvasSize.height()) / 2.0);
+    m_canvasRect = QRectF(topLeft, canvasSize);
+
+    m_pvePanel->setGeometry(rect());
+    m_pvpPanel->setGeometry(rect());
+
+    for (int i = 0; i < m_pveHotspots.size(); ++i) {
+        m_pveHotspots[i]->setCanvasRect(
+            scaledRect(kPveRects[i], m_canvasRect, kPveWidth, kPveHeight));
+    }
+    for (int i = 0; i < m_pvpHotspots.size(); ++i) {
+        m_pvpHotspots[i]->setCanvasRect(
+            scaledRect(kPvpRects[i], m_canvasRect, kPvpWidth, kPvpHeight));
+    }
+
+    if (m_currentMode == Mode::PVP) {
+        m_ipInput->setGeometry(
+            scaledRect({160, 607, 212, 53}, m_canvasRect, kPvpWidth, kPvpHeight).toRect());
+        m_readyStatusLabel->setGeometry(
+            scaledRect({1311, 530, 230, 43}, m_canvasRect, kPvpWidth, kPvpHeight).toRect());
+        m_statusLog->setGeometry(
+            scaledRect({1310, 575, 232, 112}, m_canvasRect, kPvpWidth, kPvpHeight).toRect());
+        m_ipInput->raise();
+        m_readyStatusLabel->raise();
+        m_statusLog->raise();
+    }
+    update();
+}
+
+void LobbyPage::refreshSelectionVisuals()
+{
+    for (int i = 0; i < m_pveMapHotspots.size(); ++i) {
+        m_pveMapHotspots[i]->setSelected(i == m_mapSelector->currentIndex());
+    }
+    for (int i = 0; i < m_pveDifficultyHotspots.size(); ++i) {
+        m_pveDifficultyHotspots[i]->setSelected(i == m_selectedDifficulty);
+    }
+    for (int i = 0; i < m_pvpMapHotspots.size(); ++i) {
+        m_pvpMapHotspots[i]->setSelected(i == m_selectedPvpMap);
+    }
+}
+
+void LobbyPage::showStatus(const QString &message)
+{
+    if (m_currentMode == Mode::PVP) {
+        m_readyStatusLabel->setText(message);
+        m_readyStatusLabel->show();
+        m_readyStatusLabel->raise();
+    } else {
+        m_btnPveConfirm->setToolTip(message);
+        QToolTip::showText(mapToGlobal(m_canvasRect.center().toPoint()), message, this);
+    }
 }
 
 // ========== getLocalIPAddress() 鈥斺€?鑾峰彇鏈満灞€鍩熺綉 IP 鍦板潃 ==========

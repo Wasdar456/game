@@ -36,6 +36,12 @@
 #include <QButtonGroup>
 #include <QStackedWidget>
 #include <QTextEdit>
+#include <QRectF>
+#include <QVector>
+
+class ArtHotspot;
+class QResizeEvent;
+class QShowEvent;
 
 // ========== 网络模块前向声明 ==========
 // dev 分支 network/ 模块中定义的类
@@ -82,6 +88,8 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void showEvent(QShowEvent *event) override;
 
 private:
     Mode m_currentMode;       ///< 当前显示的模式
@@ -114,10 +122,22 @@ private:
     // ========== 内部堆叠窗口 ==========
     QStackedWidget *m_panelStack;     ///< 用于切换 PVE/PVP 面板
 
+    QRectF m_canvasRect;
+    QVector<ArtHotspot*> m_pveHotspots;
+    QVector<ArtHotspot*> m_pvpHotspots;
+    QVector<ArtHotspot*> m_pveMapHotspots;
+    QVector<ArtHotspot*> m_pveDifficultyHotspots;
+    QVector<ArtHotspot*> m_pvpMapHotspots;
+    int m_selectedDifficulty;
+    int m_selectedPvpMap;
+
     void initUI();
     void createPvePanel();
     void createPvpPanel();
     void connectSignals();
+    void updateArtworkLayout();
+    void refreshSelectionVisuals();
+    void showStatus(const QString &message);
 
     /**
      * @brief 初始化 PVP 网络模块
