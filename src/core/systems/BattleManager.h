@@ -72,6 +72,8 @@ public:
     void syncPvpUnitsFromHostSnapshot(const BattleSnapshot& hostSnapshot, bool localIsHost);
 
     int currentWave() const { return currentWave_; }
+    int defeatedMonsters() const { return defeatedMonsters_; }
+    int escapedMonsters() const { return escapedMonsters_; }
     bool waveActive() const { return !monsters_.empty() || !pendingSpawns_.empty(); }
     bool gameOver() const { return resources_.baseDestroyed() || opponentResources_.baseDestroyed(); }
 
@@ -110,6 +112,8 @@ private:
     double waveElapsedSeconds_ = 0.0;
     // 当前波次编号。
     int currentWave_;
+    int defeatedMonsters_ = 0;
+    int escapedMonsters_ = 0;
 
     // PVP 模式相关
     bool isPvp_ = false;

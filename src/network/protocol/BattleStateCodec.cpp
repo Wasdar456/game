@@ -16,6 +16,8 @@ QByteArray BattleStateCodec::encodeHostSnapshot(const game::core::BattleSnapshot
         << static_cast<qint32>(snapshot.baseHealth)
         << static_cast<qint32>(snapshot.opponentResources)
         << static_cast<qint32>(snapshot.opponentBaseHealth)
+        << static_cast<qint32>(snapshot.defeatedMonsters)
+        << static_cast<qint32>(snapshot.escapedMonsters)
         << static_cast<quint16>(snapshot.units.size());
 
     for (const auto& unit : snapshot.units) {
@@ -72,9 +74,12 @@ BattleStateDecodeResult BattleStateCodec::decodeHostSnapshot(const QByteArray& b
     qint32 hostBaseHealth = 0;
     qint32 clientResources = 0;
     qint32 clientBaseHealth = 0;
+    qint32 defeatedMonsters = 0;
+    qint32 escapedMonsters = 0;
     quint16 unitCount = 0;
     in >> currentWave >> waveActive >> hostResources >> hostBaseHealth
-       >> clientResources >> clientBaseHealth >> unitCount;
+       >> clientResources >> clientBaseHealth >> defeatedMonsters >> escapedMonsters
+       >> unitCount;
     if (in.status() != QDataStream::Ok) return result;
 
     auto& snapshot = result.snapshot;
@@ -84,6 +89,8 @@ BattleStateDecodeResult BattleStateCodec::decodeHostSnapshot(const QByteArray& b
     snapshot.baseHealth = clientBaseHealth;
     snapshot.opponentResources = hostResources;
     snapshot.opponentBaseHealth = hostBaseHealth;
+    snapshot.defeatedMonsters = defeatedMonsters;
+    snapshot.escapedMonsters = escapedMonsters;
     snapshot.map = map;
 
     snapshot.units.reserve(unitCount);
@@ -206,6 +213,8 @@ quint32 BattleStateCodec::checksum(const game::core::BattleSnapshot& snapshot)
     mix(static_cast<quint32>(snapshot.baseHealth));
     mix(static_cast<quint32>(snapshot.opponentResources));
     mix(static_cast<quint32>(snapshot.opponentBaseHealth));
+    mix(static_cast<quint32>(snapshot.defeatedMonsters));
+    mix(static_cast<quint32>(snapshot.escapedMonsters));
 
     for (const auto& unit : snapshot.units) {
         mix(static_cast<quint32>(unit.id));

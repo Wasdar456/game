@@ -7,11 +7,14 @@
 #include <QLinearGradient>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPaintEvent>
 #include <QRadialGradient>
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QtMath>
+
+#include <cmath>
 
 namespace {
 
@@ -57,7 +60,7 @@ StartPage::StartPage(QWidget *parent)
 {
     initUI();
 
-    m_ambientTimer.setInterval(40);
+    m_ambientTimer.setInterval(50);
     connect(&m_ambientTimer, &QTimer::timeout, this, [this]() {
         m_ambientPhase += 0.025;
         if (!m_splashActive) {
@@ -88,11 +91,76 @@ void StartPage::paintEvent(QPaintEvent *event)
 
     painter.fillRect(rect(), QColor(36, 52, 38));
     static QPixmap menu(":/images/artwork/main_menu.jpg");
-    if (!menu.isNull()) {
+    if (!m_menuCache.isNull()) {
+        painter.drawPixmap(m_canvasRect.topLeft(), m_menuCache);
+    } else if (!menu.isNull()) {
         painter.drawPixmap(m_canvasRect, menu, QRectF(menu.rect()));
     }
 
     const qreal pulse = 0.5 + 0.5 * qSin(m_ambientPhase);
+    const qreal sx = m_canvasRect.width() / kDesignWidth;
+    const qreal sy = m_canvasRect.height() / kDesignHeight;
+
+    // Redraw the foreground character with a tiny vertical scale pulse.
+    // It reads as breathing while preserving the original painted artwork.
+    if (!menu.isNull()) {
+        const QRectF sourceCharacter(1370, 610, 270, 315);
+        QRectF targetCharacter(m_canvasRect.left() + sourceCharacter.x() * sx,
+                               m_canvasRect.top() + sourceCharacter.y() * sy,
+                               sourceCharacter.width() * sx,
+                               sourceCharacter.height() * sy);
+        const qreal breathe = 1.0 + qSin(m_ambientPhase * 0.82) * 0.006;
+        QRectF breathed = targetCharacter;
+        breathed.setHeight(targetCharacter.height() * breathe);
+        breathed.moveBottom(targetCharacter.bottom());
+        painter.save();
+        painter.setClipRect(targetCharacter.adjusted(-5, -8, 5, 4));
+        painter.drawPixmap(breathed, menu, sourceCharacter);
+        painter.restore();
+    }
+
+    // Gentle moving wave crests over the beach portion of the painting.
+    painter.save();
+    painter.setClipRect(QRectF(m_canvasRect.left(),
+                               m_canvasRect.top() + m_canvasRect.height() * 0.38,
+                               m_canvasRect.width() * 0.34,
+                               m_canvasRect.height() * 0.47));
+    for (int row = 0; row < 6; ++row) {
+        QPainterPath wave;
+        const qreal y = m_canvasRect.top() + m_canvasRect.height() * (0.48 + row * 0.055);
+        const qreal offset = qSin(m_ambientPhase * 0.8 + row) * 13.0;
+        wave.moveTo(m_canvasRect.left() - 30, y);
+        for (int segment = 0; segment < 9; ++segment) {
+            const qreal x = m_canvasRect.left() + segment * m_canvasRect.width() * 0.045 + offset;
+            wave.cubicTo(x + 14, y - 4 - row,
+                         x + 29, y + 5 + row * 0.5,
+                         x + 43, y);
+        }
+        painter.setPen(QPen(QColor(239, 248, 224, 30 + row * 5), 1.4));
+        painter.drawPath(wave);
+    }
+    painter.restore();
+
+    // Small wind-blown leaves connect the static canopy with the page motion.
+    for (int i = 0; i < 12; ++i) {
+        const qreal travel = std::fmod(m_ambientPhase * (18.0 + i % 4 * 4.0)
+                                      + i * 137.0,
+                                      m_canvasRect.width() + 180.0);
+        const qreal x = m_canvasRect.right() + 50.0 - travel;
+        const qreal y = m_canvasRect.top() + m_canvasRect.height() * (0.08 + (i % 6) * 0.105)
+                        + qSin(m_ambientPhase * 1.4 + i) * 18.0;
+        painter.save();
+        painter.translate(x, y);
+        painter.rotate(m_ambientPhase * 42.0 + i * 31.0);
+        const qreal leafSize = 4.5 + i % 3;
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(i % 2 ? QColor(118, 132, 55, 120)
+                               : QColor(73, 104, 49, 135));
+        painter.drawEllipse(QRectF(-leafSize, -leafSize * 0.42,
+                                   leafSize * 2.0, leafSize * 0.84));
+        painter.restore();
+    }
+
     QRadialGradient sunGlow(
         QPointF(m_canvasRect.left() + m_canvasRect.width() * 0.20,
                 m_canvasRect.top() + m_canvasRect.height() * 0.08),
@@ -181,6 +249,7 @@ void StartPage::initUI()
         auto *button = new ArtHotspot(artwork, spec.rect, m_menuLayer);
         button->setToolTip(QString::fromUtf8(spec.tooltip));
         button->setGlowColor(QColor(255, 222, 132));
+        button->setSwayEnabled(true);
         m_buttons.append(button);
     }
 
@@ -234,6 +303,15 @@ void StartPage::updateArtworkLayout()
     const QPointF topLeft((width() - canvasSize.width()) / 2.0,
                           (height() - canvasSize.height()) / 2.0);
     m_canvasRect = QRectF(topLeft, canvasSize);
+
+    const QSize cacheSize(qMax(1, qRound(canvasSize.width())),
+                          qMax(1, qRound(canvasSize.height())));
+    if (cacheSize != m_menuCacheSize) {
+        static QPixmap menu(":/images/artwork/main_menu.jpg");
+        m_menuCache = menu.scaled(cacheSize, Qt::IgnoreAspectRatio,
+                                  Qt::SmoothTransformation);
+        m_menuCacheSize = cacheSize;
+    }
 
     for (int i = 0; i < m_buttons.size(); ++i) {
         const QRect source = kMenuHotspots[i].rect;

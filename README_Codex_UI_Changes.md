@@ -3,6 +3,10 @@
 This note summarizes the UI, asset, and map work done on the `codex/ui-assets`
 branch.
 
+The latest battle-result, animation, audio, transition, pause-menu, and
+performance work is documented in
+[`README_UI_POLISH_TRIAL.md`](README_UI_POLISH_TRIAL.md).
+
 ## What Changed
 
 - Added Qt resource packaging through `resources/resources.qrc`.

@@ -2,6 +2,7 @@
 #define STARTPAGE_H
 
 #include <QRectF>
+#include <QPixmap>
 #include <QTimer>
 #include <QVector>
 #include <QWidget>
@@ -40,6 +41,8 @@ private:
     QWidget *m_menuLayer;
     QLabel *m_pressHint;
     QRectF m_canvasRect;
+    QPixmap m_menuCache;
+    QSize m_menuCacheSize;
     QVector<ArtHotspot*> m_buttons;
     QTimer m_ambientTimer;
     qreal m_ambientPhase;

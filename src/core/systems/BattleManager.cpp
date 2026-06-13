@@ -125,7 +125,13 @@ void BattleManager::clearBattle() {
     monsterCooldowns_.clear();
     waveElapsedSeconds_ = 0.0;
     currentWave_ = 0;
+    defeatedMonsters_ = 0;
+    escapedMonsters_ = 0;
     isPvp_ = false;
+    resources_.setResources(constants::InitialResources);
+    resources_.setBaseHealth(constants::InitialBaseHealth);
+    opponentResources_.setResources(constants::InitialResources);
+    opponentResources_.setBaseHealth(constants::InitialBaseHealth);
 }
 
 void BattleManager::clearMonsters() {
@@ -187,6 +193,8 @@ BattleSnapshot BattleManager::snapshot() const {
     result.baseHealth = resources_.baseHealth();
     result.opponentResources = opponentResources_.resources();
     result.opponentBaseHealth = opponentResources_.baseHealth();
+    result.defeatedMonsters = defeatedMonsters_;
+    result.escapedMonsters = escapedMonsters_;
     result.waveActive = waveActive();
     result.gameOver = gameOver();
     result.map = makeMapSnapshot();
@@ -266,6 +274,8 @@ BattleSnapshot BattleManager::opponentSnapshot() const {
     result.baseHealth = opponentResources_.baseHealth();
     result.opponentResources = resources_.resources();
     result.opponentBaseHealth = resources_.baseHealth();
+    result.defeatedMonsters = defeatedMonsters_;
+    result.escapedMonsters = escapedMonsters_;
     result.waveActive = waveActive();
     result.gameOver = gameOver();
     result.map = makeMapSnapshot();
@@ -439,10 +449,12 @@ void BattleManager::removeResolvedMonsters() {
             if (monster->isDead()) {
                 // 死亡怪物发放资源奖励。
                 monster->onDeath(resources_);
+                ++defeatedMonsters_;
                 monsterCooldowns_.erase(monster->id());
                 return true;
             }
             if (monster->escaped()) {
+                ++escapedMonsters_;
                 // 逃逸怪物伤害基地。
                 const MapGrid* grid = map_.gridAt(monster->position());
                 if (grid && grid->terrainType() == TerrainType::CoreB) {

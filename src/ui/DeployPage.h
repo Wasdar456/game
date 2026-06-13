@@ -81,7 +81,14 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
 
 private:
+    struct DustEffect {
+        int row;
+        int col;
+        qreal life;
+    };
+
     game::core::BattleSnapshot m_snapshot;
+    QVector<DustEffect> m_dustEffects;
     int m_mapRows;
     int m_mapCols;
     QPushButton *m_btnUpgrade;
@@ -96,6 +103,7 @@ private:
     void drawDeployable(QPainter &painter);
     void drawUnits(QPainter &painter);
     void drawHoverCell(QPainter &painter);
+    void drawDustEffects(QPainter &painter);
 };
 
 /**

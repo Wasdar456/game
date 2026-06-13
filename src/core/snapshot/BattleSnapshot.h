@@ -20,6 +20,8 @@ struct BattleSnapshot {
     int baseHealth = 0;
     int opponentResources = 0;
     int opponentBaseHealth = 0;
+    int defeatedMonsters = 0;
+    int escapedMonsters = 0;
     bool waveActive = false;
     bool gameOver = false;
     // 地图、卡牌和怪物展示数据。

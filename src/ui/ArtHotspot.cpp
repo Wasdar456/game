@@ -1,10 +1,13 @@
 #include "ui/ArtHotspot.h"
+#include "ui/AudioManager.h"
 
 #include <QEasingCurve>
 #include <QEnterEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QShowEvent>
+#include <QTimer>
+#include <QtMath>
 
 namespace {
 constexpr qreal kHoverScale = 1.045;
@@ -22,6 +25,8 @@ ArtHotspot::ArtHotspot(const QString &imagePath, const QRect &sourceRect,
     , m_glow(0.0)
     , m_selected(false)
     , m_pressed(false)
+    , m_swayEnabled(false)
+    , m_idlePhase(sourceRect.x() * 0.013 + sourceRect.y() * 0.007)
 {
     setAttribute(Qt::WA_TranslucentBackground);
     setMouseTracking(true);
@@ -37,6 +42,16 @@ ArtHotspot::ArtHotspot(const QString &imagePath, const QRect &sourceRect,
                 m_glow = state.y();
                 update();
             });
+
+    auto *idleTimer = new QTimer(this);
+    idleTimer->setInterval(40);
+    connect(idleTimer, &QTimer::timeout, this, [this]() {
+        if (m_swayEnabled && isVisible()) {
+            m_idlePhase += 0.035;
+            update();
+        }
+    });
+    idleTimer->start();
 }
 
 void ArtHotspot::setCanvasRect(const QRectF &rect)
@@ -62,6 +77,12 @@ void ArtHotspot::setSelected(bool selected)
 void ArtHotspot::setGlowColor(const QColor &color)
 {
     m_glowColor = color;
+    update();
+}
+
+void ArtHotspot::setSwayEnabled(bool enabled)
+{
+    m_swayEnabled = enabled;
     update();
 }
 
@@ -108,6 +129,7 @@ void ArtHotspot::mouseReleaseEvent(QMouseEvent *event)
         animateTo(inside ? kHoverScale : 1.0,
                   inside || m_selected ? 1.0 : 0.0);
         if (inside && m_clickHandler) {
+            AudioManager::instance().playWoodClick();
             m_clickHandler();
         }
         event->accept();
@@ -125,6 +147,13 @@ void ArtHotspot::paintEvent(QPaintEvent *event)
 
     QRectF drawRect(QPointF(0, 0), m_baseSize * m_scale);
     drawRect.moveCenter(QRectF(rect()).center());
+    const qreal sway = m_swayEnabled
+        ? qSin(m_idlePhase) * 0.7 + (m_pressed ? -0.8 : 0.0)
+        : 0.0;
+
+    painter.translate(drawRect.center());
+    painter.rotate(sway);
+    painter.translate(-drawRect.center());
 
     if (!m_sourceImage.isNull()) {
         painter.drawPixmap(drawRect, m_sourceImage, QRectF(m_sourceRect));

@@ -5,11 +5,15 @@
 
 #include "ui/DeployPage.h"
 #include "ui/MainWindow.h"
+#include "ui/AudioManager.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QDebug>
 #include <QtEndian>
+#include <QtMath>
+
+#include <algorithm>
 
 // ========== 网络模块 ==========
 #include "network/session/GameServer.h"
@@ -101,6 +105,23 @@ DeployView::DeployView(QWidget *parent)
         m_selectedUnitId = -1;
         update();
     });
+
+    auto *effectTimer = new QTimer(this);
+    effectTimer->setInterval(40);
+    connect(effectTimer, &QTimer::timeout, this, [this]() {
+        for (auto &effect : m_dustEffects) {
+            effect.life -= 0.04;
+        }
+        m_dustEffects.erase(std::remove_if(m_dustEffects.begin(), m_dustEffects.end(),
+                                           [](const DustEffect &effect) {
+                                               return effect.life <= 0.0;
+                                           }),
+                            m_dustEffects.end());
+        if (!m_dustEffects.isEmpty()) {
+            update();
+        }
+    });
+    effectTimer->start();
 }
 
 void DeployView::setMapSize(int rows, int cols)
@@ -112,6 +133,23 @@ void DeployView::setMapSize(int rows, int cols)
 
 void DeployView::updateFromSnapshot(const game::core::BattleSnapshot &snapshot)
 {
+    for (const auto &unit : snapshot.units) {
+        bool existed = false;
+        for (const auto &oldUnit : m_snapshot.units) {
+            if (oldUnit.id == unit.id) {
+                existed = true;
+                break;
+            }
+        }
+        if (!existed) {
+            constexpr int MaxDustEffects = 20;
+            if (m_dustEffects.size() >= MaxDustEffects) {
+                m_dustEffects.removeFirst();
+            }
+            m_dustEffects.append({unit.row, unit.col, 0.64});
+            AudioManager::instance().playDeploy();
+        }
+    }
     m_snapshot = snapshot;
     if (snapshot.map.rows > 0 && snapshot.map.cols > 0) {
         if (m_mapRows != snapshot.map.rows || m_mapCols != snapshot.map.cols) {
@@ -130,6 +168,7 @@ void DeployView::paintEvent(QPaintEvent *event)
     drawTerrain(painter);
     drawDeployable(painter);
     drawUnits(painter);
+    drawDustEffects(painter);
     drawHoverCell(painter);
 }
 
@@ -484,6 +523,25 @@ DeployPage::DeployPage(QWidget *parent)
 {
     initUI();
     connectSignals();
+}
+
+void DeployView::drawDustEffects(QPainter &painter)
+{
+    for (const DustEffect &effect : m_dustEffects) {
+        const qreal progress = 1.0 - effect.life / 0.64;
+        const QPointF center(effect.col * CELL_SIZE + CELL_SIZE / 2.0,
+                             effect.row * CELL_SIZE + CELL_SIZE * 0.76);
+        for (int i = 0; i < 9; ++i) {
+            const qreal angle = i * 0.70;
+            const qreal distance = CELL_SIZE * progress * (0.22 + (i % 3) * 0.05);
+            const QPointF pos = center + QPointF(qCos(angle) * distance,
+                                                 qSin(angle) * distance * 0.42);
+            const qreal radius = 5.2 - progress * 2.7 + (i % 2);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(177, 139, 82, qRound((1.0 - progress) * 170)));
+            painter.drawEllipse(pos, radius, radius * 0.62);
+        }
+    }
 }
 
 void DeployPage::paintEvent(QPaintEvent *event)

@@ -31,17 +31,20 @@
 #include <QLinearGradient>
 #include <vector>
 #include <QtMath>
-#include <QMessageBox>
 #include <QDebug>
 #include <QtEndian>
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QDir>
+#include <QKeyEvent>
+#include <QResizeEvent>
 #include <algorithm>
 #include <cmath>
 
 // ========== 引入 MainWindow 头文件以获取 BattleManager ==========
 #include "ui/MainWindow.h"
+#include "ui/AudioManager.h"
+#include "ui/PauseOverlay.h"
 
 // ========== 引入核心层头文件 ==========
 #include "core/systems/ResourceManager.h"  // 资源管理
@@ -201,6 +204,14 @@ BattleView::BattleView(QWidget *parent)
     QTimer *animTimer = new QTimer(this);
     connect(animTimer, &QTimer::timeout, this, [this]() {
         m_animFrame++;
+        for (auto &effect : m_effects) {
+            effect.life -= 0.05;
+        }
+        m_effects.erase(std::remove_if(m_effects.begin(), m_effects.end(),
+                                       [](const BattleEffect &effect) {
+                                           return effect.life <= 0.0;
+                                       }),
+                        m_effects.end());
         update();
     });
     animTimer->start(50);  // 20 FPS 动画
@@ -328,6 +339,69 @@ int BattleView::colAtPixel(int x) const
 // ========== updateFromSnapshot() —— 从快照更新渲染数据 ==========
 void BattleView::updateFromSnapshot(const game::core::BattleSnapshot &snapshot)
 {
+    auto oldUnitHp = [this](int id, int *row, int *col) {
+        for (const auto &unit : m_snapshot.units) {
+            if (unit.id == id) {
+                if (row) *row = unit.row;
+                if (col) *col = unit.col;
+                return unit.hp;
+            }
+        }
+        return -1;
+    };
+    auto oldMonsterHp = [this](int id) {
+        for (const auto &monster : m_snapshot.monsters) {
+            if (monster.id == id) {
+                return monster.hp;
+            }
+        }
+        return -1;
+    };
+
+    for (const auto &unit : snapshot.units) {
+        int oldRow = unit.row;
+        int oldCol = unit.col;
+        const int previousHp = oldUnitHp(unit.id, &oldRow, &oldCol);
+        if (previousHp < 0) {
+            addEffect(EffectType::DeployDust, unit.row, unit.col, 0.62);
+            AudioManager::instance().playDeploy();
+        } else if (unit.hp < previousHp) {
+            addEffect(EffectType::HitFlash, unit.row, unit.col, 0.30);
+            AudioManager::instance().playHit();
+        }
+    }
+
+    for (const auto &monster : snapshot.monsters) {
+        const int previousHp = oldMonsterHp(monster.id);
+        if (previousHp >= 0 && monster.hp < previousHp) {
+            addEffect(EffectType::HitFlash, monster.row, monster.col, 0.30);
+            AudioManager::instance().playHit();
+        }
+    }
+
+    if (!m_snapshot.map.grids.empty() && snapshot.baseHealth < m_snapshot.baseHealth) {
+        addEffect(EffectType::HitFlash, m_corePos.row, m_corePos.col, 0.42);
+        AudioManager::instance().playHit();
+    }
+
+    for (const auto &projectile : snapshot.projectiles) {
+        bool continuingProjectile = false;
+        for (const auto &oldProjectile : m_snapshot.projectiles) {
+            if (oldProjectile.sourceId == projectile.sourceId
+                && oldProjectile.targetId == projectile.targetId
+                && oldProjectile.kind == projectile.kind
+                && oldProjectile.progress <= projectile.progress) {
+                continuingProjectile = true;
+                break;
+            }
+        }
+        if (!continuingProjectile && projectile.progress < 0.22) {
+            addEffect(EffectType::AttackFlash,
+                      projectile.fromRow, projectile.fromCol, 0.20);
+            AudioManager::instance().playAttack();
+        }
+    }
+
     m_snapshot = snapshot;
 
     // 如果快照中有地图数据，更新地图大小
@@ -356,6 +430,7 @@ void BattleView::paintEvent(QPaintEvent *event)
     drawUnits(painter);
     drawMonsters(painter);
     drawProjectiles(painter);
+    drawEffects(painter);
 }
 
 // ========== drawTerrain() —— 绘制地形（渐变+纹理感） ==========
@@ -996,6 +1071,28 @@ void BattleView::hideRadialMenu()
     m_btnRetreat->hide();
 }
 
+void BattleView::clearEffects()
+{
+    m_effects.clear();
+    m_snapshot = game::core::BattleSnapshot();
+}
+
+void BattleView::addEffect(EffectType type, int row, int col, qreal duration)
+{
+    for (BattleEffect &effect : m_effects) {
+        if (effect.type == type && effect.row == row && effect.col == col) {
+            effect.life = duration;
+            effect.duration = duration;
+            return;
+        }
+    }
+    constexpr int MaxEffects = 72;
+    if (m_effects.size() >= MaxEffects) {
+        m_effects.remove(0, m_effects.size() - MaxEffects + 1);
+    }
+    m_effects.append({type, row, col, duration, duration});
+}
+
 int BattleView::findUnitAt(int row, int col) const
 {
     for (const auto &unit : m_snapshot.units) {
@@ -1062,6 +1159,7 @@ BattlePage::BattlePage(QWidget *parent)
     , m_btnSpeed(nullptr)
     , m_btnSkill(nullptr)
     , m_btnExit(nullptr)
+    , m_pauseOverlay(nullptr)
     , m_isPaused(false)
     , m_speedMultiplier(1.0)
     , m_battleManager(nullptr)
@@ -1081,6 +1179,7 @@ BattlePage::BattlePage(QWidget *parent)
 // ========== initUI() —— 初始化界面 ==========
 void BattlePage::initUI()
 {
+    setFocusPolicy(Qt::StrongFocus);
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
@@ -1249,6 +1348,10 @@ void BattlePage::initUI()
     // 游戏主循环定时器（约 60FPS）
     m_gameTimer = new QTimer(this);
     connect(m_gameTimer, &QTimer::timeout, this, &BattlePage::onGameTick);
+
+    m_pauseOverlay = new PauseOverlay(this);
+    m_pauseOverlay->setGeometry(rect());
+    m_pauseOverlay->raise();
 }
 
 // ========== setNetworkContext() —— 设置网络上下文（PVP 模式） ==========
@@ -1622,6 +1725,11 @@ void BattlePage::handleRemoteBattleState(const game::core::BattleSnapshot& snaps
     m_battleView->updateFromSnapshot(snapshot);
     updateStatusBar(snapshot);
 
+    if (snapshot.gameOver) {
+        finishBattle(snapshot);
+        return;
+    }
+
     if (m_isPvp && !m_isHost && m_waveStarted && !snapshot.waveActive && !m_localWaveClear) {
         m_localWaveClear = true;
         qDebug() << "[BattlePage] remote state shows WAVE_CLEAR for wave" << m_currentWaveId;
@@ -1810,6 +1918,10 @@ void BattlePage::startBattle()
 
     // 重置状态
     m_isPaused = false;
+    m_btnPause->setText("⏸");
+    m_pauseOverlay->closeMenu();
+    m_pauseOverlay->setPvpMode(m_isPvp);
+    m_battleView->clearEffects();
     m_speedMultiplier = 1.0;
     m_waveTimer = 0.0;
     m_stateSyncTimer = 0.0;
@@ -1817,6 +1929,7 @@ void BattlePage::startBattle()
     m_waveStarted = false;
     m_localWaveClear = false;
     m_peerWaveClear = false;
+    m_resultEmitted = false;
     m_currentWaveId = (m_isPvp && m_battleManager->currentWave() > 0)
                           ? m_battleManager->currentWave() + 1
                           : 1;
@@ -1892,6 +2005,16 @@ void BattlePage::onGameTick()
         }
     }
 
+    if (snap.gameOver) {
+        if (m_isPvp && m_isHost) {
+            sendBattleState(snap);
+        }
+        m_battleView->updateFromSnapshot(snap);
+        updateStatusBar(snap);
+        finishBattle(snap);
+        return;
+    }
+
     // PVP: 本端怪物清空后只发送/记录确认，Host 等双方都确认后统一回部署。
     if (m_isPvp && !snap.waveActive) {
         if (!m_localWaveClear) {
@@ -1922,6 +2045,12 @@ void BattlePage::onGameTick()
 
     // PVE: 自动下一波
     if (!m_isPvp && !snap.waveActive) {
+        if (m_currentWaveId >= PVE_FINAL_WAVE) {
+            m_battleView->updateFromSnapshot(snap);
+            updateStatusBar(snap);
+            finishBattle(snap, true);
+            return;
+        }
         m_waveTimer += deltaSeconds;
         if (m_waveTimer >= WAVE_INTERVAL) {
             m_waveTimer = 0.0;
@@ -1937,12 +2066,93 @@ void BattlePage::onGameTick()
     m_battleView->updateFromSnapshot(snap);
     updateStatusBar(snap);
 
-    if (snap.gameOver) {
-        m_inBattlePhase = false;
-        m_waveStarted = false;
-        m_gameTimer->stop();
-        emit signalBattleEnd();
+}
+
+void BattleView::drawEffects(QPainter &painter)
+{
+    for (const BattleEffect &effect : m_effects) {
+        const qreal progress = 1.0 - effect.life / effect.duration;
+        const QPointF center = cellCenter(effect.row, effect.col);
+        const qreal extent = cellExtent();
+
+        painter.save();
+        if (effect.type == EffectType::DeployDust) {
+            for (int i = 0; i < 10; ++i) {
+                const qreal angle = i * 0.628 + effect.row * 0.19;
+                const qreal distance = extent * (0.12 + progress * (0.30 + (i % 3) * 0.04));
+                const QPointF pos = center + QPointF(qCos(angle), qSin(angle) * 0.45) * distance;
+                const qreal radius = extent * (0.09 - progress * 0.045) * (0.75 + (i % 3) * 0.12);
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(QColor(151, 119, 73, qRound((1.0 - progress) * 150)));
+                painter.drawEllipse(pos, radius, radius * 0.62);
+            }
+            painter.setPen(QPen(QColor(245, 218, 154,
+                                      qRound((1.0 - progress) * 165)), 2));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawEllipse(center, extent * progress * 0.43,
+                                extent * progress * 0.24);
+        } else if (effect.type == EffectType::AttackFlash) {
+            const qreal alpha = 1.0 - progress;
+            QRadialGradient flash(center, extent * 0.48);
+            flash.setColorAt(0.0, QColor(255, 252, 212, qRound(alpha * 245)));
+            flash.setColorAt(0.35, QColor(255, 193, 72, qRound(alpha * 190)));
+            flash.setColorAt(1.0, QColor(255, 133, 32, 0));
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(flash);
+            painter.drawEllipse(center, extent * 0.48, extent * 0.48);
+            painter.setPen(QPen(QColor(255, 238, 171, qRound(alpha * 225)), 2));
+            for (int i = 0; i < 6; ++i) {
+                const qreal angle = i * 1.047 + progress;
+                painter.drawLine(center + QPointF(qCos(angle), qSin(angle)) * extent * 0.18,
+                                 center + QPointF(qCos(angle), qSin(angle)) * extent * 0.48);
+            }
+        } else {
+            const qreal alpha = 1.0 - progress;
+            const qreal radius = extent * (0.20 + progress * 0.38);
+            painter.setPen(QPen(QColor(255, 244, 218, qRound(alpha * 235)),
+                                3.0 - progress * 1.6));
+            painter.setBrush(QColor(255, 76, 61, qRound(alpha * 72)));
+            painter.drawEllipse(center, radius, radius);
+            painter.setPen(QPen(QColor(255, 91, 67, qRound(alpha * 210)), 2));
+            painter.drawLine(center + QPointF(-extent * 0.23, -extent * 0.18),
+                             center + QPointF(extent * 0.23, extent * 0.18));
+            painter.drawLine(center + QPointF(extent * 0.23, -extent * 0.18),
+                             center + QPointF(-extent * 0.23, extent * 0.18));
+        }
+        painter.restore();
     }
+}
+
+void BattlePage::finishBattle(const game::core::BattleSnapshot &snapshot, bool pveVictory)
+{
+    if (m_resultEmitted) {
+        return;
+    }
+    m_resultEmitted = true;
+    m_inBattlePhase = false;
+    m_waveStarted = false;
+    m_gameTimer->stop();
+
+    BattleResult result;
+    result.isPvp = m_isPvp;
+    result.wave = snapshot.currentWave;
+    result.defeatedMonsters = snapshot.defeatedMonsters;
+    result.escapedMonsters = snapshot.escapedMonsters;
+    result.localCoreHealth = snapshot.baseHealth;
+    result.opponentCoreHealth = snapshot.opponentBaseHealth;
+    result.mapId = m_netCtx.pveMapId;
+
+    if (!m_isPvp) {
+        result.outcome = pveVictory ? BattleOutcome::Victory : BattleOutcome::Defeat;
+    } else if (snapshot.baseHealth <= 0 && snapshot.opponentBaseHealth <= 0) {
+        result.outcome = BattleOutcome::Draw;
+    } else if (snapshot.opponentBaseHealth <= 0) {
+        result.outcome = BattleOutcome::Victory;
+    } else {
+        result.outcome = BattleOutcome::Defeat;
+    }
+
+    emit signalBattleFinished(result);
 }
 
 // ========== updateStatusBar() —— 更新状态栏 ==========
@@ -1966,8 +2176,7 @@ void BattlePage::connectSignals()
 {
     // 暂停按钮
     connect(m_btnPause, &QPushButton::clicked, this, [this]() {
-        m_isPaused = !m_isPaused;
-        m_btnPause->setText(m_isPaused ? "▶" : "⏸");
+        setPaused(!m_isPaused);
     });
 
     // 加速按钮
@@ -1978,31 +2187,30 @@ void BattlePage::connectSignals()
 
     // 退出按钮
     connect(m_btnExit, &QPushButton::clicked, this, [this]() {
-        qDebug() << "[BattlePage] exit button clicked";
-        QMessageBox::StandardButton reply = QMessageBox::question(
-            this,
-            "确认退出",
-            "确定要退出当前战斗吗？\n未保存的进度将会丢失。",
-            QMessageBox::Yes | QMessageBox::No,
-            QMessageBox::No
-        );
-
-        if (reply == QMessageBox::Yes) {
-            qDebug() << "[BattlePage] user confirmed exit";
-            // 停止游戏循环
-            if (m_gameTimer) {
-                m_gameTimer->stop();
-            }
-            m_inBattlePhase = false;
-            m_waveStarted = false;
-            // 清理战斗状态
-            if (m_battleManager) {
-                m_battleManager->clearBattle();
-            }
-            // 发出退出信号
-            emit signalBattleEnd();
-        }
+        setPaused(true);
     });
+
+    connect(m_pauseOverlay, &PauseOverlay::signalResume,
+            this, [this]() { setPaused(false); });
+    connect(m_pauseOverlay, &PauseOverlay::signalRestart,
+            this, [this]() {
+                setPaused(false);
+                m_gameTimer->stop();
+                m_inBattlePhase = false;
+                m_waveStarted = false;
+                emit signalBattleRestartRequested();
+            });
+    connect(m_pauseOverlay, &PauseOverlay::signalExitToLobby,
+            this, [this]() {
+                setPaused(false);
+                m_gameTimer->stop();
+                m_inBattlePhase = false;
+                m_waveStarted = false;
+                if (m_battleManager) {
+                    m_battleManager->clearBattle();
+                }
+                emit signalBattleCancelled();
+            });
 
     // ===== BattleView 的操作信号 → 调用 send 方法（本地 + 网络） =====
 
@@ -2029,4 +2237,40 @@ void BattlePage::connectSignals()
             this, [this](int unitId) {
         sendRecallAction(unitId);
     });
+}
+
+void BattlePage::setPaused(bool paused)
+{
+    if (!m_inBattlePhase && paused) {
+        return;
+    }
+    m_isPaused = paused;
+    m_btnPause->setText(paused ? "▶" : "⏸");
+    if (paused) {
+        m_battleView->hideRadialMenu();
+        m_pauseOverlay->setPvpMode(m_isPvp);
+        m_pauseOverlay->open();
+    } else {
+        m_pauseOverlay->closeMenu();
+        setFocus(Qt::OtherFocusReason);
+    }
+}
+
+void BattlePage::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Escape && m_inBattlePhase) {
+        setPaused(!m_isPaused);
+        event->accept();
+        return;
+    }
+    QWidget::keyPressEvent(event);
+}
+
+void BattlePage::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    if (m_pauseOverlay) {
+        m_pauseOverlay->setGeometry(rect());
+        m_pauseOverlay->raise();
+    }
 }

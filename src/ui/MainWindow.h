@@ -44,6 +44,8 @@ class DeckPage;
 class DeployPage;
 class BattlePage;
 class SettingsPage;
+class ResultPage;
+class LeafTransitionOverlay;
 
 // NetworkContext 定义在 LobbyPage.h 中
 #include "ui/LobbyPage.h"
@@ -88,6 +90,8 @@ private:
     DeployPage   *m_deployPage;  ///< 迷雾部署页面（PVP）
     BattlePage   *m_battlePage;
     SettingsPage *m_settingsPage;
+    ResultPage   *m_resultPage;
+    LeafTransitionOverlay *m_transitionOverlay;
 
     // ========== 页面导航辅助 ==========
     QWidget *m_previousPage;  ///< 记录切换到 DeckPage 前的来源页面

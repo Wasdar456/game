@@ -31,6 +31,9 @@
 #include "ui/DeployPage.h"
 #include "ui/BattlePage.h"
 #include "ui/SettingsPage.h"
+#include "ui/ResultPage.h"
+#include "ui/AudioManager.h"
+#include "ui/LeafTransitionOverlay.h"
 
 // ========== 鏋勯€犲嚱鏁?==========
 MainWindow::MainWindow(QWidget *parent)
@@ -43,6 +46,8 @@ MainWindow::MainWindow(QWidget *parent)
     , m_deployPage(nullptr)
     , m_battlePage(nullptr)
     , m_settingsPage(nullptr)
+    , m_resultPage(nullptr)
+    , m_transitionOverlay(nullptr)
     , m_previousPage(nullptr)
 {
     // ----- 鍒涘缓 BattleManager -----
@@ -60,6 +65,8 @@ MainWindow::MainWindow(QWidget *parent)
     // 鍒濆鍖?UI 鍜屼俊鍙疯繛鎺?
     initUI();
     connectSignals();
+    AudioManager::instance().initialize();
+    AudioManager::instance().setScene(AudioManager::Scene::Menu);
 }
 
 // ========== 鏋愭瀯鍑芥暟 ==========
@@ -86,6 +93,7 @@ void MainWindow::initUI()
     m_deployPage   = new DeployPage(this);
     m_battlePage   = new BattlePage(this);
     m_settingsPage = new SettingsPage(this);
+    m_resultPage   = new ResultPage(this);
 
     // ----- 灏嗘墍鏈夐〉闈㈡寜椤哄簭娣诲姞鍒板爢鍙犵獥鍙?-----
     m_stackWidget->addWidget(m_startPage);      // index 0
@@ -94,9 +102,12 @@ void MainWindow::initUI()
     m_stackWidget->addWidget(m_deployPage);     // index 3
     m_stackWidget->addWidget(m_battlePage);     // index 4
     m_stackWidget->addWidget(m_settingsPage);   // index 5
+    m_stackWidget->addWidget(m_resultPage);     // index 6
 
     // ----- 璁剧疆鍫嗗彔绐楀彛涓轰富绐楀彛鐨勪腑澶帶浠?-----
     this->setCentralWidget(m_stackWidget);
+    m_transitionOverlay = new LeafTransitionOverlay(m_stackWidget);
+    m_transitionOverlay->setGeometry(m_stackWidget->rect());
 
     // ----- 榛樿鏄剧ず璧峰椤?-----
     m_stackWidget->setCurrentWidget(m_startPage);
@@ -114,50 +125,22 @@ void MainWindow::fadeToPage(QWidget *page)
         return;
     }
 
-    current->setGraphicsEffect(nullptr);
-    page->setGraphicsEffect(nullptr);
-
-    // 娣″嚭褰撳墠椤?
-    QGraphicsOpacityEffect *outEffect = new QGraphicsOpacityEffect(current);
-    current->setGraphicsEffect(outEffect);
-    QPropertyAnimation *outAnim = new QPropertyAnimation(outEffect, "opacity");
-    outAnim->setDuration(150);
-    outAnim->setStartValue(1.0);
-    outAnim->setEndValue(0.0);
-    outAnim->setEasingCurve(QEasingCurve::OutCubic);
-
-    // 娣″嚭瀹屾垚鍚庡垏鎹㈤〉闈㈠苟寮€濮嬫贰鍏?
-    connect(outAnim, &QPropertyAnimation::finished, this, [this, current, page]() {
-        QTimer::singleShot(0, current, [current]() {
-            current->setGraphicsEffect(nullptr);
-            current->update();
-        });
+    if (!m_transitionOverlay || m_transitionOverlay->isRunning()) {
+        return;
+    }
+    m_transitionOverlay->setGeometry(m_stackWidget->rect());
+    m_transitionOverlay->play([this, current, page]() {
+        current->setGraphicsEffect(nullptr);
+        page->setGraphicsEffect(nullptr);
         m_stackWidget->setCurrentWidget(page);
         page->show();
-        page->raise();
         page->update();
-
-        // showEvent() may refresh page visuals, so attach the fade-in effect afterwards.
-        QGraphicsOpacityEffect *inEffect = new QGraphicsOpacityEffect(page);
-        inEffect->setOpacity(0.0);
-        page->setGraphicsEffect(inEffect);
-        QPropertyAnimation *inAnim = new QPropertyAnimation(inEffect, "opacity");
-        inAnim->setDuration(200);
-        inAnim->setStartValue(0.0);
-        inAnim->setEndValue(1.0);
-        inAnim->setEasingCurve(QEasingCurve::InCubic);
-
-        connect(inAnim, &QPropertyAnimation::finished, page, [page]() {
-            QTimer::singleShot(0, page, [page]() {
-                page->setGraphicsEffect(nullptr);
-                page->update();
-                page->repaint();
-            });
-        });
-        inAnim->start(QAbstractAnimation::DeleteWhenStopped);
+        m_transitionOverlay->raise();
+        AudioManager::instance().setScene(
+            page == m_battlePage || page == m_deployPage
+                ? AudioManager::Scene::Battle
+                : AudioManager::Scene::Menu);
     });
-
-    outAnim->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
 // ========== connectSignals() 鈥斺€?杩炴帴淇″彿涓庢Ы ==========
@@ -275,11 +258,58 @@ void MainWindow::connectSignals()
                 fadeToPage(m_deployPage);
             });
 
-    // 鎴樻枟缁撴潫 鈫?鍥炲埌璧峰椤?
-    connect(m_battlePage, &BattlePage::signalBattleEnd,
+    connect(m_battlePage, &BattlePage::signalBattleFinished,
+            this, [this](const BattleResult &result) {
+                m_resultPage->setResult(result);
+                fadeToPage(m_resultPage);
+            });
+
+    connect(m_battlePage, &BattlePage::signalBattleCancelled,
             this, [this]() {
                 m_battleManager->clearBattle();
-                fadeToPage(m_startPage);
+                m_lobbyPage->setMode(m_networkContext.isPvp
+                                         ? LobbyPage::Mode::PVP
+                                         : LobbyPage::Mode::PVE);
+                fadeToPage(m_lobbyPage);
+            });
+
+    connect(m_battlePage, &BattlePage::signalBattleRestartRequested,
+            this, [this]() {
+                m_battleManager->clearBattle();
+                if (m_networkContext.isPvp) {
+                    m_deployPage->setNetworkContext(m_networkContext);
+                    m_deployPage->setDeck(m_deckPage->getSelectedKinds());
+                    m_deployPage->initDeployment();
+                    fadeToPage(m_deployPage);
+                } else {
+                    m_battlePage->setNetworkContext(m_networkContext);
+                    m_battlePage->startBattle();
+                }
+            });
+
+    connect(m_resultPage, &ResultPage::signalReplay,
+            this, [this]() {
+                m_battleManager->clearBattle();
+                if (m_resultPage->result().isPvp) {
+                    m_deployPage->setNetworkContext(m_networkContext);
+                    m_deployPage->setDeck(m_deckPage->getSelectedKinds());
+                    m_deployPage->initDeployment();
+                    fadeToPage(m_deployPage);
+                } else {
+                    m_battlePage->setNetworkContext(m_networkContext);
+                    m_battlePage->startBattle();
+                    fadeToPage(m_battlePage);
+                }
+            });
+
+    connect(m_resultPage, &ResultPage::signalReturnToLobby,
+            this, [this]() {
+                m_battleManager->clearBattle();
+                m_lobbyPage->setMode(m_resultPage->result().isPvp
+                                         ? LobbyPage::Mode::PVP
+                                         : LobbyPage::Mode::PVE);
+                m_previousPage = m_lobbyPage;
+                fadeToPage(m_lobbyPage);
             });
 
     // ===== 璁剧疆椤?(SettingsPage) 鐨勪俊鍙疯繛鎺?=====
@@ -288,5 +318,10 @@ void MainWindow::connectSignals()
     connect(m_settingsPage, &SettingsPage::signalBack,
             this, [this]() {
                 fadeToPage(m_startPage);
+            });
+
+    connect(m_settingsPage, &SettingsPage::signalVolumeChanged,
+            this, [](int bgm, int sfx) {
+                AudioManager::instance().setVolumes(bgm, sfx);
             });
 }

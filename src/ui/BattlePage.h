@@ -54,6 +54,11 @@
 // ========== 网络模块 ==========
 #include "ui/LobbyPage.h"                   // NetworkContext 结构体
 #include "network/protocol/ProtocolDef.h"   // MsgType 枚举
+#include "ui/BattleResult.h"
+
+class PauseOverlay;
+class QKeyEvent;
+class QResizeEvent;
 
 /**
  * @class BattleView
@@ -75,6 +80,7 @@ public:
     void setImageCrop(int x, int y, int w, int h);
     void setImageOffset(int x, int y);
     void hideRadialMenu();
+    void clearEffects();
 
     // ========== 交互状态 ==========
     enum class InteractionMode {
@@ -119,7 +125,22 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
 
 private:
+    enum class EffectType {
+        DeployDust,
+        AttackFlash,
+        HitFlash
+    };
+
+    struct BattleEffect {
+        EffectType type;
+        int row;
+        int col;
+        qreal life;
+        qreal duration;
+    };
+
     game::core::BattleSnapshot m_snapshot;
+    QVector<BattleEffect> m_effects;
     QPixmap m_backgroundImage;
     int m_mapRows;
     int m_mapCols;
@@ -141,6 +162,7 @@ private:
     QPointF cellCenter(int row, int col) const;
     int rowAtPixel(int y) const;
     int colAtPixel(int x) const;
+    void addEffect(EffectType type, int row, int col, qreal duration);
 
     // ========== 增强绘制方法 ==========
     void drawTerrain(QPainter &painter);           ///< 绘制地形（渐变+纹理感）
@@ -151,6 +173,7 @@ private:
     void drawMonsters(QPainter &painter);           ///< 绘制怪物（阴影+动画）
     void drawProjectiles(QPainter &painter);        ///< 绘制投射物占位特效
     void drawHoverCell(QPainter &painter);          ///< 绘制悬停格子高亮
+    void drawEffects(QPainter &painter);
 };
 
 /**
@@ -184,8 +207,14 @@ public:
     void startBattle();
 
 signals:
-    void signalBattleEnd();         ///< 战斗结束（核心被摧毁）
+    void signalBattleFinished(const BattleResult &result);
+    void signalBattleCancelled();
+    void signalBattleRestartRequested();
     void signalBackToDeploy();      ///< 怪物清空，返回部署阶段
+
+protected:
+    void keyPressEvent(QKeyEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     // ========== UI 组件 ==========
@@ -203,6 +232,7 @@ private:
     QPushButton *m_btnSpeed;
     QPushButton *m_btnSkill;
     QPushButton *m_btnExit;  ///< 退出按钮
+    PauseOverlay *m_pauseOverlay;
 
     // ========== 游戏状态 ==========
     bool m_isPaused;                ///< 是否暂停
@@ -210,6 +240,8 @@ private:
     int m_currentWaveId;            ///< 当前波次 ID（用于自动推进）
     double m_waveTimer;             ///< 波次间隔计时器（秒）
     static constexpr double WAVE_INTERVAL = 15.0;  ///< 每波间隔 15 秒
+    static constexpr int PVE_FINAL_WAVE = 10;
+    bool m_resultEmitted = false;
 
     // ========== 核心层引用 ==========
     game::core::BattleManager *m_battleManager;  ///< 通过 MainWindow 获取
@@ -229,6 +261,8 @@ private:
     void initUI();
     void connectSignals();
     void updateStatusBar(const game::core::BattleSnapshot &snapshot);
+    void finishBattle(const game::core::BattleSnapshot &snapshot, bool pveVictory = false);
+    void setPaused(bool paused);
 
     // ========== 地图初始化 ==========
     void setupPveMap();                 ///< 初始化 PVE 地图（从 startBattle 提取）

@@ -110,6 +110,7 @@ private:
     void refreshDeckSlotsDisplay();        ///< 刷新卡槽显示
     void refreshDetailPanel(int cardIndex);///< 刷新详细属性面板
     void updateStartBattleButton();        ///< 更新"开始战斗"按钮状态
+    void animateCardToSlot(int cardIndex, int slotIndex);
 };
 
 #endif // DECKPAGE_H

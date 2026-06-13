@@ -19,6 +19,7 @@ public:
     void setClickHandler(std::function<void()> handler);
     void setSelected(bool selected);
     void setGlowColor(const QColor &color);
+    void setSwayEnabled(bool enabled);
     void refreshVisual();
 
 protected:
@@ -42,6 +43,8 @@ private:
     qreal m_glow;
     bool m_selected;
     bool m_pressed;
+    bool m_swayEnabled;
+    qreal m_idlePhase;
 };
 
 #endif // ARTHOTSPOT_H

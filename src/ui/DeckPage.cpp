@@ -1,10 +1,16 @@
 #include "ui/DeckPage.h"
 
 #include "ui/ArtHotspot.h"
+#include "ui/AudioManager.h"
 
+#include <QEasingCurve>
+#include <QGraphicsOpacityEffect>
 #include <QIcon>
+#include <QLabel>
+#include <QParallelAnimationGroup>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QPropertyAnimation>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QShowEvent>
@@ -189,7 +195,7 @@ void DeckPage::initUI()
             for (int slot = 0; slot < MAX_DECK_SLOTS; ++slot) {
                 if (m_selectedSlots[slot] == -1) {
                     m_selectedSlots[slot] = i;
-                    refreshDeckSlotsDisplay();
+                    animateCardToSlot(i, slot);
                     updateStartBattleButton();
                     return;
                 }
@@ -271,6 +277,53 @@ void DeckPage::updateArtworkLayout()
     m_backHotspot->raise();
     m_startHotspot->raise();
     update();
+}
+
+void DeckPage::animateCardToSlot(int cardIndex, int slotIndex)
+{
+    if (cardIndex < 0 || cardIndex >= kCardRects.size()
+        || slotIndex < 0 || slotIndex >= m_slotButtons.size()) {
+        refreshDeckSlotsDisplay();
+        return;
+    }
+
+    static QPixmap artwork(":/images/artwork/deck_atlas.png");
+    const QPixmap cardArt = artwork.copy(kCardRects[cardIndex]);
+    auto *flyingCard = new QLabel(this);
+    flyingCard->setAttribute(Qt::WA_TransparentForMouseEvents);
+    flyingCard->setPixmap(cardArt);
+    flyingCard->setScaledContents(true);
+    flyingCard->setStyleSheet(
+        "background:rgba(255,240,190,0.18);"
+        "border:3px solid #f2c65e; border-radius:5px;");
+
+    const QRect start = scaledRect(kCardRects[cardIndex], m_canvasRect).toRect();
+    const QRect end = m_slotButtons[slotIndex]->geometry().adjusted(6, 6, -6, -6);
+    flyingCard->setGeometry(start);
+    flyingCard->show();
+    flyingCard->raise();
+
+    auto *opacity = new QGraphicsOpacityEffect(flyingCard);
+    flyingCard->setGraphicsEffect(opacity);
+    auto *group = new QParallelAnimationGroup(flyingCard);
+    auto *move = new QPropertyAnimation(flyingCard, "geometry", group);
+    move->setDuration(420);
+    move->setStartValue(start);
+    move->setEndValue(end);
+    move->setEasingCurve(QEasingCurve::InOutBack);
+    auto *fade = new QPropertyAnimation(opacity, "opacity", group);
+    fade->setDuration(420);
+    fade->setStartValue(0.94);
+    fade->setKeyValueAt(0.72, 1.0);
+    fade->setEndValue(0.35);
+
+    AudioManager::instance().playCardSelect();
+    connect(group, &QParallelAnimationGroup::finished, this,
+            [this, flyingCard]() {
+                refreshDeckSlotsDisplay();
+                flyingCard->deleteLater();
+            });
+    group->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
 void DeckPage::refreshDeckSlotsDisplay()
