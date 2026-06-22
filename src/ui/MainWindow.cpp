@@ -125,22 +125,15 @@ void MainWindow::fadeToPage(QWidget *page)
         return;
     }
 
-    if (!m_transitionOverlay || m_transitionOverlay->isRunning()) {
-        return;
-    }
-    m_transitionOverlay->setGeometry(m_stackWidget->rect());
-    m_transitionOverlay->play([this, current, page]() {
-        current->setGraphicsEffect(nullptr);
-        page->setGraphicsEffect(nullptr);
-        m_stackWidget->setCurrentWidget(page);
-        page->show();
-        page->update();
-        m_transitionOverlay->raise();
-        AudioManager::instance().setScene(
-            page == m_battlePage || page == m_deployPage
-                ? AudioManager::Scene::Battle
-                : AudioManager::Scene::Menu);
-    });
+    current->setGraphicsEffect(nullptr);
+    page->setGraphicsEffect(nullptr);
+    m_stackWidget->setCurrentWidget(page);
+    page->show();
+    page->update();
+    AudioManager::instance().setScene(
+        page == m_battlePage || page == m_deployPage
+            ? AudioManager::Scene::Battle
+            : AudioManager::Scene::Menu);
 }
 
 // ========== connectSignals() 鈥斺€?杩炴帴淇″彿涓庢Ы ==========
@@ -218,6 +211,7 @@ void MainWindow::connectSignals()
                 } else {
                     // PVE 妯″紡锛氱洿鎺ヨ繘鍏ユ垬鏂?
                     m_battlePage->setNetworkContext(m_networkContext);
+                    m_battlePage->setDeck(m_deckPage->getSelectedKinds());
                     m_battlePage->startBattle();
                     fadeToPage(m_battlePage);
                 }
@@ -239,6 +233,7 @@ void MainWindow::connectSignals()
     connect(m_deployPage, &DeployPage::signalBattleStart,
             this, [this]() {
                 m_battlePage->setNetworkContext(m_networkContext);
+                m_battlePage->setDeck(m_deckPage->getSelectedKinds());
                 m_battlePage->startBattle();
                 fadeToPage(m_battlePage);
             });
@@ -283,6 +278,7 @@ void MainWindow::connectSignals()
                     fadeToPage(m_deployPage);
                 } else {
                     m_battlePage->setNetworkContext(m_networkContext);
+                    m_battlePage->setDeck(m_deckPage->getSelectedKinds());
                     m_battlePage->startBattle();
                 }
             });
@@ -297,6 +293,7 @@ void MainWindow::connectSignals()
                     fadeToPage(m_deployPage);
                 } else {
                     m_battlePage->setNetworkContext(m_networkContext);
+                    m_battlePage->setDeck(m_deckPage->getSelectedKinds());
                     m_battlePage->startBattle();
                     fadeToPage(m_battlePage);
                 }

@@ -21,6 +21,7 @@
 #include <QPainter>
 #include <QPaintEvent>
 #include <QMouseEvent>
+#include <QPixmap>
 
 // ========== 核心层头文件 ==========
 #include "core/systems/BattleManager.h"
@@ -48,6 +49,7 @@ public:
 
     void updateFromSnapshot(const game::core::BattleSnapshot &snapshot);
     void setMapSize(int rows, int cols);
+    void setArtworkOverlayMode(bool enabled);
 
     // 交互状态
     enum class InteractionMode {
@@ -91,6 +93,7 @@ private:
     QVector<DustEffect> m_dustEffects;
     int m_mapRows;
     int m_mapCols;
+    bool m_artworkOverlayMode;
     QPushButton *m_btnUpgrade;
     QPushButton *m_btnMove;
     QPushButton *m_btnRecall;
@@ -98,6 +101,13 @@ private:
     QVector<game::core::MapPosition> getDeployableCells() const;
     QVector<game::core::MapPosition> getMovableCells(int unitId) const;
     int findOwnUnitAt(int row, int col) const;
+    double cellWidth() const;
+    double cellHeight() const;
+    double cellExtent() const;
+    QRectF cellRect(int row, int col) const;
+    QPointF cellCenter(int row, int col) const;
+    int rowAtPixel(int y) const;
+    int colAtPixel(int x) const;
     void showRadialMenu(int unitId, int pixelX, int pixelY);
     void drawTerrain(QPainter &painter);
     void drawDeployable(QPainter &painter);
@@ -144,6 +154,7 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     struct PendingDeploy {
@@ -161,9 +172,13 @@ private:
     DeployView *m_deployView;
     QLabel *m_titleLabel;
     QLabel *m_deployCountLabel;
+    QLabel *m_localCoreLabel;
+    QLabel *m_enemyCoreLabel;
     QPushButton *m_btnBack;
     QPushButton *m_btnStartBattle;
     QVector<QPushButton*> m_cardButtons;
+    QVector<QLabel*> m_cardNameLabels;
+    QVector<QLabel*> m_cardCostLabels;
 
     // ========== 网络状态 ==========
     NetworkContext m_netCtx;
@@ -183,15 +198,20 @@ private:
     bool m_localReady = false;       // 本地是否点击了开战
     bool m_opponentReady = false;    // 对方是否点击了开战
     QLabel *m_opponentLabel;
+    QPixmap m_pvpArtwork;
+    QPixmap m_deckArtwork;
 
     void initUI();
     void connectSignals();
     void setupMap();
     void updateDeployCount();
+    void refreshCardDisplay();
     void refreshSnapshot();
     void setupCardButtonConnections();  ///< 设置卡牌按钮连接（只一次）
     void applyPendingOpponentDeploys();
     void applyPendingOpponentOps();
+    void layoutArtworkUi();
+    QRect artworkRect() const;
 
     // 网络处理
     void onNetworkPacket(game::network::MsgType type, const QByteArray& body);

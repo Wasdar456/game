@@ -38,6 +38,7 @@
 #include <QDir>
 #include <QKeyEvent>
 #include <QResizeEvent>
+#include <QSettings>
 #include <algorithm>
 #include <cmath>
 
@@ -45,6 +46,7 @@
 #include "ui/MainWindow.h"
 #include "ui/AudioManager.h"
 #include "ui/PauseOverlay.h"
+#include "ui/TutorialOverlay.h"
 
 // ========== 引入核心层头文件 ==========
 #include "core/systems/ResourceManager.h"  // 资源管理
@@ -72,12 +74,9 @@ QString findProjectFile(const QString& relativePath)
         QDir(appDir).filePath("../../" + relativePath),
         QDir(appDir).filePath("../../../" + relativePath)
     };
-
     for (const QString& candidate : candidates) {
         QFileInfo info(candidate);
-        if (info.exists() && info.isFile()) {
-            return info.absoluteFilePath();
-        }
+        if (info.exists() && info.isFile()) return info.absoluteFilePath();
     }
     return {};
 }
@@ -87,27 +86,95 @@ game::core::TerrainType terrainFromMapTile(const std::string& type)
     if (type == "PATH_A" || type == "PATH_B" || type == "PATH_SHARED") {
         return game::core::TerrainType::Path;
     }
-    if (type == "SPAWN_A" || type == "SPAWN_B") {
-        return game::core::TerrainType::SpawnPoint;
-    }
-    if (type == "CORE_A") {
-        return game::core::TerrainType::CoreA;
-    }
-    if (type == "CORE_B") {
-        return game::core::TerrainType::CoreB;
-    }
+    if (type == "SPAWN_A" || type == "SPAWN_B") return game::core::TerrainType::SpawnPoint;
+    if (type == "CORE_A") return game::core::TerrainType::CoreA;
+    if (type == "CORE_B") return game::core::TerrainType::CoreB;
     if (type == "DEPLOY_A" || type == "DEPLOY_B" || type == "DEPLOY_NEUTRAL") {
         return game::core::TerrainType::FlatLand;
     }
-    if (type == "HIGH_GROUND") {
-        return game::core::TerrainType::HighGround;
-    }
+    if (type == "HIGH_GROUND") return game::core::TerrainType::HighGround;
     return game::core::TerrainType::NoDeploy;
 }
 
 int terrainHeightFromMapTile(const std::string& type)
 {
     return type == "HIGH_GROUND" ? 1 : 0;
+}
+
+QString cardDisplayName(game::core::CardKind kind)
+{
+    switch (kind) {
+    case game::core::CardKind::Attack: return "Kiwi Scout";
+    case game::core::CardKind::Sniper: return "Sniper Berry";
+    case game::core::CardKind::Aoe: return "Orange Bomber";
+    case game::core::CardKind::Specialist: return "Berry Tank";
+    case game::core::CardKind::Produce: return "Miner Pine";
+    case game::core::CardKind::Arsenal: return "Mango Engineer";
+    case game::core::CardKind::Heal: return "Peach Healer";
+    case game::core::CardKind::HeavyMedic: return "Coco Defender";
+    }
+    return "Unknown";
+}
+
+QString mapDisplayName(const QString& mapId)
+{
+    if (mapId == "lab_map_02") return "Sunny Beach";
+    if (mapId == "lab_map_01") return "Office Panic";
+    return "Jungle Ruins";
+}
+
+QRectF cardSourceRect(game::core::CardKind kind)
+{
+    switch (kind) {
+    case game::core::CardKind::Produce: return {272, 214, 151, 199};
+    case game::core::CardKind::Sniper: return {440, 214, 162, 199};
+    case game::core::CardKind::Specialist: return {619, 214, 160, 199};
+    case game::core::CardKind::Heal: return {798, 214, 161, 199};
+    case game::core::CardKind::Attack: return {973, 214, 158, 199};
+    case game::core::CardKind::Aoe: return {272, 428, 153, 198};
+    case game::core::CardKind::HeavyMedic: return {441, 428, 161, 198};
+    case game::core::CardKind::Arsenal: return {619, 428, 160, 198};
+    }
+    return {440, 214, 162, 199};
+}
+
+void drawHealthBar(QPainter& painter,
+                   const QRectF& rect,
+                   int currentHealth,
+                   int maxHealth,
+                   const QColor& healthyColor)
+{
+    const qreal ratio = std::clamp(currentHealth / qreal(qMax(1, maxHealth)), 0.0, 1.0);
+    const QColor fillColor = ratio <= 0.3
+                                 ? QColor(206, 63, 45)
+                                 : (ratio <= 0.6 ? QColor(226, 160, 48) : healthyColor);
+
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(QPen(QColor(75, 50, 31, 220), 2));
+    painter.setBrush(QColor(64, 47, 34, 225));
+    painter.drawRoundedRect(rect, rect.height() / 2.0, rect.height() / 2.0);
+
+    QRectF fillRect = rect.adjusted(2, 2, -2, -2);
+    fillRect.setWidth(fillRect.width() * ratio);
+    if (fillRect.width() > 0.5) {
+        QLinearGradient fill(fillRect.topLeft(), fillRect.bottomLeft());
+        fill.setColorAt(0.0, fillColor.lighter(135));
+        fill.setColorAt(0.48, fillColor);
+        fill.setColorAt(1.0, fillColor.darker(125));
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(fill);
+        painter.drawRoundedRect(fillRect,
+                                fillRect.height() / 2.0,
+                                fillRect.height() / 2.0);
+        painter.setBrush(QColor(255, 255, 255, 75));
+        painter.drawRoundedRect(QRectF(fillRect.x() + 2,
+                                       fillRect.y() + 1,
+                                       qMax(0.0, fillRect.width() - 4),
+                                       qMax(1.0, fillRect.height() * 0.24)),
+                                2, 2);
+    }
+    painter.restore();
 }
 
 } // namespace
@@ -140,13 +207,14 @@ BattleView::BattleView(QWidget *parent)
     , m_imageCropH(0)
     , m_imageOffsetX(0)
     , m_imageOffsetY(0)
+    , m_artworkOverlayMode(false)
 {
     setMapSize(m_mapRows, m_mapCols);
 
     // ----- 创建环形菜单按钮 -----
-    m_btnUpgrade = new QPushButton("⬆ 升级", this);
-    m_btnMove    = new QPushButton("🏃 移动", this);
-    m_btnRetreat = new QPushButton("↩ 撤回", this);
+    m_btnUpgrade = new QPushButton("Upgrade", this);
+    m_btnMove    = new QPushButton("Move", this);
+    m_btnRetreat = new QPushButton("Recall", this);
 
     QString radialStyle =
         "QPushButton {"
@@ -222,6 +290,10 @@ void BattleView::setMapSize(int rows, int cols)
 {
     m_mapRows = rows;
     m_mapCols = cols;
+    if (m_artworkOverlayMode) {
+        update();
+        return;
+    }
     if (!m_backgroundImage.isNull()) {
         QSize imageSize = m_backgroundImage.size();
         if (m_imageCropW > 0 && m_imageCropH > 0) {
@@ -235,6 +307,22 @@ void BattleView::setMapSize(int rows, int cols)
     }
 }
 
+void BattleView::setArtworkOverlayMode(bool enabled)
+{
+    m_artworkOverlayMode = enabled;
+    setAttribute(Qt::WA_TranslucentBackground, enabled);
+    setAutoFillBackground(!enabled);
+    if (enabled) {
+        m_backgroundImage = QPixmap();
+        setMinimumSize(0, 0);
+        setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    } else {
+        setMapSize(m_mapRows, m_mapCols);
+    }
+    update();
+}
+
 bool BattleView::setBackgroundImage(const QString& path)
 {
     QPixmap image(path);
@@ -242,6 +330,12 @@ bool BattleView::setBackgroundImage(const QString& path)
         m_backgroundImage = QPixmap();
         update();
         return false;
+    }
+
+    if (m_artworkOverlayMode) {
+        m_backgroundImage = QPixmap();
+        update();
+        return true;
     }
 
     m_backgroundImage = image;
@@ -261,7 +355,7 @@ bool BattleView::setBackgroundImage(const QString& path)
 void BattleView::clearBackgroundImage()
 {
     m_backgroundImage = QPixmap();
-    if (m_mapRows > 0 && m_mapCols > 0) {
+    if (!m_artworkOverlayMode && m_mapRows > 0 && m_mapCols > 0) {
         this->setFixedSize(m_mapCols * CELL_SIZE, m_mapRows * CELL_SIZE);
     }
     update();
@@ -424,8 +518,10 @@ void BattleView::paintEvent(QPaintEvent *event)
 
     drawTerrain(painter);
     drawHoverCell(painter);
-    drawSpawnMarker(painter);
-    drawCoreMarker(painter);
+    if (!m_artworkOverlayMode) {
+        drawSpawnMarker(painter);
+        drawCoreMarker(painter);
+    }
     drawHighlights(painter);
     drawUnits(painter);
     drawMonsters(painter);
@@ -437,6 +533,10 @@ void BattleView::paintEvent(QPaintEvent *event)
 void BattleView::drawTerrain(QPainter &painter)
 {
     const bool hasImage = !m_backgroundImage.isNull();
+
+    if (m_artworkOverlayMode) {
+        return;
+    }
 
     // 绘制背景图片（支持裁剪）
     if (hasImage) {
@@ -1057,7 +1157,7 @@ void BattleView::showRadialMenu(int unitId, int pixelX, int pixelY)
     // 升级按钮状态
     m_btnUpgrade->setEnabled(level < game::core::constants::MaxCardLevel);
     m_btnUpgrade->setText(level >= game::core::constants::MaxCardLevel ?
-                              "⬆ 满级" : QString("⬆ Lv%1→%2").arg(level).arg(level + 1));
+                              "Max Level" : QString("Lv%1 > %2").arg(level).arg(level + 1));
 
     m_btnUpgrade->show();
     m_btnMove->show();
@@ -1155,11 +1255,14 @@ BattlePage::BattlePage(QWidget *parent)
     , m_waveLabel(nullptr)
     , m_coreHpLabel(nullptr)
     , m_resourceLabel(nullptr)
+    , m_phaseLabel(nullptr)
     , m_btnPause(nullptr)
     , m_btnSpeed(nullptr)
     , m_btnSkill(nullptr)
     , m_btnExit(nullptr)
     , m_pauseOverlay(nullptr)
+    , m_btnGuide(nullptr)
+    , m_tutorialOverlay(nullptr)
     , m_isPaused(false)
     , m_speedMultiplier(1.0)
     , m_battleManager(nullptr)
@@ -1170,8 +1273,23 @@ BattlePage::BattlePage(QWidget *parent)
     , m_localWaveClear(false)
     , m_peerWaveClear(false)
     , m_stateSyncTimer(0.0)
+    , m_displayCoreHealth(game::core::constants::InitialBaseHealth)
+    , m_displayOpponentCoreHealth(game::core::constants::InitialBaseHealth)
     , m_opponentLabel(nullptr)
+    , m_pvpArtwork(":/images/artwork/battle_pvp.png")
+    , m_pveArtwork(":/images/artwork/battle_pve.png")
+    , m_pveUiOverlay(":/images/artwork/battle_pve_ui_overlay_v2.png")
+    , m_labMap01(":/images/maps/lab_map_01.png")
+    , m_labMap02(":/images/maps/lab_map_02.png")
+    , m_deckArtwork(":/images/artwork/deck_atlas.png")
 {
+    m_deck = {
+        game::core::CardKind::Sniper,
+        game::core::CardKind::Produce,
+        game::core::CardKind::Heal,
+        game::core::CardKind::HeavyMedic,
+        game::core::CardKind::Aoe
+    };
     initUI();
     connectSignals();
 }
@@ -1180,170 +1298,114 @@ BattlePage::BattlePage(QWidget *parent)
 void BattlePage::initUI()
 {
     setFocusPolicy(Qt::StrongFocus);
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-    mainLayout->setSpacing(0);
-
-    // ===== 顶部状态栏 =====
-    {
-        QWidget *barContainer = new QWidget(this);
-        barContainer->setFixedHeight(50);
-        barContainer->setStyleSheet(
-            "QWidget {"
-            "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "    stop:0 rgba(73,50,39,0.96), stop:1 rgba(43,31,28,0.94));"
-            "  border-bottom: 2px solid rgba(255,210,126,0.42);"
-            "}"
-        );
-        QHBoxLayout *layout = new QHBoxLayout(barContainer);
-        layout->setContentsMargins(20, 0, 20, 0);
-
-        m_waveLabel = new QLabel("🌊 波次: 0", barContainer);
-        m_waveLabel->setStyleSheet("color: #FFF0C8; font-size: 16px; font-weight: bold; background: transparent;");
-
-        m_coreHpLabel = new QLabel("🏰 核心: 10", barContainer);
-        m_coreHpLabel->setStyleSheet("color: #9EE0C7; font-size: 16px; font-weight: bold; background: transparent;");
-
-        m_resourceLabel = new QLabel("💰 资源: 100", barContainer);
-        m_resourceLabel->setStyleSheet("color: #FFD36F; font-size: 16px; font-weight: bold; background: transparent;");
-
-        // 对手信息标签（PVP 模式显示）
-        m_opponentLabel = new QLabel("对手资源: --", barContainer);
-        m_opponentLabel->setStyleSheet("color: #FFAC8E; font-size: 16px; font-weight: bold; background: transparent;");
-        m_opponentLabel->setVisible(false);  // 默认隐藏，PVP 模式下显示
-
-        // 退出按钮
-        m_btnExit = new QPushButton("✕ 退出", barContainer);
-        m_btnExit->setFixedSize(80, 36);
-        m_btnExit->setStyleSheet(
-            "QPushButton {"
-            "  background-color: rgba(121,57,44,0.68); color: #FFE5C2;"
-            "  border: 2px solid rgba(255,190,124,0.45); border-radius: 8px;"
-            "  font-size: 14px; font-weight: bold;"
-            "}"
-            "QPushButton:hover {"
-            "  background-color: rgba(162,76,55,0.82);"
-            "  border: 2px solid #FFD27E;"
-            "}"
-        );
-        m_btnExit->setCursor(Qt::PointingHandCursor);
-
-        layout->addWidget(m_waveLabel);
-        layout->addStretch();
-        layout->addWidget(m_coreHpLabel);
-        layout->addStretch();
-        layout->addWidget(m_resourceLabel);
-        layout->addSpacing(15);
-        layout->addWidget(m_opponentLabel);
-        layout->addSpacing(15);
-        layout->addWidget(m_btnExit);
-        mainLayout->addWidget(barContainer);
-    }
-
-    // ===== 中央战斗视口 =====
     m_battleView = new BattleView(this);
-    QHBoxLayout *viewLayout = new QHBoxLayout();
-    viewLayout->addStretch();
-    viewLayout->addWidget(m_battleView);
-    viewLayout->addStretch();
-    mainLayout->addLayout(viewLayout, 1);
+    m_battleView->setArtworkOverlayMode(true);
 
-    // ===== 底部操作栏 =====
-    {
-        QWidget *barContainer = new QWidget(this);
-        barContainer->setFixedHeight(90);
-        barContainer->setStyleSheet(
-            "QWidget {"
-            "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "    stop:0 rgba(43,31,28,0.92), stop:1 rgba(73,50,39,0.96));"
-            "  border-top: 2px solid rgba(255,210,126,0.42);"
-            "}"
-        );
-        QHBoxLayout *layout = new QHBoxLayout(barContainer);
-        layout->setContentsMargins(15, 10, 15, 10);
-
-        // 卡牌按钮
-        QStringList cardNames = {"突击手", "采矿工", "医生", "狙击手", "AOE炮塔"};
-        QVector<game::core::CardKind> cardKinds = {
-            game::core::CardKind::Attack,
-            game::core::CardKind::Produce,
-            game::core::CardKind::Heal,
-            game::core::CardKind::Sniper,
-            game::core::CardKind::Aoe
-        };
-        QStringList cardCosts = {"40", "35", "30", "50", "60"};
-        QStringList cardIcons = {"⚔", "⛏", "❤", "🎯", "💥"};
-
-        for (int i = 0; i < cardNames.size(); ++i) {
-            QPushButton *cardBtn = new QPushButton(barContainer);
-            cardBtn->setFixedSize(90, 70);
-            cardBtn->setText(QString("%1\n%2\n💰%3")
-                                 .arg(cardIcons[i])
-                                 .arg(cardNames[i])
-                                 .arg(cardCosts[i]));
-            cardBtn->setStyleSheet(
-                "QPushButton {"
-                "  background-color: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                "    stop:0 rgba(225,176,99,0.95), stop:1 rgba(123,82,50,0.92));"
-                "  color: #3A2418;"
-                "  border: 2px solid rgba(76,48,31,0.82); border-radius: 8px;"
-                "  font-size: 11px; font-weight: bold;"
-                "}"
-                "QPushButton:hover {"
-                "  border: 2px solid #FFD27E;"
-                "  background-color: rgba(255,213,127,0.40);"
-                "  color: #23150D;"
-                "}"
-                "QPushButton:pressed { background-color: rgba(100,62,38,0.75); }"
-            );
-            cardBtn->setCursor(Qt::PointingHandCursor);
-
-            game::core::CardKind kind = cardKinds[i];
-            connect(cardBtn, &QPushButton::clicked, this, [this, kind]() {
-                m_battleView->m_mode = BattleView::InteractionMode::DEPLOYING;
-                m_battleView->m_selectedCardKind = kind;
-                m_battleView->hideRadialMenu();
-                m_battleView->update();
-            });
-
-            m_cardButtons.append(cardBtn);
-            layout->addWidget(cardBtn);
-        }
-
-        layout->addSpacing(20);
-
-        // 暂停按钮
-        m_btnPause = new QPushButton("⏸", barContainer);
-        m_btnPause->setFixedSize(50, 45);
-        m_btnPause->setStyleSheet(
-            "QPushButton { background-color: rgba(225,176,99,0.88); color: #3A2418;"
-            "  border: 2px solid rgba(76,48,31,0.82); border-radius: 9px; font-size: 16px; font-weight: bold; }"
-            "QPushButton:hover { color: #23150D; border: 2px solid #FFD27E; }"
-        );
-        layout->addWidget(m_btnPause);
-
-        // 加速按钮
-        m_btnSpeed = new QPushButton("1x", barContainer);
-        m_btnSpeed->setFixedSize(50, 45);
-        m_btnSpeed->setStyleSheet(m_btnPause->styleSheet());
-        layout->addWidget(m_btnSpeed);
-
-        // 技能按钮
-        m_btnSkill = new QPushButton("⚡", barContainer);
-        m_btnSkill->setFixedSize(50, 45);
-        m_btnSkill->setEnabled(false);
-        m_btnSkill->setStyleSheet(
-            "QPushButton { background-color: rgba(107,85,65,0.62); color: #D1B991;"
-            "  border: 2px solid rgba(76,48,31,0.45); border-radius: 9px; font-size: 16px; }"
-        );
-        m_btnSkill->setToolTip("技能为自动释放");
-        layout->addWidget(m_btnSkill);
-
-        mainLayout->addWidget(barContainer);
+    const QString labelStyle =
+        "QLabel { color: #3B2819; background: #F2DCA9;"
+        " border-radius: 4px;"
+        " font-weight: 700; padding: 2px 6px; }";
+    m_waveLabel = new QLabel("Wave 0", this);
+    m_phaseLabel = new QLabel("Battle Phase", this);
+    m_coreHpLabel = new QLabel("Your Core 10/10", this);
+    m_opponentLabel = new QLabel("Enemy Core 10/10", this);
+    m_resourceLabel = new QLabel("Resource 0", this);
+    for (QLabel *label : {m_waveLabel, m_phaseLabel, m_coreHpLabel,
+                          m_opponentLabel, m_resourceLabel}) {
+        label->setAlignment(Qt::AlignCenter);
+        label->setStyleSheet(labelStyle);
     }
 
-    // 页面背景
-    this->setStyleSheet("BattlePage { background-color: #211A1D; }");
+    for (int i = 0; i < 5; ++i) {
+        auto *cardBtn = new QPushButton(this);
+        cardBtn->setText(QString());
+        cardBtn->setCursor(Qt::PointingHandCursor);
+        cardBtn->setStyleSheet(
+            "QPushButton { background: transparent; border: 3px solid transparent; border-radius: 6px; }"
+            "QPushButton:hover { background: rgba(255,245,194,42); border-color: rgba(255,236,139,210); }"
+            "QPushButton[selected=\"true\"] { background: rgba(255,232,126,48);"
+            " border: 4px solid #F8D77A; }"
+            "QPushButton:pressed { background: rgba(111,78,39,70); }"
+            "QPushButton:disabled { background: rgba(44,35,28,32); border-color: transparent; }");
+        connect(cardBtn, &QPushButton::clicked, this, [this, i]() {
+            if (i >= m_deck.size()) return;
+            m_selectedCardIndex = i;
+            updateCardVisualState(m_displayResources);
+            m_battleView->m_mode = BattleView::InteractionMode::DEPLOYING;
+            m_battleView->m_selectedCardKind = m_deck[i];
+            m_battleView->hideRadialMenu();
+            m_battleView->update();
+            if (m_tutorialStage == TutorialStage::WaitCard) {
+                m_tutorialStage = TutorialStage::DeployPrompt;
+                updateTutorialTargets();
+                m_tutorialOverlay->showStep(
+                    "Captain Pine",
+                    "Good choice. The glowing cells are valid ground. Place the defender where it can watch the winding path.",
+                    TutorialOverlay::Focus::Battlefield,
+                    "Deploy now");
+            }
+        });
+        m_cardButtons.append(cardBtn);
+
+        auto *nameLabel = new QLabel(this);
+        nameLabel->setAlignment(Qt::AlignCenter);
+        nameLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+        nameLabel->setStyleSheet(
+            "QLabel { color: #332216; background: #F1DCA9;"
+            " border: 1px solid rgba(104,72,39,120); border-radius: 3px;"
+            " font-size: 12px; font-weight: 700; padding: 1px 3px; }");
+        m_cardNameLabels.append(nameLabel);
+
+        auto *costLabel = new QLabel(this);
+        costLabel->setAlignment(Qt::AlignCenter);
+        costLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+        costLabel->setStyleSheet(
+            "QLabel { color: #342113; background: #F1DCA9;"
+            " border: 2px solid #74502C; border-radius: 10px;"
+            " font-size: 15px; font-weight: 800; padding: 1px 5px; }");
+        m_cardCostLabels.append(costLabel);
+    }
+
+    const QString roundButtonStyle =
+        "QPushButton { background: rgba(246,226,176,215); color: #3B2819;"
+        " border: 2px solid rgba(89,61,36,190); border-radius: 8px;"
+        " font-weight: 700; }"
+        "QPushButton:hover { background: rgba(255,239,191,240); border-color: #F8D77A; }"
+        "QPushButton:pressed { background: rgba(197,159,94,230); }";
+
+    m_btnPause = new QPushButton(this);
+    m_btnPause->setToolTip("暂停 / 设置");
+    m_btnPause->setCursor(Qt::PointingHandCursor);
+    m_btnPause->setStyleSheet(
+        "QPushButton { background: transparent; border: 2px solid transparent; border-radius: 10px; }"
+        "QPushButton:hover { background: rgba(255,245,194,38); border-color: rgba(255,236,139,190); }"
+        "QPushButton:pressed { background: rgba(111,78,39,65); }");
+
+    m_btnSpeed = new QPushButton("1x", this);
+    m_btnSpeed->setToolTip("战斗速度");
+    m_btnSpeed->setCursor(Qt::PointingHandCursor);
+    m_btnSpeed->setStyleSheet(roundButtonStyle);
+
+    m_btnSkill = new QPushButton("自动技能", this);
+    m_btnSkill->setEnabled(false);
+    m_btnSkill->setStyleSheet(roundButtonStyle);
+
+    m_btnExit = new QPushButton("Menu", this);
+    m_btnExit->setToolTip("打开暂停菜单");
+    m_btnExit->setCursor(Qt::PointingHandCursor);
+    m_btnExit->setStyleSheet(roundButtonStyle);
+
+    m_btnGuide = new QPushButton("?", this);
+    m_btnGuide->setToolTip("Replay story guide");
+    m_btnGuide->setCursor(Qt::PointingHandCursor);
+    m_btnGuide->setStyleSheet(
+        "QPushButton { color:#5b391f; background:rgba(246,226,176,235);"
+        " border:2px solid rgba(89,61,36,205); border-radius:22px;"
+        " font-size:24px; font-weight:900; }"
+        "QPushButton:hover { background:rgba(255,239,191,250); border-color:#F8D77A; }"
+        "QPushButton:pressed { background:rgba(197,159,94,235); }");
+
+    setStyleSheet("BattlePage { background-color: #203B35; }");
 
     // 游戏主循环定时器（约 60FPS）
     m_gameTimer = new QTimer(this);
@@ -1352,6 +1414,399 @@ void BattlePage::initUI()
     m_pauseOverlay = new PauseOverlay(this);
     m_pauseOverlay->setGeometry(rect());
     m_pauseOverlay->raise();
+    m_tutorialOverlay = new TutorialOverlay(this);
+    m_tutorialOverlay->setGeometry(rect());
+    connect(m_btnGuide, &QPushButton::clicked,
+            this, [this]() { beginTutorial(true); });
+    connect(m_tutorialOverlay, &TutorialOverlay::signalAction,
+            this, &BattlePage::advanceTutorial);
+    connect(m_tutorialOverlay, &TutorialOverlay::signalSkip,
+            this, [this]() { finishTutorial(true); });
+    refreshCardDisplay();
+    layoutArtworkUi();
+}
+
+void BattlePage::setDeck(const QVector<game::core::CardKind>& deck)
+{
+    m_deck = deck.mid(0, 5);
+    m_selectedCardIndex = -1;
+    refreshCardDisplay();
+    update();
+}
+
+void BattlePage::refreshCardDisplay()
+{
+    for (int i = 0; i < m_cardButtons.size(); ++i) {
+        const bool hasCard = i < m_deck.size();
+        m_cardButtons[i]->setVisible(hasCard);
+        m_cardNameLabels[i]->setVisible(hasCard);
+        m_cardCostLabels[i]->setVisible(hasCard);
+        if (!hasCard) continue;
+
+        const auto kind = m_deck[i];
+        const int cost = game::core::CardSystem::deployCost(kind);
+        const QString name = cardDisplayName(kind);
+        m_cardButtons[i]->setToolTip(QString("%1 - Cost %2").arg(name).arg(cost));
+        m_cardNameLabels[i]->setText(name);
+        m_cardCostLabels[i]->setText(QString("Juice %1").arg(cost));
+    }
+}
+
+void BattlePage::updateCardVisualState(int resources)
+{
+    const QRect canvas = artworkRect();
+    const qreal uiScale = std::min(canvas.width() / 1672.0,
+                                   canvas.height() / 941.0);
+    const int costPx = qMax(10, qRound(15 * uiScale));
+
+    for (int i = 0; i < m_cardButtons.size(); ++i) {
+        if (i >= m_deck.size()) continue;
+
+        const int cost = game::core::CardSystem::deployCost(m_deck[i]);
+        const bool affordable = !m_isPvp && resources >= cost;
+        const bool selected = affordable && i == m_selectedCardIndex;
+
+        m_cardButtons[i]->setEnabled(affordable);
+        m_cardButtons[i]->setProperty("selected", selected);
+        m_cardButtons[i]->style()->unpolish(m_cardButtons[i]);
+        m_cardButtons[i]->style()->polish(m_cardButtons[i]);
+
+        const QColor textColor = affordable ? QColor("#342113") : QColor("#8B3125");
+        const QColor background = affordable ? QColor(246, 226, 176, 245)
+                                             : QColor(239, 201, 172, 245);
+        const QColor border = affordable ? QColor("#74502C") : QColor("#A84D3B");
+        m_cardCostLabels[i]->setStyleSheet(QString(
+            "QLabel { color: %1; background: rgba(%2,%3,%4,%5);"
+            " border: %6px solid %7; border-radius: %8px;"
+            " font-size: %9px; font-weight: 800; padding: 0px 2px; }")
+            .arg(textColor.name())
+            .arg(background.red()).arg(background.green())
+            .arg(background.blue()).arg(background.alpha())
+            .arg(qMax(1, qRound(2 * uiScale)))
+            .arg(border.name())
+            .arg(qMax(5, qRound(10 * uiScale)))
+            .arg(costPx));
+        m_cardCostLabels[i]->setToolTip(
+            affordable
+                ? QString("Ready - costs %1 Juice").arg(cost)
+                : QString("Need %1 more Juice").arg(qMax(0, cost - resources)));
+    }
+}
+
+void BattlePage::beginTutorial(bool replay)
+{
+    Q_UNUSED(replay);
+    if (m_isPvp || !m_inBattlePhase || !m_tutorialOverlay) {
+        return;
+    }
+
+    m_tutorialSessionActive = true;
+    m_tutorialPaused = true;
+    m_coreWarningShown = false;
+    m_tutorialStage = TutorialStage::Intro;
+    m_selectedCardIndex = -1;
+    if (m_battleView) {
+        m_battleView->m_mode = BattleView::InteractionMode::NONE;
+        m_battleView->hideRadialMenu();
+    }
+    updateCardVisualState(m_displayResources);
+    updateTutorialTargets();
+    m_tutorialOverlay->showStep(
+        "Captain Pine",
+        "The tide has carried raiders to our last safe shore. This small core is home to every fruit still standing.",
+        TutorialOverlay::Focus::None,
+        "I am ready");
+}
+
+void BattlePage::advanceTutorial()
+{
+    switch (m_tutorialStage) {
+    case TutorialStage::Intro:
+        m_tutorialStage = TutorialStage::Resources;
+        m_tutorialOverlay->showStep(
+            "Captain Pine",
+            "Juice powers every deployment. Spend it carefully: stronger allies cost more, and empty reserves leave the path exposed.",
+            TutorialOverlay::Focus::Resource,
+            "Show the squad");
+        break;
+    case TutorialStage::Resources:
+        m_tutorialStage = TutorialStage::CardPrompt;
+        m_tutorialOverlay->showStep(
+            "Captain Pine",
+            "Each card has a role. Miners build the economy, defenders hold the line, and ranged allies cover the bends.",
+            TutorialOverlay::Focus::Cards,
+            "Choose a card");
+        break;
+    case TutorialStage::CardPrompt:
+        m_tutorialStage = TutorialStage::WaitCard;
+        m_tutorialOverlay->closeOverlay();
+        break;
+    case TutorialStage::DeployPrompt:
+        m_tutorialStage = TutorialStage::WaitDeploy;
+        m_tutorialOverlay->closeOverlay();
+        break;
+    case TutorialStage::Tactics:
+        m_tutorialStage = TutorialStage::Final;
+        m_tutorialOverlay->showStep(
+            "Captain Pine",
+            "The core is our final line. Field Manual unlocked: use the ? button whenever you want to replay these tactical lessons.",
+            TutorialOverlay::Focus::Core,
+            "Begin the defense");
+        break;
+    case TutorialStage::Final:
+        finishTutorial(false);
+        break;
+    case TutorialStage::CoreWarning:
+        m_tutorialOverlay->closeOverlay();
+        m_tutorialPaused = false;
+        m_tutorialStage = TutorialStage::Inactive;
+        break;
+    case TutorialStage::WaitCard:
+    case TutorialStage::WaitDeploy:
+    case TutorialStage::Inactive:
+        break;
+    }
+}
+
+void BattlePage::finishTutorial(bool skipped)
+{
+    if (!m_tutorialOverlay) return;
+
+    m_tutorialOverlay->closeOverlay();
+    m_tutorialPaused = false;
+    m_tutorialStage = TutorialStage::Inactive;
+    m_selectedCardIndex = -1;
+    updateCardVisualState(m_displayResources);
+
+    QSettings settings;
+    settings.setValue("tutorial/storyGuideV1Complete", true);
+    settings.setValue("tutorial/fieldManualUnlocked", true);
+    if (!skipped) {
+        settings.setValue("tutorial/lastCompletedMap", m_activePveMapId);
+    }
+}
+
+void BattlePage::updateTutorialTargets()
+{
+    if (!m_tutorialOverlay) return;
+
+    QRect cards;
+    for (QPushButton *button : m_cardButtons) {
+        if (button->isVisible()) {
+            cards = cards.isNull() ? button->geometry() : cards.united(button->geometry());
+        }
+    }
+    m_tutorialOverlay->setTargets(
+        m_resourceLabel ? m_resourceLabel->geometry() : QRect(),
+        cards,
+        m_battleView ? m_battleView->geometry() : QRect(),
+        m_coreHpLabel ? m_coreHpLabel->geometry() : QRect());
+}
+
+QRect BattlePage::artworkRect() const
+{
+    constexpr int DesignWidth = 1672;
+    constexpr int DesignHeight = 941;
+    QSize fitted(DesignWidth, DesignHeight);
+    fitted.scale(size(), Qt::KeepAspectRatio);
+    return QRect((width() - fitted.width()) / 2,
+                 (height() - fitted.height()) / 2,
+                 fitted.width(), fitted.height());
+}
+
+void BattlePage::paintEvent(QPaintEvent *event)
+{
+    Q_UNUSED(event);
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.fillRect(rect(), QColor(26, 55, 49));
+
+    const QRect canvas = artworkRect();
+    auto mapped = [&](const QRectF& designRect) {
+        const qreal sx = canvas.width() / 1672.0;
+        const qreal sy = canvas.height() / 941.0;
+        return QRectF(canvas.x() + designRect.x() * sx,
+                      canvas.y() + designRect.y() * sy,
+                      designRect.width() * sx,
+                      designRect.height() * sy);
+    };
+
+    if (m_isPvp && !m_pvpArtwork.isNull()) {
+        painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
+                           m_pvpArtwork, QRectF(0, 96, 1672, 604));
+    } else if (m_activePveMapId == "island_pve" && !m_pveArtwork.isNull()) {
+        painter.drawPixmap(canvas, m_pveArtwork);
+    } else {
+        const QPixmap& mapArtwork = m_activePveMapId == "lab_map_02"
+                                        ? m_labMap02
+                                        : m_labMap01;
+        if (!mapArtwork.isNull()) {
+            painter.drawPixmap(canvas, mapArtwork);
+        }
+    }
+
+    if (m_isPvp && !m_pvpArtwork.isNull()) {
+        painter.drawPixmap(mapped(QRectF(0, 0, 1672, 126)),
+                           m_pvpArtwork, QRectF(0, 0, 1672, 126));
+        painter.drawPixmap(mapped(QRectF(0, 690, 1672, 251)),
+                           m_pvpArtwork, QRectF(0, 690, 1672, 251));
+    } else if (!m_pveUiOverlay.isNull()) {
+        painter.drawPixmap(canvas, m_pveUiOverlay);
+    }
+
+    if (m_isPvp) {
+        drawHealthBar(painter, mapped(QRectF(615, 72, 194, 12)),
+                      m_displayCoreHealth,
+                      game::core::constants::InitialBaseHealth,
+                      QColor(62, 157, 203));
+        drawHealthBar(painter, mapped(QRectF(918, 72, 194, 12)),
+                      m_displayOpponentCoreHealth,
+                      game::core::constants::InitialBaseHealth,
+                      QColor(205, 83, 61));
+    } else {
+        drawHealthBar(painter, mapped(QRectF(797, 90, 232, 12)),
+                      m_displayCoreHealth,
+                      game::core::constants::InitialBaseHealth,
+                      QColor(85, 157, 65));
+    }
+
+    const QRectF pvpCards[] = {
+        {355, 704, 180, 216}, {550, 704, 180, 216},
+        {745, 704, 180, 216}, {940, 704, 180, 216},
+        {1135, 704, 180, 216}
+    };
+    const QRectF pveCards[] = {
+        {330, 707, 188, 216}, {519, 707, 195, 216},
+        {715, 707, 197, 216}, {913, 707, 198, 216},
+        {1112, 707, 196, 216}
+    };
+    const QRectF* cardDestinations = m_isPvp ? pvpCards : pveCards;
+    for (int i = 0; i < 5; ++i) {
+        if (i < m_deck.size()) {
+            painter.drawPixmap(mapped(cardDestinations[i]),
+                               m_deckArtwork, cardSourceRect(m_deck[i]));
+        }
+    }
+}
+
+void BattlePage::layoutArtworkUi()
+{
+    if (!m_battleView) return;
+
+    const QRect canvas = artworkRect();
+    const qreal sx = canvas.width() / 1672.0;
+    const qreal sy = canvas.height() / 941.0;
+    auto mapped = [&](const QRectF &designRect) {
+        return QRect(qRound(canvas.x() + designRect.x() * sx),
+                     qRound(canvas.y() + designRect.y() * sy),
+                     qMax(1, qRound(designRect.width() * sx)),
+                     qMax(1, qRound(designRect.height() * sy)));
+    };
+
+    const int labelPx = qMax(11, qRound(20 * std::min(sx, sy)));
+    const QString labelStyle = QString(
+        "QLabel { color: #3B2819; background: #F2DCA9;"
+        " border-radius: %1px;"
+        " font-size: %2px; font-weight: 700; padding: 1px 4px; }")
+        .arg(qMax(3, qRound(5 * sx)))
+        .arg(labelPx);
+    for (QLabel *label : {m_waveLabel, m_phaseLabel, m_coreHpLabel,
+                          m_opponentLabel, m_resourceLabel}) {
+        label->setStyleSheet(labelStyle);
+    }
+
+    const qreal uiScale = std::min(sx, sy);
+    const int namePx = qMax(9, qRound(13 * uiScale));
+    const int costPx = qMax(10, qRound(15 * uiScale));
+    const QString cardNameStyle = QString(
+        "QLabel { color: #332216; background: rgba(241,220,169,235);"
+        " border: %1px solid rgba(104,72,39,120); border-radius: %2px;"
+        " font-size: %3px; font-weight: 700; padding: 0px 2px; }")
+        .arg(qMax(1, qRound(1 * uiScale)))
+        .arg(qMax(2, qRound(3 * uiScale)))
+        .arg(namePx);
+    const QString cardCostStyle = QString(
+        "QLabel { color: #342113; background: rgba(246,226,176,245);"
+        " border: %1px solid #74502C; border-radius: %2px;"
+        " font-size: %3px; font-weight: 850; padding: 0px 2px; }")
+        .arg(qMax(1, qRound(2 * uiScale)))
+        .arg(qMax(5, qRound(10 * uiScale)))
+        .arg(costPx);
+    for (QLabel *label : m_cardNameLabels) {
+        label->setStyleSheet(cardNameStyle);
+    }
+    for (QLabel *label : m_cardCostLabels) {
+        label->setStyleSheet(cardCostStyle);
+    }
+
+    if (m_isPvp) {
+        m_battleView->setGeometry(mapped(QRectF(174, 126, 1324, 552)));
+        m_waveLabel->setGeometry(mapped(QRectF(135, 35, 126, 50)));
+        m_phaseLabel->setGeometry(mapped(QRectF(355, 35, 166, 50)));
+        m_coreHpLabel->setGeometry(mapped(QRectF(615, 29, 210, 50)));
+        m_opponentLabel->setGeometry(mapped(QRectF(918, 29, 212, 50)));
+        m_resourceLabel->setGeometry(mapped(QRectF(1210, 35, 137, 50)));
+        m_phaseLabel->show();
+        m_opponentLabel->show();
+    } else {
+        if (m_activePveMapId == "island_pve") {
+            m_battleView->setGeometry(mapped(QRectF(238, 164, 1328, 520)));
+        } else {
+            m_battleView->setGeometry(canvas);
+        }
+        m_waveLabel->setGeometry(mapped(QRectF(485, 40, 185, 52)));
+        m_coreHpLabel->setGeometry(mapped(QRectF(798, 40, 248, 52)));
+        m_resourceLabel->setGeometry(mapped(QRectF(1188, 40, 185, 52)));
+        m_phaseLabel->hide();
+        m_opponentLabel->hide();
+    }
+
+    const QRectF pvpCards[] = {
+        {355, 704, 180, 216}, {550, 704, 180, 216},
+        {745, 704, 180, 216}, {940, 704, 180, 216},
+        {1135, 704, 180, 216}
+    };
+    const QRectF pveCards[] = {
+        {330, 707, 188, 216}, {519, 707, 195, 216},
+        {715, 707, 197, 216}, {913, 707, 198, 216},
+        {1112, 707, 196, 216}
+    };
+    const QRectF* cards = m_isPvp ? pvpCards : pveCards;
+    for (int i = 0; i < m_cardButtons.size(); ++i) {
+        const QRect cardRect = mapped(cards[i]);
+        m_cardButtons[i]->setGeometry(cardRect);
+        m_cardNameLabels[i]->setGeometry(mapped(QRectF(cards[i].x() + 15,
+                                                       cards[i].y() + 10,
+                                                       cards[i].width() - 30, 30)));
+        m_cardCostLabels[i]->setGeometry(mapped(QRectF(cards[i].x() + 28,
+                                                       cards[i].y() + 168,
+                                                       cards[i].width() - 56, 34)));
+    }
+    m_btnSpeed->setGeometry(mapped(QRectF(1450, 795, 92, 56)));
+    m_btnPause->setGeometry(mapped(QRectF(1538, 23, 98, 88)));
+    m_btnGuide->setGeometry(mapped(QRectF(72, 795, 58, 58)));
+    m_btnGuide->setVisible(!m_isPvp);
+    m_btnExit->hide();
+    m_btnSkill->hide();
+    m_battleView->lower();
+    const QVector<QWidget*> foregroundWidgets = {
+        m_waveLabel, m_phaseLabel, m_coreHpLabel, m_opponentLabel,
+        m_resourceLabel, m_btnPause, m_btnSpeed, m_btnGuide
+    };
+    for (QWidget *widget : foregroundWidgets) {
+        widget->raise();
+    }
+    for (auto *button : m_cardButtons) button->raise();
+    for (auto *label : m_cardNameLabels) label->raise();
+    for (auto *label : m_cardCostLabels) label->raise();
+    updateCardVisualState(m_displayResources);
+    if (m_pauseOverlay) m_pauseOverlay->raise();
+    if (m_tutorialOverlay) {
+        m_tutorialOverlay->setGeometry(rect());
+        updateTutorialTargets();
+        if (m_tutorialOverlay->isVisible()) m_tutorialOverlay->raise();
+    }
 }
 
 // ========== setNetworkContext() —— 设置网络上下文（PVP 模式） ==========
@@ -1360,145 +1815,98 @@ void BattlePage::setNetworkContext(const NetworkContext& ctx)
     m_netCtx = ctx;
     m_isPvp = ctx.isPvp;
     m_isHost = ctx.isHost;
+    if (!m_isPvp) {
+        m_activePveMapId = ctx.pveMapId.isEmpty() ? QString("island_pve") : ctx.pveMapId;
+    }
     if (m_battleView) {
         m_battleView->m_localIsHost = !m_isPvp || m_isHost;
     }
+    layoutArtworkUi();
+    update();
 }
 
 // ========== setupPveMap() —— 初始化 PVE 地图 ==========
 void BattlePage::setupPveMap()
 {
     auto& map = m_battleManager->map();
+    m_battleView->clearBackgroundImage();
+    m_activePveMapId = m_netCtx.pveMapId.isEmpty()
+                           ? QString("island_pve")
+                           : m_netCtx.pveMapId;
 
-    game::core::LoadedMapConfig mapConfig;
-    std::string loadError;
-    const QString selectedMapId = m_netCtx.pveMapId.isEmpty() ? QString("lab_map_01") : m_netCtx.pveMapId;
-    const QString safeMapId = (selectedMapId == "lab_map_02") ? selectedMapId : QString("lab_map_01");
-    const QString mapPath = findProjectFile(QString("assets/maps/%1.json").arg(safeMapId));
-    if (!mapPath.isEmpty() &&
-        game::core::MapConfigLoader::loadFromJson(mapPath.toStdString(), mapConfig, &loadError)) {
-        map.resize(mapConfig.rows, mapConfig.cols, game::core::TerrainType::NoDeploy, 0);
+    if (m_activePveMapId == "island_pve") {
+        map.resize(8, 18, game::core::TerrainType::FlatLand, 0);
+        const game::core::MapPosition spawnPos(2, 17);
+        const game::core::MapPosition corePos(4, 0);
 
-        for (const auto& tile : mapConfig.tiles) {
+        std::vector<game::core::MapPosition> pathCells = {
+            spawnPos, {2,16}, {3,16}, {3,15}, {4,15}, {4,14},
+            {4,13}, {4,12}, {4,11}, {4,10}, {4,9}, {4,8},
+            {4,7}, {4,6}, {4,5}, {4,4}, {4,3}, {4,2},
+            {4,1}, corePos
+        };
+        for (const auto& pos : pathCells) {
+            if (pos != spawnPos && pos != corePos) {
+                map.setGrid(pos, game::core::TerrainType::Path, 0);
+            }
+        }
+        map.setGrid(spawnPos, game::core::TerrainType::SpawnPoint, 0);
+        map.setGrid(corePos, game::core::TerrainType::CoreA, 0);
+
+        const std::vector<game::core::MapPosition> highGroundCells = {
+            {1,3}, {1,6}, {1,10}, {1,13},
+            {6,4}, {6,8}, {6,12}, {6,15}
+        };
+        for (const auto& pos : highGroundCells) {
+            map.setGrid(pos, game::core::TerrainType::HighGround, 1);
+        }
+        m_battleManager->setPath(pathCells);
+        m_battleView->m_spawnPos = spawnPos;
+        m_battleView->m_corePos = corePos;
+    } else {
+        const QString safeMapId = m_activePveMapId == "lab_map_02"
+                                      ? QString("lab_map_02")
+                                      : QString("lab_map_01");
+        m_activePveMapId = safeMapId;
+        const QString mapPath = findProjectFile(QString("assets/maps/%1.json").arg(safeMapId));
+        game::core::LoadedMapConfig config;
+        std::string error;
+        if (mapPath.isEmpty()
+            || !game::core::MapConfigLoader::loadFromJson(mapPath.toStdString(), config, &error)) {
+            qWarning() << "[BattlePage] failed to load map config" << mapPath
+                       << QString::fromStdString(error);
+            m_activePveMapId = "island_pve";
+            m_netCtx.pveMapId = m_activePveMapId;
+            setupPveMap();
+            return;
+        }
+
+        map.resize(config.rows, config.cols, game::core::TerrainType::NoDeploy, 0);
+        for (const auto& tile : config.tiles) {
             map.setGrid({tile.row, tile.col},
                         terrainFromMapTile(tile.type),
                         terrainHeightFromMapTile(tile.type));
         }
-
-        for (const auto& route : mapConfig.routesA) {
+        for (const auto& route : config.routesA) {
             for (const auto& pos : route) {
-                const game::core::MapGrid* grid = map.gridAt(pos);
+                const auto *grid = map.gridAt(pos);
                 if (grid && grid->terrainType() == game::core::TerrainType::NoDeploy) {
                     map.setGrid(pos, game::core::TerrainType::Path, 0);
                 }
             }
         }
-
-        if (!mapConfig.routesA.empty()) {
-            m_battleManager->setPaths(mapConfig.routesA);
-        } else if (!mapConfig.spawnA.empty()) {
-            m_battleManager->setSpawnPoint(mapConfig.spawnA.front());
-        }
-
-        const game::core::MapPosition spawnPos = !mapConfig.spawnA.empty()
-                                                    ? mapConfig.spawnA.front()
-                                                    : (!mapConfig.routesA.empty() && !mapConfig.routesA.front().empty()
-                                                           ? mapConfig.routesA.front().front()
-                                                           : game::core::MapPosition(1, 1));
-        const game::core::MapPosition corePos = !mapConfig.coreA.empty()
-                                                   ? mapConfig.coreA.front()
-                                                   : (!mapConfig.routesA.empty() && !mapConfig.routesA.front().empty()
-                                                          ? mapConfig.routesA.front().back()
-                                                          : game::core::MapPosition(map.rows() - 2, map.cols() - 2));
-
-        m_battleView->setMapSize(map.rows(), map.cols());
-        m_battleView->m_spawnPos = spawnPos;
-        m_battleView->m_corePos = corePos;
-
-        // 设置图片裁剪和偏移（在加载图片前设置，用于计算控件尺寸）
-        if (mapConfig.imageCrop.width > 0 && mapConfig.imageCrop.height > 0) {
-            m_battleView->setImageCrop(mapConfig.imageCrop.x, mapConfig.imageCrop.y,
-                                       mapConfig.imageCrop.width, mapConfig.imageCrop.height);
-        }
-        if (mapConfig.imageOffset.x != 0 || mapConfig.imageOffset.y != 0) {
-            m_battleView->setImageOffset(mapConfig.imageOffset.x, mapConfig.imageOffset.y);
-        }
-
-        if (!mapConfig.image.empty()) {
-            QString imagePath = QFileInfo(mapPath).dir().filePath(QString::fromStdString(mapConfig.image));
-            if (!m_battleView->setBackgroundImage(imagePath)) {
-                qWarning() << "[BattlePage] failed to load PVE map image:" << imagePath;
-            }
-        } else {
-            m_battleView->clearBackgroundImage();
-        }
-
-        qDebug() << "[BattlePage] loaded PVE map from" << mapPath
-                 << "size" << map.rows() << "x" << map.cols()
-                 << "routesA" << static_cast<int>(mapConfig.routesA.size());
-        return;
+        m_battleManager->setPaths(config.routesA);
+        m_battleView->m_spawnPos = !config.spawnA.empty()
+                                       ? config.spawnA.front()
+                                       : config.routesA.front().front();
+        m_battleView->m_corePos = !config.coreA.empty()
+                                      ? config.coreA.front()
+                                      : config.routesA.front().back();
     }
 
-    if (!mapPath.isEmpty()) {
-        qWarning() << "[BattlePage] failed to load PVE map:" << QString::fromStdString(loadError)
-                   << "path:" << mapPath;
-    } else {
-        qWarning() << "[BattlePage] PVE map JSON not found, using fallback hardcoded map.";
-    }
-
-    map.resize(game::core::constants::DefaultMapRows,
-               game::core::constants::DefaultMapCols,
-               game::core::TerrainType::FlatLand,
-               0);
-    m_battleView->clearBackgroundImage();
-
-    game::core::MapPosition spawnPos(1, 1);
-    game::core::MapPosition corePos(10, 16);
-
-    // 设置 NoDeploy 边框
-    for (int r = 0; r < map.rows(); ++r) {
-        map.setGrid({r, 0}, game::core::TerrainType::NoDeploy, 0);
-        map.setGrid({r, map.cols() - 1}, game::core::TerrainType::NoDeploy, 0);
-    }
-    for (int c = 0; c < map.cols(); ++c) {
-        map.setGrid({0, c}, game::core::TerrainType::NoDeploy, 0);
-        map.setGrid({map.rows() - 1, c}, game::core::TerrainType::NoDeploy, 0);
-    }
-
-    // S 型路径
-    std::vector<game::core::MapPosition> pathCells = {
-        {1,1}, {1,2}, {1,3}, {1,4}, {1,5}, {1,6},
-        {2,6}, {3,6},
-        {4,6}, {4,7}, {4,8}, {4,9}, {4,10}, {4,11}, {4,12}, {4,13},
-        {5,13}, {6,13},
-        {7,13}, {7,12}, {7,11}, {7,10}, {7,9}, {7,8}, {7,7}, {7,6},
-        {8,6}, {9,6},
-        {10,6}, {10,7}, {10,8}, {10,9}, {10,10}, {10,11},
-        {10,12}, {10,13}, {10,14}, {10,15}, {10,16}
-    };
-
-    for (const auto& pos : pathCells) {
-        map.setGrid(pos, game::core::TerrainType::Path, 0);
-    }
-
-    // 高台
-    std::vector<game::core::MapPosition> highGroundCells = {
-        {2,2}, {2,3}, {3,2}, {3,3},
-        {2,8}, {2,9}, {3,8}, {3,9},
-        {5,5}, {5,6}, {6,5}, {6,6},
-        {5,10}, {5,11}, {6,10}, {6,11},
-        {8,9}, {8,10}, {9,9}, {9,10},
-        {8,14}, {8,15}, {9,14}, {9,15}
-    };
-    for (const auto& pos : highGroundCells) {
-        map.setGrid(pos, game::core::TerrainType::HighGround, 1);
-    }
-
-    m_battleManager->setSpawnPoint(spawnPos);
-    m_battleManager->setPath(pathCells);
-
-    m_battleView->m_spawnPos = spawnPos;
-    m_battleView->m_corePos = corePos;
+    m_battleView->setMapSize(map.rows(), map.cols());
+    layoutArtworkUi();
+    update();
 }
 
 // ========== setupPvpMap() —— 初始化 PVP 对称地图 ==========
@@ -1506,105 +1914,74 @@ void BattlePage::setupPvpMap()
 {
     auto& map = m_battleManager->map();
     m_battleView->clearBackgroundImage();
+    map.resize(8, 18, game::core::TerrainType::FlatLand, 0);
 
-    // 新 PVP 地图布局（12x18）
-    // 出怪口在上方 (1,6) 和 (1,11)
-    // A方核心在左下角 (10,1)，B方核心在右下角 (10,16)
-
-    // 1) 设置 NoDeploy 边框
-    for (int r = 0; r < map.rows(); ++r) {
-        map.setGrid({r, 0}, game::core::TerrainType::NoDeploy, 0);
-        map.setGrid({r, map.cols() - 1}, game::core::TerrainType::NoDeploy, 0);
-    }
-    for (int c = 0; c < map.cols(); ++c) {
-        map.setGrid({0, c}, game::core::TerrainType::NoDeploy, 0);
-        map.setGrid({map.rows() - 1, c}, game::core::TerrainType::NoDeploy, 0);
-    }
-
-    // 2) 设置出生点
-    game::core::MapPosition spawn1(1, 6);   // 上方出生点
-    game::core::MapPosition spawn2(1, 11);  // 左上角出生点
+    const game::core::MapPosition spawn1(0, 8);
+    const game::core::MapPosition spawn2(7, 9);
+    const game::core::MapPosition coreA(4, 0);
+    const game::core::MapPosition coreB(4, 17);
     map.setGrid(spawn1, game::core::TerrainType::SpawnPoint, 0);
     map.setGrid(spawn2, game::core::TerrainType::SpawnPoint, 0);
-
-    // 3) 设置核心
-    game::core::MapPosition coreA(10, 1);   // A方核心（左下角）
-    game::core::MapPosition coreB(10, 16);  // B方核心（右下角）
     map.setGrid(coreA, game::core::TerrainType::CoreA, 0);
     map.setGrid(coreB, game::core::TerrainType::CoreB, 0);
 
-    // 4) 设置路径
-    // 从出生点1向下到分叉点
-    std::vector<game::core::MapPosition> path1_down = {
-        {2,6}, {3,6}, {4,6}, {5,6}, {6,6}, {7,6}, {8,6}
+    std::vector<game::core::MapPosition> pathToA = {
+        spawn1, {1,8}, {2,8}, {3,8}, {4,8},
+        {4,7}, {4,6}, {4,5}, {4,4}, {4,3}, {4,2}, {4,1}, coreA
     };
-    // 从出生点2向下到分叉点
-    std::vector<game::core::MapPosition> path2_down = {
-        {2,11}, {3,11}, {4,11}, {5,11}, {6,11}, {7,11}, {8,11}
+    std::vector<game::core::MapPosition> pathToB = {
+        spawn2, {6,9}, {5,9}, {4,9},
+        {4,10}, {4,11}, {4,12}, {4,13}, {4,14}, {4,15}, {4,16}, coreB
     };
-    // 横向连接路径
-    std::vector<game::core::MapPosition> path_horizontal = {
-        {8,7}, {8,8}, {8,9}, {8,10}
-    };
-    // 向左下到A方核心
-    std::vector<game::core::MapPosition> path_toA = {
-        {9,6}, {9,5}, {9,4}, {9,3}, {9,2}, {9,1}
-    };
-    // 向右下到B方核心
-    std::vector<game::core::MapPosition> path_toB = {
-        {9,11}, {9,12}, {9,13}, {9,14}, {9,15}, {9,16}
-    };
+    for (const auto& pos : pathToA) {
+        if (pos != spawn1 && pos != coreA) {
+            map.setGrid(pos, game::core::TerrainType::Path, 0);
+        }
+    }
+    for (const auto& pos : pathToB) {
+        if (pos != spawn2 && pos != coreB) {
+            map.setGrid(pos, game::core::TerrainType::Path, 0);
+        }
+    }
 
-    // 标记所有路径
-    for (const auto& pos : path1_down)
-        map.setGrid(pos, game::core::TerrainType::Path, 0);
-    for (const auto& pos : path2_down)
-        map.setGrid(pos, game::core::TerrainType::Path, 0);
-    for (const auto& pos : path_horizontal)
-        map.setGrid(pos, game::core::TerrainType::Path, 0);
-    for (const auto& pos : path_toA)
-        map.setGrid(pos, game::core::TerrainType::Path, 0);
-    for (const auto& pos : path_toB)
-        map.setGrid(pos, game::core::TerrainType::Path, 0);
-
-    // 5) 设置高台（战略要地）
     std::vector<game::core::MapPosition> highGround = {
-        // A方区域的高台
-        {3,2}, {3,3}, {5,2}, {5,3}, {7,2}, {7,3},
-        // B方区域的高台
-        {3,14}, {3,15}, {5,14}, {5,15}, {7,14}, {7,15},
-        // 中间区域的高台
-        {4,8}, {4,9}, {6,8}, {6,9}
+        {1,2}, {1,4}, {2,6}, {6,2}, {6,5},
+        {1,13}, {1,15}, {2,11}, {6,12}, {6,15}
     };
-    for (const auto& pos : highGround)
+    for (const auto& pos : highGround) {
         map.setGrid(pos, game::core::TerrainType::HighGround, 1);
-
-    // 6) 设置双核心路线。WaveSpawner 会按怪物序号轮流分配，保证两边压力接近。
-    std::vector<game::core::MapPosition> pathToA;
-    pathToA.push_back(spawn1);
-    for (const auto& pos : path1_down) pathToA.push_back(pos);
-    for (const auto& pos : path_toA) pathToA.push_back(pos);
-    pathToA.push_back(coreA);
-
-    std::vector<game::core::MapPosition> pathToB;
-    pathToB.push_back(spawn2);
-    for (const auto& pos : path2_down) pathToB.push_back(pos);
-    for (const auto& pos : path_toB) pathToB.push_back(pos);
-    pathToB.push_back(coreB);
+    }
 
     m_battleManager->setPaths({pathToA, pathToB});
-
-    // 根据玩家角色设置显示标记
-    m_battleView->m_spawnPos = spawn1;  // 所有玩家看到相同出生点
-    m_battleView->m_corePos = m_isHost ? coreA : coreB;  // 各自看到自己的核心
+    m_battleView->setMapSize(map.rows(), map.cols());
+    m_battleView->m_spawnPos = spawn1;
+    m_battleView->m_corePos = m_isHost ? coreA : coreB;
+    layoutArtworkUi();
+    update();
 }
 
 // ========== sendDeployAction() —— 发送部署操作 ==========
 void BattlePage::sendDeployAction(game::core::CardKind kind, game::core::MapPosition pos)
 {
     // 本地执行
+    bool deployed = false;
     if (m_battleManager) {
-        m_battleManager->deployCard(kind, pos);
+        deployed = static_cast<bool>(m_battleManager->deployCard(kind, pos));
+    }
+    if (deployed) {
+        m_selectedCardIndex = -1;
+        m_battleView->m_mode = BattleView::InteractionMode::NONE;
+        updateStatusBar(m_battleManager->snapshot());
+        if (m_tutorialStage == TutorialStage::WaitDeploy) {
+            m_tutorialStage = TutorialStage::Tactics;
+            m_tutorialPaused = true;
+            updateTutorialTargets();
+            m_tutorialOverlay->showStep(
+                "Captain Pine",
+                "Our first guardian is in position. Click any deployed ally to open its command ring: Upgrade strengthens it, Move repositions it, and Recall returns part of its cost.",
+                TutorialOverlay::Focus::Battlefield,
+                "Understood");
+        }
     }
 
     // 网络发送
@@ -1889,7 +2266,7 @@ void BattlePage::startBattle()
 
         // 初始化视野系统
         auto& vision = m_battleManager->visionManager();
-        vision.initDefaultVision(game::core::MapPosition(10, 1), game::core::MapPosition(10, 16));
+        vision.initDefaultVision(game::core::MapPosition(4, 0), game::core::MapPosition(4, 17));
 
         // 连接网络信号
         if (m_isHost && m_netCtx.server) {
@@ -1918,7 +2295,7 @@ void BattlePage::startBattle()
 
     // 重置状态
     m_isPaused = false;
-    m_btnPause->setText("⏸");
+    m_btnPause->setText(QString());
     m_pauseOverlay->closeMenu();
     m_pauseOverlay->setPvpMode(m_isPvp);
     m_battleView->clearEffects();
@@ -1930,14 +2307,18 @@ void BattlePage::startBattle()
     m_localWaveClear = false;
     m_peerWaveClear = false;
     m_resultEmitted = false;
+    m_selectedCardIndex = -1;
+    m_displayResources = -1;
+    m_tutorialPaused = false;
+    m_tutorialSessionActive = false;
+    m_coreWarningShown = false;
+    m_tutorialStage = TutorialStage::Inactive;
+    if (m_tutorialOverlay) m_tutorialOverlay->closeOverlay();
     m_currentWaveId = (m_isPvp && m_battleManager->currentWave() > 0)
                           ? m_battleManager->currentWave() + 1
                           : 1;
 
     // PVP 战斗阶段是纯观看，部署/升级/移动/撤回全部放在迷雾部署阶段。
-    for (auto* btn : m_cardButtons) {
-        btn->setEnabled(!m_isPvp);
-    }
     if (m_battleView) {
         m_battleView->m_interactionEnabled = !m_isPvp;
         m_battleView->hideRadialMenu();
@@ -1970,12 +2351,21 @@ void BattlePage::startBattle()
     game::core::BattleSnapshot snap = m_battleManager->snapshot();
     m_battleView->updateFromSnapshot(snap);
     updateStatusBar(snap);
+
+    if (!m_isPvp) {
+        QSettings settings;
+        if (!settings.value("tutorial/storyGuideV1Complete", false).toBool()) {
+            QTimer::singleShot(120, this, [this]() {
+                if (m_inBattlePhase && !m_isPvp) beginTutorial(false);
+            });
+        }
+    }
 }
 
 // ========== onGameTick() —— 游戏主循环回调 ==========
 void BattlePage::onGameTick()
 {
-    if (!m_battleManager || m_isPaused) return;
+    if (!m_battleManager || m_isPaused || m_tutorialPaused) return;
 
     double deltaSeconds = game::core::constants::DefaultFrameSeconds * m_speedMultiplier;
 
@@ -2158,16 +2548,45 @@ void BattlePage::finishBattle(const game::core::BattleSnapshot &snapshot, bool p
 // ========== updateStatusBar() —— 更新状态栏 ==========
 void BattlePage::updateStatusBar(const game::core::BattleSnapshot &snapshot)
 {
-    m_waveLabel->setText(QString("🌊 波次: %1  场上: %2  %3")
-                             .arg(snapshot.currentWave)
-                             .arg(snapshot.monsters.size())
-                             .arg(snapshot.waveActive ? "出怪中" : "已清空"));
-    m_coreHpLabel->setText(QString("🏰 核心: %1").arg(snapshot.baseHealth));
-    m_resourceLabel->setText(QString("💰 资源: %1").arg(snapshot.resources));
+    const int previousCoreHealth = m_displayCoreHealth;
+    const bool healthChanged =
+        m_displayCoreHealth != snapshot.baseHealth
+        || m_displayOpponentCoreHealth != snapshot.opponentBaseHealth;
+    const bool resourcesChanged = m_displayResources != snapshot.resources;
+    m_displayCoreHealth = snapshot.baseHealth;
+    m_displayOpponentCoreHealth = snapshot.opponentBaseHealth;
+    m_displayResources = snapshot.resources;
+
+    m_waveLabel->setText(QString("Wave %1").arg(snapshot.currentWave));
+    m_phaseLabel->setText(m_isPvp
+                              ? (snapshot.waveActive ? "Battle Phase" : "Resource Phase")
+                              : mapDisplayName(m_activePveMapId));
+    m_coreHpLabel->setText(QString("Your Core %1/10").arg(snapshot.baseHealth));
+    m_resourceLabel->setText(QString("Resource %1").arg(snapshot.resources));
     if (m_isPvp && m_opponentLabel) {
-        m_opponentLabel->setText(QString("对手核心: %1  资源: %2")
-                                     .arg(snapshot.opponentBaseHealth)
-                                     .arg(snapshot.opponentResources));
+        m_opponentLabel->setText(QString("Enemy Core %1/10")
+                                     .arg(snapshot.opponentBaseHealth));
+    }
+    if (resourcesChanged) {
+        updateCardVisualState(snapshot.resources);
+    }
+    if (!m_isPvp
+        && m_tutorialSessionActive
+        && !m_coreWarningShown
+        && m_tutorialStage == TutorialStage::Inactive
+        && snapshot.baseHealth < previousCoreHealth) {
+        m_coreWarningShown = true;
+        m_tutorialPaused = true;
+        m_tutorialStage = TutorialStage::CoreWarning;
+        updateTutorialTargets();
+        m_tutorialOverlay->showStep(
+            "Peach Healer",
+            "The core is hurt, but it is not lost. Reinforce the weak bend and keep enough Juice for an emergency defender.",
+            TutorialOverlay::Focus::Core,
+            "Hold the line");
+    }
+    if (healthChanged) {
+        update();
     }
 }
 
@@ -2245,7 +2664,7 @@ void BattlePage::setPaused(bool paused)
         return;
     }
     m_isPaused = paused;
-    m_btnPause->setText(paused ? "▶" : "⏸");
+    m_btnPause->setText(QString());
     if (paused) {
         m_battleView->hideRadialMenu();
         m_pauseOverlay->setPvpMode(m_isPvp);
@@ -2269,6 +2688,8 @@ void BattlePage::keyPressEvent(QKeyEvent *event)
 void BattlePage::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
+    layoutArtworkUi();
+    update();
     if (m_pauseOverlay) {
         m_pauseOverlay->setGeometry(rect());
         m_pauseOverlay->raise();

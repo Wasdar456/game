@@ -154,7 +154,7 @@ void LobbyPage::createPvePanel()
 
     m_mapSelector = new QComboBox(m_pvePanel);
     m_mapSelector->addItem("Sunny Beach", "lab_map_02");
-    m_mapSelector->addItem("Jungle Ruins", "lab_map_01");
+    m_mapSelector->addItem("Jungle Ruins", "island_pve");
     m_mapSelector->addItem("Office Panic", "lab_map_01");
     m_mapSelector->hide();
 
@@ -183,9 +183,6 @@ void LobbyPage::createPvePanel()
         m_pveHotspots[i]->setClickHandler([this, i]() {
             m_mapSelector->setCurrentIndex(i);
             refreshSelectionVisuals();
-            if (i == 2) {
-                showStatus("Office Panic 地图逻辑尚缺，当前暂用 Jungle Ruins");
-            }
         });
     }
     for (int i = 0; i < 3; ++i) {

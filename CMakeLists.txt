@@ -48,6 +48,8 @@ file(GLOB_RECURSE SOURCES
 # ─────────────────────────────────────────────
 add_executable(DffenseAndAttack
     ${SOURCES}
+    src/ui/TutorialOverlay.cpp
+    src/ui/TutorialOverlay.h
     resources/resources.qrc
 )
 

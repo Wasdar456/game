@@ -10,10 +10,12 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QDebug>
+#include <QResizeEvent>
 #include <QtEndian>
 #include <QtMath>
 
 #include <algorithm>
+#include <cmath>
 
 // ========== 网络模块 ==========
 #include "network/session/GameServer.h"
@@ -23,24 +25,18 @@ namespace {
 QString cardName(game::core::CardKind kind)
 {
     switch (kind) {
-    case game::core::CardKind::Attack: return "突击手";
-    case game::core::CardKind::Sniper: return "狙击手";
-    case game::core::CardKind::Aoe: return "AOE炮塔";
-    case game::core::CardKind::Specialist: return "特种兵";
-    case game::core::CardKind::Produce: return "采矿工";
-    case game::core::CardKind::Arsenal: return "兵工厂";
-    case game::core::CardKind::Heal: return "医生";
-    case game::core::CardKind::HeavyMedic: return "重装医生";
+    case game::core::CardKind::Attack: return "Kiwi Scout";
+    case game::core::CardKind::Sniper: return "Sniper Berry";
+    case game::core::CardKind::Aoe: return "Orange Bomber";
+    case game::core::CardKind::Specialist: return "Berry Tank";
+    case game::core::CardKind::Produce: return "Miner Pine";
+    case game::core::CardKind::Arsenal: return "Mango Engineer";
+    case game::core::CardKind::Heal: return "Peach Healer";
+    case game::core::CardKind::HeavyMedic: return "Coco Defender";
     }
-    return "未知";
+    return "Unknown";
 }
 
-QString cardIcon(game::core::CardKind kind)
-{
-    if (game::core::isAttackCardKind(kind)) return "⚔";
-    if (game::core::isProduceCardKind(kind)) return "⛏";
-    return "❤";
-}
 }
 
 // ============================================================================
@@ -58,6 +54,7 @@ DeployView::DeployView(QWidget *parent)
     , m_corePos(10, 1)
     , m_mapRows(game::core::constants::DefaultMapRows)
     , m_mapCols(game::core::constants::DefaultMapCols)
+    , m_artworkOverlayMode(false)
     , m_btnUpgrade(nullptr)
     , m_btnMove(nullptr)
     , m_btnRecall(nullptr)
@@ -65,9 +62,9 @@ DeployView::DeployView(QWidget *parent)
     setMapSize(m_mapRows, m_mapCols);
     setMouseTracking(true);
 
-    m_btnUpgrade = new QPushButton("⬆ 升级", this);
-    m_btnMove = new QPushButton("🏃 移动", this);
-    m_btnRecall = new QPushButton("↩ 撤回", this);
+    m_btnUpgrade = new QPushButton("Upgrade", this);
+    m_btnMove = new QPushButton("Move", this);
+    m_btnRecall = new QPushButton("Recall", this);
 
     const QString radialStyle =
         "QPushButton {"
@@ -128,7 +125,74 @@ void DeployView::setMapSize(int rows, int cols)
 {
     m_mapRows = rows;
     m_mapCols = cols;
-    this->setFixedSize(cols * CELL_SIZE, rows * CELL_SIZE);
+    if (!m_artworkOverlayMode) {
+        this->setFixedSize(cols * CELL_SIZE, rows * CELL_SIZE);
+    }
+}
+
+QRectF cardSourceRect(game::core::CardKind kind)
+{
+    switch (kind) {
+    case game::core::CardKind::Produce: return {272, 214, 151, 199};
+    case game::core::CardKind::Sniper: return {440, 214, 162, 199};
+    case game::core::CardKind::Specialist: return {619, 214, 160, 199};
+    case game::core::CardKind::Heal: return {798, 214, 161, 199};
+    case game::core::CardKind::Attack: return {973, 214, 158, 199};
+    case game::core::CardKind::Aoe: return {272, 428, 153, 198};
+    case game::core::CardKind::HeavyMedic: return {441, 428, 161, 198};
+    case game::core::CardKind::Arsenal: return {619, 428, 160, 198};
+    }
+    return {440, 214, 162, 199};
+}
+
+void DeployView::setArtworkOverlayMode(bool enabled)
+{
+    m_artworkOverlayMode = enabled;
+    setAttribute(Qt::WA_TranslucentBackground, enabled);
+    setAutoFillBackground(!enabled);
+    if (enabled) {
+        setMinimumSize(0, 0);
+        setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    } else {
+        setMapSize(m_mapRows, m_mapCols);
+    }
+    update();
+}
+
+double DeployView::cellWidth() const
+{
+    return m_mapCols > 0 ? static_cast<double>(width()) / m_mapCols : CELL_SIZE;
+}
+
+double DeployView::cellHeight() const
+{
+    return m_mapRows > 0 ? static_cast<double>(height()) / m_mapRows : CELL_SIZE;
+}
+
+double DeployView::cellExtent() const
+{
+    return std::min(cellWidth(), cellHeight());
+}
+
+QRectF DeployView::cellRect(int row, int col) const
+{
+    return QRectF(col * cellWidth(), row * cellHeight(), cellWidth(), cellHeight());
+}
+
+QPointF DeployView::cellCenter(int row, int col) const
+{
+    return cellRect(row, col).center();
+}
+
+int DeployView::rowAtPixel(int y) const
+{
+    return cellHeight() > 0.0 ? static_cast<int>(std::floor(y / cellHeight())) : -1;
+}
+
+int DeployView::colAtPixel(int x) const
+{
+    return cellWidth() > 0.0 ? static_cast<int>(std::floor(x / cellWidth())) : -1;
 }
 
 void DeployView::updateFromSnapshot(const game::core::BattleSnapshot &snapshot)
@@ -174,8 +238,12 @@ void DeployView::paintEvent(QPaintEvent *event)
 
 void DeployView::drawTerrain(QPainter &painter)
 {
+    if (m_artworkOverlayMode) {
+        return;
+    }
+
     for (const auto &grid : m_snapshot.map.grids) {
-        QRect cellRect(grid.col * CELL_SIZE, grid.row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        QRectF cell = cellRect(grid.row, grid.col);
 
         QColor color;
         switch (grid.terrain) {
@@ -204,18 +272,18 @@ void DeployView::drawTerrain(QPainter &painter)
 
         painter.setPen(QPen(QColor(80, 80, 80), 1));
         painter.setBrush(color);
-        painter.drawRect(cellRect);
+        painter.drawRect(cell);
 
         // 在出生点和核心上绘制标记
         if (grid.terrain == game::core::TerrainType::SpawnPoint) {
             painter.setPen(QPen(QColor(255, 255, 255), 2));
-            painter.drawText(cellRect, Qt::AlignCenter, "S");
+            painter.drawText(cell, Qt::AlignCenter, "S");
         } else if (grid.terrain == game::core::TerrainType::CoreA) {
             painter.setPen(QPen(QColor(255, 255, 255), 2));
-            painter.drawText(cellRect, Qt::AlignCenter, "A");
+            painter.drawText(cell, Qt::AlignCenter, "A");
         } else if (grid.terrain == game::core::TerrainType::CoreB) {
             painter.setPen(QPen(QColor(255, 255, 255), 2));
-            painter.drawText(cellRect, Qt::AlignCenter, "B");
+            painter.drawText(cell, Qt::AlignCenter, "B");
         }
     }
 }
@@ -226,10 +294,10 @@ void DeployView::drawDeployable(QPainter &painter)
 
     if (m_mode == InteractionMode::MOVING) {
         for (const auto& pos : getMovableCells(m_selectedUnitId)) {
-            QRect cellRect(pos.col * CELL_SIZE, pos.row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            QRectF cell = cellRect(pos.row, pos.col);
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(255, 213, 79, 48));
-            painter.drawRect(cellRect);
+            painter.drawRect(cell);
         }
         return;
     }
@@ -238,10 +306,10 @@ void DeployView::drawDeployable(QPainter &painter)
         if (!grid.occupied &&
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
-            QRect cellRect(grid.col * CELL_SIZE, grid.row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            QRectF cell = cellRect(grid.row, grid.col);
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(0, 255, 0, 40));
-            painter.drawRect(cellRect);
+            painter.drawRect(cell);
         }
     }
 }
@@ -249,8 +317,9 @@ void DeployView::drawDeployable(QPainter &painter)
 void DeployView::drawUnits(QPainter &painter)
 {
     for (const auto &unit : m_snapshot.units) {
-        QRect unitRect(unit.col * CELL_SIZE, unit.row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-        QRect innerRect = unitRect.adjusted(4, 4, -4, -4);
+        QRectF unitRect = cellRect(unit.row, unit.col);
+        const qreal inset = qMax<qreal>(2.0, cellExtent() * 0.09);
+        QRectF innerRect = unitRect.adjusted(inset, inset, -inset, -inset);
 
         // 根据单位类型和阵营选择颜色
         QColor unitColor;
@@ -326,7 +395,7 @@ void DeployView::drawHoverCell(QPainter &painter)
     if (m_hoverRow < 0 || m_hoverCol < 0) return;
     if (m_hoverRow >= m_mapRows || m_hoverCol >= m_mapCols) return;
 
-    QRect hoverRect(m_hoverCol * CELL_SIZE, m_hoverRow * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    QRectF hoverRect = cellRect(m_hoverRow, m_hoverCol);
     painter.setPen(QPen(QColor(0, 212, 255, 70), 2));
     painter.setBrush(QColor(0, 212, 255, 18));
     painter.drawRect(hoverRect);
@@ -334,8 +403,8 @@ void DeployView::drawHoverCell(QPainter &painter)
 
 void DeployView::mouseMoveEvent(QMouseEvent *event)
 {
-    int col = event->pos().x() / CELL_SIZE;
-    int row = event->pos().y() / CELL_SIZE;
+    int col = colAtPixel(event->pos().x());
+    int row = rowAtPixel(event->pos().y());
 
     if (row != m_hoverRow || col != m_hoverCol) {
         m_hoverRow = row;
@@ -346,8 +415,8 @@ void DeployView::mouseMoveEvent(QMouseEvent *event)
 
 void DeployView::mousePressEvent(QMouseEvent *event)
 {
-    int col = event->pos().x() / CELL_SIZE;
-    int row = event->pos().y() / CELL_SIZE;
+    int col = colAtPixel(event->pos().x());
+    int row = rowAtPixel(event->pos().y());
 
     if (row < 0 || row >= m_mapRows || col < 0 || col >= m_mapCols) return;
 
@@ -356,7 +425,8 @@ void DeployView::mousePressEvent(QMouseEvent *event)
         if (unitId > 0) {
             m_selectedUnitId = unitId;
             m_mode = InteractionMode::RADIAL_MENU;
-            showRadialMenu(unitId, col * CELL_SIZE + CELL_SIZE / 2, row * CELL_SIZE + CELL_SIZE / 2);
+            const QPointF center = cellCenter(row, col);
+            showRadialMenu(unitId, qRound(center.x()), qRound(center.y()));
             update();
         }
         return;
@@ -475,16 +545,21 @@ void DeployView::showRadialMenu(int unitId, int pixelX, int pixelY)
         }
     }
 
-    const int btnWidth = 70;
-    const int btnHeight = 36;
-    m_btnUpgrade->setGeometry(pixelX - btnWidth / 2, pixelY - CELL_SIZE - btnHeight - 5, btnWidth, btnHeight);
-    m_btnMove->setGeometry(pixelX - CELL_SIZE - btnWidth - 5, pixelY + 10, btnWidth, btnHeight);
-    m_btnRecall->setGeometry(pixelX + CELL_SIZE + 5, pixelY + 10, btnWidth, btnHeight);
+    const int extent = qMax(36, qRound(cellExtent()));
+    const int btnWidth = qMax(64, qRound(extent * 1.45));
+    const int btnHeight = qMax(32, qRound(extent * 0.72));
+    m_btnUpgrade->setGeometry(pixelX - btnWidth / 2,
+                              pixelY - extent - btnHeight - 5,
+                              btnWidth, btnHeight);
+    m_btnMove->setGeometry(pixelX - extent - btnWidth - 5,
+                           pixelY + 8, btnWidth, btnHeight);
+    m_btnRecall->setGeometry(pixelX + extent + 5,
+                             pixelY + 8, btnWidth, btnHeight);
 
     m_btnUpgrade->setEnabled(level < game::core::constants::MaxCardLevel);
     m_btnUpgrade->setText(level >= game::core::constants::MaxCardLevel
-                              ? "⬆ 满级"
-                              : QString("⬆ Lv%1→%2").arg(level).arg(level + 1));
+                              ? "Max Level"
+                              : QString("Lv%1 > %2").arg(level).arg(level + 1));
 
     m_btnUpgrade->show();
     m_btnMove->show();
@@ -510,6 +585,8 @@ DeployPage::DeployPage(QWidget *parent)
     , m_deployView(nullptr)
     , m_titleLabel(nullptr)
     , m_deployCountLabel(nullptr)
+    , m_localCoreLabel(nullptr)
+    , m_enemyCoreLabel(nullptr)
     , m_btnBack(nullptr)
     , m_btnStartBattle(nullptr)
     , m_isPvp(false)
@@ -520,6 +597,8 @@ DeployPage::DeployPage(QWidget *parent)
     , m_localReady(false)
     , m_opponentReady(false)
     , m_opponentLabel(nullptr)
+    , m_pvpArtwork(":/images/artwork/battle_pvp.png")
+    , m_deckArtwork(":/images/artwork/deck_atlas.png")
 {
     initUI();
     connectSignals();
@@ -529,11 +608,13 @@ void DeployView::drawDustEffects(QPainter &painter)
 {
     for (const DustEffect &effect : m_dustEffects) {
         const qreal progress = 1.0 - effect.life / 0.64;
-        const QPointF center(effect.col * CELL_SIZE + CELL_SIZE / 2.0,
-                             effect.row * CELL_SIZE + CELL_SIZE * 0.76);
+        QPointF center = cellCenter(effect.row, effect.col);
+        center.setY(cellRect(effect.row, effect.col).top()
+                    + cellRect(effect.row, effect.col).height() * 0.76);
+        const qreal extent = cellExtent();
         for (int i = 0; i < 9; ++i) {
             const qreal angle = i * 0.70;
-            const qreal distance = CELL_SIZE * progress * (0.22 + (i % 3) * 0.05);
+            const qreal distance = extent * progress * (0.22 + (i % 3) * 0.05);
             const QPointF pos = center + QPointF(qCos(angle) * distance,
                                                  qSin(angle) * distance * 0.42);
             const qreal radius = 5.2 - progress * 2.7 + (i % 2);
@@ -548,18 +629,40 @@ void DeployPage::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
     QPainter painter(this);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
     painter.setRenderHint(QPainter::Antialiasing);
-    static QPixmap bg(":/images/ui/scene_lab_02.png");
-    if (!bg.isNull()) {
-        QSize scaled = bg.size();
-        scaled.scale(size(), Qt::KeepAspectRatioByExpanding);
-        QRect target(QPoint((width() - scaled.width()) / 2,
-                            (height() - scaled.height()) / 2), scaled);
-        painter.drawPixmap(target, bg);
-    } else {
-        painter.fillRect(rect(), QColor(37, 30, 34));
+    painter.fillRect(rect(), QColor(26, 55, 49));
+
+    const QRect canvas = artworkRect();
+    auto mapped = [&](const QRectF& designRect) {
+        const qreal sx = canvas.width() / 1672.0;
+        const qreal sy = canvas.height() / 941.0;
+        return QRectF(canvas.x() + designRect.x() * sx,
+                      canvas.y() + designRect.y() * sy,
+                      designRect.width() * sx,
+                      designRect.height() * sy);
+    };
+
+    if (!m_pvpArtwork.isNull()) {
+        painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
+                           m_pvpArtwork, QRectF(0, 96, 1672, 604));
+        painter.drawPixmap(mapped(QRectF(0, 0, 1672, 126)),
+                           m_pvpArtwork, QRectF(0, 0, 1672, 126));
+        painter.drawPixmap(mapped(QRectF(0, 690, 1672, 251)),
+                           m_pvpArtwork, QRectF(0, 690, 1672, 251));
+
+        const QRectF cardDestinations[] = {
+            {355, 704, 180, 216}, {550, 704, 180, 216},
+            {745, 704, 180, 216}, {940, 704, 180, 216},
+            {1135, 704, 180, 216}
+        };
+        for (int i = 0; i < 5; ++i) {
+            if (i < m_deck.size()) {
+                painter.drawPixmap(mapped(cardDestinations[i]),
+                                   m_deckArtwork, cardSourceRect(m_deck[i]));
+            }
+        }
     }
-    painter.fillRect(rect(), QColor(35, 24, 21, 118));
 }
 
 void DeployPage::setNetworkContext(const NetworkContext& ctx)
@@ -567,137 +670,217 @@ void DeployPage::setNetworkContext(const NetworkContext& ctx)
     m_netCtx = ctx;
     m_isPvp = ctx.isPvp;
     m_isHost = ctx.isHost;
+    layoutArtworkUi();
+    update();
 }
 
 void DeployPage::setDeck(const QVector<game::core::CardKind>& deck)
 {
-    m_deck = deck;
+    m_deck = deck.mid(0, 5);
+    refreshCardDisplay();
+    update();
 }
 
 void DeployPage::initUI()
 {
     setAutoFillBackground(false);
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-    mainLayout->setSpacing(0);
-
-    // ===== 顶部状态栏 =====
-    {
-        QWidget *barContainer = new QWidget(this);
-        barContainer->setFixedHeight(50);
-        barContainer->setStyleSheet(
-            "QWidget {"
-            "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "    stop:0 rgba(73,50,39,0.96), stop:1 rgba(43,31,28,0.94));"
-            "  border-bottom: 2px solid rgba(255,210,126,0.42);"
-            "}"
-        );
-        QHBoxLayout *layout = new QHBoxLayout(barContainer);
-        layout->setContentsMargins(20, 0, 20, 0);
-
-        m_btnBack = new QPushButton("← 返回", barContainer);
-        m_btnBack->setFixedSize(80, 36);
-        m_btnBack->setStyleSheet(
-            "QPushButton { background-color: rgba(225,176,99,0.86); color: #3A2418;"
-            "  border: 2px solid rgba(76,48,31,0.82); border-radius: 8px; font-size: 14px; font-weight: bold; }"
-            "QPushButton:hover { border: 2px solid #FFD27E; }"
-        );
-        m_btnBack->setCursor(Qt::PointingHandCursor);
-
-        m_titleLabel = new QLabel("迷雾部署阶段", barContainer);
-        m_titleLabel->setStyleSheet("color: #FFF0C8; font-size: 18px; font-weight: bold;");
-
-        m_deployCountLabel = new QLabel("已部署: 0 个单位", barContainer);
-        m_deployCountLabel->setStyleSheet("color: #FFD54F; font-size: 16px; font-weight: bold;");
-
-        m_opponentLabel = new QLabel("对手: 等待中...", barContainer);
-        m_opponentLabel->setStyleSheet("color: #9EE0C7; font-size: 16px;");
-
-        layout->addWidget(m_btnBack);
-        layout->addSpacing(20);
-        layout->addWidget(m_titleLabel);
-        layout->addStretch();
-        layout->addWidget(m_deployCountLabel);
-        layout->addSpacing(20);
-        layout->addWidget(m_opponentLabel);
-
-        mainLayout->addWidget(barContainer);
-    }
-
-    // ===== 中央部署视口 =====
     m_deployView = new DeployView(this);
-    QHBoxLayout *viewLayout = new QHBoxLayout();
-    viewLayout->addStretch();
-    viewLayout->addWidget(m_deployView);
-    viewLayout->addStretch();
-    mainLayout->addLayout(viewLayout, 1);
+    m_deployView->setArtworkOverlayMode(true);
 
-    // ===== 底部操作栏 =====
-    {
-        QWidget *barContainer = new QWidget(this);
-        barContainer->setFixedHeight(90);
-        barContainer->setStyleSheet(
-            "QWidget {"
-            "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "    stop:0 rgba(43,31,28,0.92), stop:1 rgba(73,50,39,0.96));"
-            "  border-top: 2px solid rgba(255,210,126,0.42);"
-            "}"
-        );
-        QHBoxLayout *layout = new QHBoxLayout(barContainer);
-        layout->setContentsMargins(15, 10, 15, 10);
-
-        // 卡牌按钮（5个槽位，将在 initDeployment 中根据实际选卡更新）
-
-        for (int i = 0; i < 5; ++i) {
-            QPushButton *cardBtn = new QPushButton(barContainer);
-            cardBtn->setFixedSize(100, 70);
-            cardBtn->setText("空");
-            cardBtn->setStyleSheet(
-                "QPushButton {"
-                "  background-color: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                "    stop:0 rgba(225,176,99,0.95), stop:1 rgba(123,82,50,0.92));"
-                "  color: #3A2418;"
-                "  border: 2px solid rgba(76,48,31,0.82); border-radius: 8px;"
-                "  font-size: 11px; font-weight: bold;"
-                "}"
-                "QPushButton:hover {"
-                "  border: 2px solid #FFD27E;"
-                "  background-color: rgba(255,213,127,0.40);"
-                "}"
-                "QPushButton:disabled { color: #7E6B55; border-color: rgba(76,48,31,0.25); }"
-            );
-            cardBtn->setCursor(Qt::PointingHandCursor);
-            cardBtn->setEnabled(false);
-
-            m_cardButtons.append(cardBtn);
-            layout->addWidget(cardBtn);
-        }
-
-        layout->addStretch();
-
-        // 开战按钮
-        m_btnStartBattle = new QPushButton("开战", barContainer);
-        m_btnStartBattle->setFixedSize(120, 50);
-        m_btnStartBattle->setStyleSheet(
-            "QPushButton {"
-            "  background-color: rgba(225,176,99,0.92); color: #3A2418;"
-            "  border: 2px solid rgba(76,48,31,0.82); border-radius: 10px;"
-            "  font-size: 18px; font-weight: bold;"
-            "}"
-            "QPushButton:hover { border: 2px solid #FFD27E; }"
-            "QPushButton:disabled { color: #7E6B55; border-color: rgba(76,48,31,0.25); }"
-        );
-        m_btnStartBattle->setCursor(Qt::PointingHandCursor);
-        layout->addWidget(m_btnStartBattle);
-
-        mainLayout->addWidget(barContainer);
+    const QString labelStyle =
+        "QLabel { color: #3B2819; background: #F2DCA9;"
+        " border-radius: 4px;"
+        " font-size: 18px; font-weight: 700; padding: 2px 6px; }";
+    m_titleLabel = new QLabel("Deploy Phase", this);
+    m_deployCountLabel = new QLabel("Resource 0", this);
+    m_localCoreLabel = new QLabel("Your Core 10/10", this);
+    m_enemyCoreLabel = new QLabel("Enemy Core 10/10", this);
+    m_opponentLabel = new QLabel("Syncing", this);
+    for (QLabel *label : {m_titleLabel, m_deployCountLabel, m_localCoreLabel,
+                          m_enemyCoreLabel, m_opponentLabel}) {
+        label->setAlignment(Qt::AlignCenter);
+        label->setStyleSheet(labelStyle);
     }
 
-    // 页面背景
-    this->setStyleSheet("DeployPage { background: transparent; }");
+    const QString commandStyle =
+        "QPushButton { background: rgba(246,226,176,225); color: #3B2819;"
+        " border: 2px solid rgba(89,61,36,195); border-radius: 8px;"
+        ""
+        " font-size: 18px; font-weight: 700; }"
+        "QPushButton:hover { background: rgba(255,239,191,245); border-color: #F8D77A; }"
+        "QPushButton:pressed { background: rgba(197,159,94,235); }"
+        "QPushButton:disabled { color: rgba(80,61,42,145); background: rgba(222,203,161,185); }";
+
+    m_btnBack = new QPushButton("Back", this);
+    m_btnBack->setCursor(Qt::PointingHandCursor);
+    m_btnBack->setStyleSheet(commandStyle);
+
+    for (int i = 0; i < 5; ++i) {
+        auto *cardBtn = new QPushButton(this);
+        cardBtn->setText(QString());
+        cardBtn->setCursor(Qt::PointingHandCursor);
+        cardBtn->setEnabled(false);
+        cardBtn->setStyleSheet(
+            "QPushButton { background: transparent; border: 3px solid transparent; border-radius: 6px; }"
+            "QPushButton:hover { background: rgba(255,245,194,42); border-color: rgba(255,236,139,210); }"
+            "QPushButton:pressed { background: rgba(111,78,39,70); }"
+            "QPushButton:disabled { background: rgba(44,35,28,28); border-color: transparent; }");
+        m_cardButtons.append(cardBtn);
+
+        auto *nameLabel = new QLabel(this);
+        nameLabel->setAlignment(Qt::AlignCenter);
+        nameLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+        nameLabel->setStyleSheet(
+            "QLabel { color: #332216; background: #F1DCA9;"
+            " border: 1px solid rgba(104,72,39,120); border-radius: 3px;"
+            " font-size: 12px; font-weight: 700; padding: 1px 3px; }");
+        m_cardNameLabels.append(nameLabel);
+
+        auto *costLabel = new QLabel(this);
+        costLabel->setAlignment(Qt::AlignCenter);
+        costLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+        costLabel->setStyleSheet(
+            "QLabel { color: #342113; background: #F1DCA9;"
+            " border: 2px solid #74502C; border-radius: 10px;"
+            " font-size: 15px; font-weight: 800; padding: 1px 5px; }");
+        m_cardCostLabels.append(costLabel);
+    }
+
+    m_btnStartBattle = new QPushButton("Ready", this);
+    m_btnStartBattle->setCursor(Qt::PointingHandCursor);
+    m_btnStartBattle->setStyleSheet(commandStyle);
+
+    setStyleSheet("DeployPage { background-color: #203B35; }");
 
     // 设置卡牌按钮连接（只一次）
     setupCardButtonConnections();
+    refreshCardDisplay();
+    layoutArtworkUi();
+}
+
+QRect DeployPage::artworkRect() const
+{
+    constexpr int DesignWidth = 1672;
+    constexpr int DesignHeight = 941;
+    QSize fitted(DesignWidth, DesignHeight);
+    fitted.scale(size(), Qt::KeepAspectRatio);
+    return QRect((width() - fitted.width()) / 2,
+                 (height() - fitted.height()) / 2,
+                 fitted.width(), fitted.height());
+}
+
+void DeployPage::layoutArtworkUi()
+{
+    if (!m_deployView) return;
+
+    const QRect canvas = artworkRect();
+    const qreal sx = canvas.width() / 1672.0;
+    const qreal sy = canvas.height() / 941.0;
+    auto mapped = [&](const QRectF &designRect) {
+        return QRect(qRound(canvas.x() + designRect.x() * sx),
+                     qRound(canvas.y() + designRect.y() * sy),
+                     qMax(1, qRound(designRect.width() * sx)),
+                     qMax(1, qRound(designRect.height() * sy)));
+    };
+
+    const int fontPx = qMax(11, qRound(19 * std::min(sx, sy)));
+    const QString labelStyle = QString(
+        "QLabel { color: #3B2819; background: #F2DCA9;"
+        " border-radius: %1px;"
+        " font-size: %2px; font-weight: 700; padding: 1px 4px; }")
+        .arg(qMax(3, qRound(5 * sx)))
+        .arg(fontPx);
+    for (QLabel *label : {m_titleLabel, m_deployCountLabel, m_localCoreLabel,
+                          m_enemyCoreLabel, m_opponentLabel}) {
+        label->setStyleSheet(labelStyle);
+    }
+
+    const qreal uiScale = std::min(sx, sy);
+    const int namePx = qMax(9, qRound(13 * uiScale));
+    const int costPx = qMax(10, qRound(15 * uiScale));
+    const QString cardNameStyle = QString(
+        "QLabel { color: #332216; background: rgba(241,220,169,235);"
+        " border: %1px solid rgba(104,72,39,120); border-radius: %2px;"
+        " font-size: %3px; font-weight: 700; padding: 0px 2px; }")
+        .arg(qMax(1, qRound(1 * uiScale)))
+        .arg(qMax(2, qRound(3 * uiScale)))
+        .arg(namePx);
+    const QString cardCostStyle = QString(
+        "QLabel { color: #342113; background: rgba(246,226,176,245);"
+        " border: %1px solid #74502C; border-radius: %2px;"
+        " font-size: %3px; font-weight: 850; padding: 0px 2px; }")
+        .arg(qMax(1, qRound(2 * uiScale)))
+        .arg(qMax(5, qRound(10 * uiScale)))
+        .arg(costPx);
+    for (QLabel *label : m_cardNameLabels) {
+        label->setStyleSheet(cardNameStyle);
+    }
+    for (QLabel *label : m_cardCostLabels) {
+        label->setStyleSheet(cardCostStyle);
+    }
+
+    m_deployView->setGeometry(mapped(QRectF(174, 126, 1324, 552)));
+    m_titleLabel->setGeometry(mapped(QRectF(135, 35, 126, 50)));
+    m_localCoreLabel->setGeometry(mapped(QRectF(615, 29, 210, 50)));
+    m_enemyCoreLabel->setGeometry(mapped(QRectF(918, 29, 212, 50)));
+    m_deployCountLabel->setGeometry(mapped(QRectF(1210, 35, 137, 50)));
+    m_opponentLabel->setGeometry(mapped(QRectF(1410, 35, 112, 50)));
+    m_btnBack->setGeometry(mapped(QRectF(90, 775, 190, 64)));
+    m_btnStartBattle->setGeometry(mapped(QRectF(1380, 775, 205, 64)));
+
+    const QRectF cards[] = {
+        {355, 704, 180, 216}, {550, 704, 180, 216},
+        {745, 704, 180, 216}, {940, 704, 180, 216},
+        {1135, 704, 180, 216}
+    };
+    for (int i = 0; i < m_cardButtons.size(); ++i) {
+        const QRect cardRect = mapped(cards[i]);
+        m_cardButtons[i]->setGeometry(cardRect);
+        m_cardNameLabels[i]->setGeometry(mapped(QRectF(cards[i].x() + 15,
+                                                       cards[i].y() + 10,
+                                                       cards[i].width() - 30, 30)));
+        m_cardCostLabels[i]->setGeometry(mapped(QRectF(cards[i].x() + 28,
+                                                       cards[i].y() + 168,
+                                                       cards[i].width() - 56, 34)));
+    }
+
+    m_deployView->lower();
+    const QVector<QWidget*> foregroundWidgets = {
+        m_titleLabel, m_deployCountLabel, m_localCoreLabel, m_enemyCoreLabel, m_opponentLabel,
+        m_btnBack, m_btnStartBattle
+    };
+    for (QWidget *widget : foregroundWidgets) {
+        widget->raise();
+    }
+    for (auto *button : m_cardButtons) button->raise();
+    for (auto *label : m_cardNameLabels) label->raise();
+    for (auto *label : m_cardCostLabels) label->raise();
+}
+
+void DeployPage::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    layoutArtworkUi();
+    update();
+}
+
+void DeployPage::refreshCardDisplay()
+{
+    for (int i = 0; i < m_cardButtons.size(); ++i) {
+        const bool hasCard = i < m_deck.size();
+        m_cardButtons[i]->setVisible(hasCard);
+        m_cardButtons[i]->setEnabled(hasCard && !m_localReady);
+        m_cardNameLabels[i]->setVisible(hasCard);
+        m_cardCostLabels[i]->setVisible(hasCard);
+        if (!hasCard) continue;
+
+        const auto kind = m_deck[i];
+        const int cost = game::core::CardSystem::deployCost(kind);
+        const QString name = cardName(kind);
+        m_cardButtons[i]->setToolTip(QString("%1 - Cost %2").arg(name).arg(cost));
+        m_cardNameLabels[i]->setText(name);
+        m_cardCostLabels[i]->setText(QString("Juice %1").arg(cost));
+    }
 }
 
 void DeployPage::connectSignals()
@@ -758,7 +941,7 @@ void DeployPage::connectSignals()
     connect(m_btnStartBattle, &QPushButton::clicked, this, [this]() {
         m_localReady = true;
         m_btnStartBattle->setEnabled(false);
-        m_btnStartBattle->setText("等待对手...");
+        m_btnStartBattle->setText("Waiting...");
 
         if (m_isPvp) {
             sendDeploymentEnd();
@@ -798,20 +981,7 @@ void DeployPage::initDeployment()
     // 设置地图
     setupMap();
 
-    // 配置卡牌按钮（根据 deck 更新名称和费用）
-    for (int i = 0; i < m_cardButtons.size(); ++i) {
-        if (i < m_deck.size()) {
-            m_cardButtons[i]->setEnabled(true);
-            game::core::CardKind kind = m_deck[i];
-            QString icon = cardIcon(kind);
-            QString name = cardName(kind);
-            int cost = game::core::CardSystem::deployCost(kind);
-            m_cardButtons[i]->setText(QString("%1 %2\n💰%3").arg(icon).arg(name).arg(cost));
-        } else {
-            m_cardButtons[i]->setEnabled(false);
-            m_cardButtons[i]->setText("空");
-        }
-    }
+    refreshCardDisplay();
 
     // 连接网络信号（只连接一次，使用 UniqueConnection）
     if (m_isPvp) {
@@ -827,8 +997,8 @@ void DeployPage::initDeployment()
     // 更新显示
     updateDeployCount();
     m_btnStartBattle->setEnabled(true);
-    m_btnStartBattle->setText("开战");
-    m_opponentLabel->setText("对手: 等待中...");
+    m_btnStartBattle->setText("Ready");
+    m_opponentLabel->setText("Syncing");
 
     game::core::BattleSnapshot snap = m_battleManager->snapshot();
     m_deployView->updateFromSnapshot(snap);
@@ -852,22 +1022,14 @@ void DeployPage::setupCardButtonConnections()
             // 高亮选中按钮
             for (int j = 0; j < m_cardButtons.size(); ++j) {
                 m_cardButtons[j]->setStyleSheet(
-                    "QPushButton {"
-                    "  background-color: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                    "    stop:0 rgba(225,176,99,0.95), stop:1 rgba(123,82,50,0.92));"
-                    "  color: #3A2418;"
-                    "  border: 2px solid rgba(76,48,31,0.82); border-radius: 8px;"
-                    "  font-size: 11px; font-weight: bold;"
-                    "}"
+                    "QPushButton { background: transparent; border: 3px solid transparent; border-radius: 6px; }"
+                    "QPushButton:hover { background: rgba(255,245,194,42); border-color: rgba(255,236,139,210); }"
                 );
             }
             m_cardButtons[i]->setStyleSheet(
-                "QPushButton {"
-                "  background-color: rgba(255,213,127,0.56);"
-                "  color: #24150D;"
-                "  border: 2px solid #FFD27E; border-radius: 8px;"
-                "  font-size: 11px; font-weight: bold;"
-                "}"
+                "QPushButton { background: rgba(255,234,133,46);"
+                " border: 4px solid rgba(255,226,104,235); border-radius: 7px; }"
+                "QPushButton:hover { background: rgba(255,245,194,62); border-color: #FFF0A3; }"
             );
         });
     }
@@ -876,99 +1038,46 @@ void DeployPage::setupCardButtonConnections()
 void DeployPage::setupMap()
 {
     auto& map = m_battleManager->map();
+    map.resize(8, 18, game::core::TerrainType::FlatLand, 0);
 
-    // 新 PVP 地图布局（12x18）
-    // 出怪口在上方 (1,6) 和 (1,11)
-    // A方核心在左下角 (10,1)，B方核心在右下角 (10,16)
-
-    // 1) 设置 NoDeploy 边框
-    for (int r = 0; r < map.rows(); ++r) {
-        map.setGrid({r, 0}, game::core::TerrainType::NoDeploy, 0);
-        map.setGrid({r, map.cols() - 1}, game::core::TerrainType::NoDeploy, 0);
-    }
-    for (int c = 0; c < map.cols(); ++c) {
-        map.setGrid({0, c}, game::core::TerrainType::NoDeploy, 0);
-        map.setGrid({map.rows() - 1, c}, game::core::TerrainType::NoDeploy, 0);
-    }
-
-    // 2) 设置出生点
-    game::core::MapPosition spawn1(1, 6);   // 上方出生点
-    game::core::MapPosition spawn2(1, 11);  // 左上角出生点
+    const game::core::MapPosition spawn1(0, 8);
+    const game::core::MapPosition spawn2(7, 9);
+    const game::core::MapPosition coreA(4, 0);
+    const game::core::MapPosition coreB(4, 17);
     map.setGrid(spawn1, game::core::TerrainType::SpawnPoint, 0);
     map.setGrid(spawn2, game::core::TerrainType::SpawnPoint, 0);
-
-    // 3) 设置核心
-    game::core::MapPosition coreA(10, 1);   // A方核心（左下角）
-    game::core::MapPosition coreB(10, 16);  // B方核心（右下角）
     map.setGrid(coreA, game::core::TerrainType::CoreA, 0);
     map.setGrid(coreB, game::core::TerrainType::CoreB, 0);
 
-    // 4) 设置路径
-    // 从出生点1向下到分叉点
-    std::vector<game::core::MapPosition> path1_down = {
-        {2,6}, {3,6}, {4,6}, {5,6}, {6,6}, {7,6}, {8,6}
+    std::vector<game::core::MapPosition> pathToA = {
+        spawn1, {1,8}, {2,8}, {3,8}, {4,8},
+        {4,7}, {4,6}, {4,5}, {4,4}, {4,3}, {4,2}, {4,1}, coreA
     };
-    // 从出生点2向下到分叉点
-    std::vector<game::core::MapPosition> path2_down = {
-        {2,11}, {3,11}, {4,11}, {5,11}, {6,11}, {7,11}, {8,11}
+    std::vector<game::core::MapPosition> pathToB = {
+        spawn2, {6,9}, {5,9}, {4,9},
+        {4,10}, {4,11}, {4,12}, {4,13}, {4,14}, {4,15}, {4,16}, coreB
     };
-    // 横向连接路径
-    std::vector<game::core::MapPosition> path_horizontal = {
-        {8,7}, {8,8}, {8,9}, {8,10}
-    };
-    // 向左下到A方核心
-    std::vector<game::core::MapPosition> path_toA = {
-        {9,6}, {9,5}, {9,4}, {9,3}, {9,2}, {9,1}
-    };
-    // 向右下到B方核心
-    std::vector<game::core::MapPosition> path_toB = {
-        {9,11}, {9,12}, {9,13}, {9,14}, {9,15}, {9,16}
-    };
+    for (const auto& pos : pathToA) {
+        if (pos != spawn1 && pos != coreA) {
+            map.setGrid(pos, game::core::TerrainType::Path, 0);
+        }
+    }
+    for (const auto& pos : pathToB) {
+        if (pos != spawn2 && pos != coreB) {
+            map.setGrid(pos, game::core::TerrainType::Path, 0);
+        }
+    }
 
-    // 标记所有路径
-    for (const auto& pos : path1_down)
-        map.setGrid(pos, game::core::TerrainType::Path, 0);
-    for (const auto& pos : path2_down)
-        map.setGrid(pos, game::core::TerrainType::Path, 0);
-    for (const auto& pos : path_horizontal)
-        map.setGrid(pos, game::core::TerrainType::Path, 0);
-    for (const auto& pos : path_toA)
-        map.setGrid(pos, game::core::TerrainType::Path, 0);
-    for (const auto& pos : path_toB)
-        map.setGrid(pos, game::core::TerrainType::Path, 0);
-
-    // 5) 设置高台（战略要地）
     std::vector<game::core::MapPosition> highGround = {
-        // A方区域的高台
-        {3,2}, {3,3}, {5,2}, {5,3}, {7,2}, {7,3},
-        // B方区域的高台
-        {3,14}, {3,15}, {5,14}, {5,15}, {7,14}, {7,15},
-        // 中间区域的高台
-        {4,8}, {4,9}, {6,8}, {6,9}
+        {1,2}, {1,4}, {2,6}, {6,2}, {6,5},
+        {1,13}, {1,15}, {2,11}, {6,12}, {6,15}
     };
-    for (const auto& pos : highGround)
+    for (const auto& pos : highGround) {
         map.setGrid(pos, game::core::TerrainType::HighGround, 1);
-
-    // 6) 设置双核心路线。WaveSpawner 会按怪物序号轮流分配，保证两边压力接近。
-    std::vector<game::core::MapPosition> pathToA;
-    pathToA.push_back(spawn1);
-    for (const auto& pos : path1_down)
-        pathToA.push_back(pos);
-    for (const auto& pos : path_toA)
-        pathToA.push_back(pos);
-    pathToA.push_back(coreA);
-
-    std::vector<game::core::MapPosition> pathToB;
-    pathToB.push_back(spawn2);
-    for (const auto& pos : path2_down)
-        pathToB.push_back(pos);
-    for (const auto& pos : path_toB)
-        pathToB.push_back(pos);
-    pathToB.push_back(coreB);
+    }
 
     m_battleManager->setPaths({pathToA, pathToB});
-
-    // 根据玩家角色设置显示标记
+    m_deployView->setMapSize(map.rows(), map.cols());
     m_deployView->m_spawnPos = spawn1;
     m_deployView->m_corePos = m_isHost ? coreA : coreB;
 }
@@ -976,7 +1085,13 @@ void DeployPage::setupMap()
 void DeployPage::updateDeployCount()
 {
     int resources = m_battleManager ? m_battleManager->resources().resources() : 0;
-    m_deployCountLabel->setText(QString("已部署: %1 资源: %2").arg(m_deployedCount).arg(resources));
+    m_titleLabel->setText(QString("Deploy %1").arg(m_deployedCount));
+    m_deployCountLabel->setText(QString("Resource %1").arg(resources));
+    if (m_battleManager) {
+        const auto snapshot = m_battleManager->snapshot();
+        m_localCoreLabel->setText(QString("Your Core %1/10").arg(snapshot.baseHealth));
+        m_enemyCoreLabel->setText(QString("Enemy Core %1/10").arg(snapshot.opponentBaseHealth));
+    }
 }
 
 void DeployPage::refreshSnapshot()
@@ -998,8 +1113,8 @@ void DeployPage::reEnter()
     m_localReady = false;
     m_opponentReady = false;
     m_btnStartBattle->setEnabled(true);
-    m_btnStartBattle->setText("开战");
-    m_opponentLabel->setText("对手: 等待中...");
+    m_btnStartBattle->setText("Ready");
+    m_opponentLabel->setText("Syncing");
     m_selectedUnitId = -1;
     m_deployView->m_selectedUnitId = -1;
     m_deployView->hideRadialMenu();
@@ -1128,7 +1243,7 @@ void DeployPage::sendDeploymentEnd()
         m_netCtx.client->sendPacket(game::network::MsgType::DEPLOYMENT_END);
     }
 
-    m_opponentLabel->setText("对手: 已完成部署");
+    m_opponentLabel->setText("Sync OK");
     m_opponentLabel->setStyleSheet("color: #00E676; font-size: 16px;");
 }
 
@@ -1150,7 +1265,7 @@ void DeployPage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
     }
     case game::network::MsgType::DEPLOYMENT_END: {
         m_opponentReady = true;
-        m_opponentLabel->setText("对手: 已完成部署");
+        m_opponentLabel->setText("Sync OK");
         m_opponentLabel->setStyleSheet("color: #00E676; font-size: 16px;");
 
         // Host 检查双方是否都准备好了

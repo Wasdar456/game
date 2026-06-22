@@ -49,6 +49,7 @@
 #include "core/systems/BattleManager.h"     // 战斗总管理器
 #include "core/snapshot/BattleSnapshot.h"   // 战斗快照（只读）
 #include "core/base/CoreTypes.h"            // CardKind, TerrainType 等枚举
+#include "core/base/Constants.h"
 #include "core/map/MapPosition.h"           // 网格坐标
 
 // ========== 网络模块 ==========
@@ -57,6 +58,7 @@
 #include "ui/BattleResult.h"
 
 class PauseOverlay;
+class TutorialOverlay;
 class QKeyEvent;
 class QResizeEvent;
 
@@ -79,6 +81,7 @@ public:
     void clearBackgroundImage();
     void setImageCrop(int x, int y, int w, int h);
     void setImageOffset(int x, int y);
+    void setArtworkOverlayMode(bool enabled);
     void hideRadialMenu();
     void clearEffects();
 
@@ -150,6 +153,7 @@ private:
     int m_imageCropH;
     int m_imageOffsetX;
     int m_imageOffsetY;
+    bool m_artworkOverlayMode;
 
     void showRadialMenu(int unitId, int pixelX, int pixelY);
     int findUnitAt(int row, int col) const;
@@ -198,6 +202,7 @@ public:
      * 在 startBattle() 之前由 MainWindow 调用
      */
     void setNetworkContext(const NetworkContext& ctx);
+    void setDeck(const QVector<game::core::CardKind>& deck);
 
     /**
      * @brief 开始战斗
@@ -213,6 +218,7 @@ signals:
     void signalBackToDeploy();      ///< 怪物清空，返回部署阶段
 
 protected:
+    void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
 
@@ -225,14 +231,19 @@ private:
     QLabel *m_waveLabel;            ///< 波次显示
     QLabel *m_coreHpLabel;          ///< 核心血量
     QLabel *m_resourceLabel;        ///< 资源点数
+    QLabel *m_phaseLabel;
 
     // ===== 底部操作栏 =====
     QVector<QPushButton*> m_cardButtons;  ///< 底部卡牌按钮（对应 CardKind）
+    QVector<QLabel*> m_cardNameLabels;
+    QVector<QLabel*> m_cardCostLabels;
     QPushButton *m_btnPause;
     QPushButton *m_btnSpeed;
     QPushButton *m_btnSkill;
     QPushButton *m_btnExit;  ///< 退出按钮
     PauseOverlay *m_pauseOverlay;
+    QPushButton *m_btnGuide;
+    TutorialOverlay *m_tutorialOverlay;
 
     // ========== 游戏状态 ==========
     bool m_isPaused;                ///< 是否暂停
@@ -255,7 +266,35 @@ private:
     bool m_localWaveClear = false;      ///< 本端本波怪物是否已清空
     bool m_peerWaveClear = false;       ///< 对端本波怪物是否已清空
     double m_stateSyncTimer = 0.0;      ///< Host 权威快照同步计时
+    int m_displayCoreHealth = game::core::constants::InitialBaseHealth;
+    int m_displayOpponentCoreHealth = game::core::constants::InitialBaseHealth;
+    int m_displayResources = -1;
+    int m_selectedCardIndex = -1;
+    enum class TutorialStage {
+        Inactive,
+        Intro,
+        Resources,
+        CardPrompt,
+        WaitCard,
+        DeployPrompt,
+        WaitDeploy,
+        Tactics,
+        Final,
+        CoreWarning
+    };
+    TutorialStage m_tutorialStage = TutorialStage::Inactive;
+    bool m_tutorialPaused = false;
+    bool m_tutorialSessionActive = false;
+    bool m_coreWarningShown = false;
     QLabel *m_opponentLabel;            ///< 对手信息标签
+    QPixmap m_pvpArtwork;
+    QPixmap m_pveArtwork;
+    QPixmap m_pveUiOverlay;
+    QPixmap m_labMap01;
+    QPixmap m_labMap02;
+    QPixmap m_deckArtwork;
+    QVector<game::core::CardKind> m_deck;
+    QString m_activePveMapId;
 
     // ========== 初始化方法 ==========
     void initUI();
@@ -263,6 +302,14 @@ private:
     void updateStatusBar(const game::core::BattleSnapshot &snapshot);
     void finishBattle(const game::core::BattleSnapshot &snapshot, bool pveVictory = false);
     void setPaused(bool paused);
+    void refreshCardDisplay();
+    void updateCardVisualState(int resources);
+    void beginTutorial(bool replay);
+    void advanceTutorial();
+    void finishTutorial(bool skipped);
+    void updateTutorialTargets();
+    void layoutArtworkUi();
+    QRect artworkRect() const;
 
     // ========== 地图初始化 ==========
     void setupPveMap();                 ///< 初始化 PVE 地图（从 startBattle 提取）
