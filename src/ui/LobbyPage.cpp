@@ -76,6 +76,14 @@ QRectF scaledRect(const QRect &source, const QRectF &canvas,
                   source.height() * sy);
 }
 
+QString readyStatusStyle(const QString& color)
+{
+    return QString(
+        "QLabel { color:%1; background-color:rgb(242,222,176);"
+        " border:1px solid rgba(94,66,37,0.55); border-radius:4px;"
+        " padding:5px; font-size:14px; font-weight:800; }").arg(color);
+}
+
 } // namespace
 
 // ========== 鏋勯€犲嚱鏁?==========
@@ -478,14 +486,16 @@ void LobbyPage::connectSignals()
                         m_statusLog->append(">> 对方已进入房间，请点击准备");
                         m_btnReady->setEnabled(true);
                         m_readyStatusLabel->setText("对方已连接，请点击准备");
-                        m_readyStatusLabel->setStyleSheet("color: #00E676; font-size: 14px;");
+                        m_readyStatusLabel->setStyleSheet(readyStatusStyle("#287a43"));
+                        m_readyStatusLabel->update();
                     });
 
             // 杩炴帴鍑嗗鐘舵€佷俊鍙?
             connect(m_lobbyManager, &game::network::LobbyManager::peerReady,
                     this, [this]() {
                         m_readyStatusLabel->setText("对方已准备");
-                        m_readyStatusLabel->setStyleSheet("color: #00E676; font-size: 14px;");
+                        m_readyStatusLabel->setStyleSheet(readyStatusStyle("#287a43"));
+                        m_readyStatusLabel->update();
                     });
         } else {
             m_statusLog->append(">> 创建房间失败，请检查端口是否被占用。");
@@ -524,14 +534,16 @@ void LobbyPage::connectSignals()
                     m_statusLog->append(">> 已连接到房间，点击准备按钮");
                     m_btnReady->setEnabled(true);
                     m_readyStatusLabel->setText("已连接，请点击准备");
-                    m_readyStatusLabel->setStyleSheet("color: #00E676; font-size: 14px;");
+                    m_readyStatusLabel->setStyleSheet(readyStatusStyle("#287a43"));
+                    m_readyStatusLabel->update();
                 });
 
         // 杩炴帴鍑嗗鐘舵€佷俊鍙?
         connect(m_lobbyManager, &game::network::LobbyManager::peerReady,
                 this, [this]() {
                     m_readyStatusLabel->setText("对方已准备");
-                    m_readyStatusLabel->setStyleSheet("color: #00E676; font-size: 14px;");
+                    m_readyStatusLabel->setStyleSheet(readyStatusStyle("#287a43"));
+                    m_readyStatusLabel->update();
                 });
 
         // 杩炴帴 LobbyManager 鐨?gameStarted 淇″彿 鈫?杩涘叆閫夊崱椤?
@@ -559,7 +571,8 @@ void LobbyPage::connectSignals()
             m_btnReady->setEnabled(false);
             m_btnReady->setText("已准备");
             m_readyStatusLabel->setText("你已准备，等待对方准备...");
-            m_readyStatusLabel->setStyleSheet("color: #FFC107; font-size: 14px;");
+            m_readyStatusLabel->setStyleSheet(readyStatusStyle("#9a6418"));
+            m_readyStatusLabel->update();
             m_statusLog->append(">> 你已准备，等待对方准备...");
         }
     });

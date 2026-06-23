@@ -39,6 +39,7 @@
 #include <QKeyEvent>
 #include <QResizeEvent>
 #include <QSettings>
+#include <QPixmapCache>
 #include <algorithm>
 #include <cmath>
 
@@ -138,6 +139,65 @@ QRectF cardSourceRect(game::core::CardKind kind)
     return {440, 214, 162, 199};
 }
 
+const QPixmap* unitArtwork(const game::core::UnitSnapshot& unit)
+{
+    static const QPixmap sniper(":/images/new_art/unit_sniper_berry.png");
+    static const QPixmap bomber(":/images/new_art/unit_orange_bomber.png");
+    static const QPixmap tank(":/images/new_art/unit_berry_tank.png");
+    static const QPixmap healer(":/images/new_art/unit_peach_healer.png");
+    static const QPixmap defender(":/images/new_art/unit_coco_defender.png");
+
+    if (unit.type == game::core::ObjectType::CardHeal) {
+        return unit.maxHp >= 500 ? &defender : &healer;
+    }
+    if (unit.type == game::core::ObjectType::CardAttack) {
+        if (unit.maxHp == 400) return &sniper;
+        if (unit.maxHp == 500) return &bomber;
+        if (unit.maxHp == 450) return &tank;
+    }
+    return nullptr;
+}
+
+void drawCachedArtwork(QPainter& painter, const QRectF& target, const QPixmap& source)
+{
+    const QSize targetSize = target.size().toSize();
+    const QString key = QString("unit-%1-%2x%3")
+        .arg(source.cacheKey()).arg(targetSize.width()).arg(targetSize.height());
+    QPixmap scaled;
+    if (!QPixmapCache::find(key, &scaled)) {
+        scaled = source.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        QPixmapCache::insert(key, scaled);
+    }
+    const QPointF topLeft(target.center().x() - scaled.width() * 0.5,
+                          target.bottom() - scaled.height());
+    painter.drawPixmap(topLeft, scaled);
+}
+
+QRectF commandRingRect(const QPointF& center, qreal extent, const QSize& viewport)
+{
+    const qreal height = extent * 3.2;
+    const qreal width = height * 574.0 / 640.0;
+    const QPointF shiftedCenter = center + QPointF(extent * 0.24, -extent * 0.22);
+    QRectF ring(shiftedCenter.x() - width * 0.48,
+                shiftedCenter.y() - height * 0.54,
+                width,
+                height);
+    const qreal margin = 6.0;
+    if (ring.left() < margin) ring.moveLeft(margin);
+    if (ring.right() > viewport.width() - margin) ring.moveRight(viewport.width() - margin);
+    if (ring.top() < margin) ring.moveTop(margin);
+    if (ring.bottom() > viewport.height() - margin) ring.moveBottom(viewport.height() - margin);
+    return ring;
+}
+
+QRect commandButtonRect(const QRectF& ring, const QRectF& normalized)
+{
+    return QRectF(ring.left() + ring.width() * normalized.x(),
+                  ring.top() + ring.height() * normalized.y(),
+                  ring.width() * normalized.width(),
+                  ring.height() * normalized.height()).toRect();
+}
+
 void drawHealthBar(QPainter& painter,
                    const QRectF& rect,
                    int currentHealth,
@@ -208,6 +268,7 @@ BattleView::BattleView(QWidget *parent)
     , m_imageOffsetX(0)
     , m_imageOffsetY(0)
     , m_artworkOverlayMode(false)
+    , m_showGrid(true)
 {
     setMapSize(m_mapRows, m_mapCols);
 
@@ -218,18 +279,22 @@ BattleView::BattleView(QWidget *parent)
 
     QString radialStyle =
         "QPushButton {"
-        "  background-color: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-        "    stop:0 rgba(22,50,90,0.95), stop:1 rgba(12,28,50,0.95));"
-        "  color: #00E5FF;"
-        "  border: 2px solid rgba(0,212,255,0.65); border-radius: 18px;"
-        "  font-size: 13px; font-weight: bold; padding: 8px 14px;"
+        "  background: transparent;"
+        "  border: 2px solid transparent; border-radius: 8px;"
         "}"
-        "QPushButton:hover { background-color: rgba(0,212,255,0.25); border: 2px solid #00D4FF; }"
-        "QPushButton:disabled { color: #667788; border: 2px solid rgba(0,212,255,0.25); }"
+        "QPushButton:hover { background: rgba(255,245,180,0.18); border-color: rgba(255,235,130,0.85); }"
+        "QPushButton:pressed { background: rgba(70,45,20,0.22); }"
+        "QPushButton:disabled { background: rgba(35,30,24,0.34); border-color: transparent; }"
     ;
     m_btnUpgrade->setStyleSheet(radialStyle);
     m_btnMove->setStyleSheet(radialStyle);
     m_btnRetreat->setStyleSheet(radialStyle);
+    m_btnUpgrade->setToolTip("Upgrade");
+    m_btnMove->setToolTip("Move");
+    m_btnRetreat->setToolTip("Recall");
+    m_btnUpgrade->setCursor(Qt::PointingHandCursor);
+    m_btnMove->setCursor(Qt::PointingHandCursor);
+    m_btnRetreat->setCursor(Qt::PointingHandCursor);
 
     m_btnUpgrade->hide();
     m_btnMove->hide();
@@ -280,7 +345,12 @@ BattleView::BattleView(QWidget *parent)
                                            return effect.life <= 0.0;
                                        }),
                         m_effects.end());
-        update();
+        if (!m_effects.isEmpty()
+            || m_mode == InteractionMode::RADIAL_MENU
+            || m_mode == InteractionMode::MOVING
+            || m_mode == InteractionMode::DEPLOYING) {
+            update();
+        }
     });
     animTimer->start(50);  // 20 FPS 动画
 }
@@ -517,6 +587,15 @@ void BattleView::paintEvent(QPaintEvent *event)
     painter.setRenderHint(QPainter::Antialiasing);
 
     drawTerrain(painter);
+    if (m_showGrid) {
+        painter.setPen(QPen(QColor(76, 58, 36, 42), 1));
+        painter.setBrush(Qt::NoBrush);
+        for (int row = 0; row < m_mapRows; ++row) {
+            for (int col = 0; col < m_mapCols; ++col) {
+                painter.drawRect(cellRect(row, col));
+            }
+        }
+    }
     drawHoverCell(painter);
     if (!m_artworkOverlayMode) {
         drawSpawnMarker(painter);
@@ -527,6 +606,26 @@ void BattleView::paintEvent(QPaintEvent *event)
     drawMonsters(painter);
     drawProjectiles(painter);
     drawEffects(painter);
+
+    if (m_mode == InteractionMode::RADIAL_MENU && m_selectedUnitId >= 0) {
+        static const QPixmap commandRing(":/images/new_art/command_ring.png");
+        for (const auto &unit : m_snapshot.units) {
+            if (unit.id != m_selectedUnitId) continue;
+            const QRectF ringRect = commandRingRect(cellCenter(unit.row, unit.col),
+                                                    cellExtent(), size());
+            painter.drawPixmap(ringRect.toRect(), commandRing, commandRing.rect());
+            break;
+        }
+        m_btnUpgrade->raise();
+        m_btnMove->raise();
+        m_btnRetreat->raise();
+    }
+}
+
+void BattleView::setShowGrid(bool show)
+{
+    m_showGrid = show;
+    update();
 }
 
 // ========== drawTerrain() —— 绘制地形（渐变+纹理感） ==========
@@ -831,12 +930,30 @@ void BattleView::drawUnits(QPainter &painter)
         painter.drawRoundedRect(innerRect.adjusted(2, 3, 2, 3), 6, 6);
 
         // 单位方块（渐变填充）
-        QLinearGradient unitGrad(innerRect.topLeft(), innerRect.bottomRight());
-        unitGrad.setColorAt(0, unitColor.lighter(120));
-        unitGrad.setColorAt(1, unitColor.darker(110));
-        painter.setPen(QPen(borderColor, 2));
-        painter.setBrush(unitGrad);
-        painter.drawRoundedRect(innerRect, 6, 6);
+        const QPixmap* sprite = unitArtwork(unit);
+        if (sprite && !sprite->isNull()) {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(30, 20, 12, 82));
+            painter.drawEllipse(QRectF(unitRect.left() + unitRect.width() * 0.08,
+                                       unitRect.bottom() - unitRect.height() * 0.18,
+                                       unitRect.width() * 0.84,
+                                       unitRect.height() * 0.24));
+            const QRectF spriteRect(unitRect.center().x() - unitRect.width() * 0.67,
+                                    unitRect.bottom() - unitRect.height() * 1.38,
+                                    unitRect.width() * 1.34,
+                                    unitRect.height() * 1.40);
+            painter.save();
+            if (isOpponent) painter.setOpacity(0.76);
+            drawCachedArtwork(painter, spriteRect, *sprite);
+            painter.restore();
+        } else {
+            QLinearGradient unitGrad(innerRect.topLeft(), innerRect.bottomRight());
+            unitGrad.setColorAt(0, unitColor.lighter(120));
+            unitGrad.setColorAt(1, unitColor.darker(110));
+            painter.setPen(QPen(borderColor, 2));
+            painter.setBrush(unitGrad);
+            painter.drawRoundedRect(innerRect, 6, 6);
+        }
 
         // 选中发光效果
         if (unit.id == m_selectedUnitId && m_mode == InteractionMode::RADIAL_MENU) {
@@ -863,9 +980,11 @@ void BattleView::drawUnits(QPainter &painter)
                          QString("Lv%1").arg(unit.level));
 
         // 单位类型标签
-        QFont typeFont("Microsoft YaHei", 10, QFont::Bold);
-        painter.setFont(typeFont);
-        painter.drawText(innerRect, Qt::AlignCenter, label);
+        if (!sprite) {
+            QFont typeFont("Microsoft YaHei", 10, QFont::Bold);
+            painter.setFont(typeFont);
+            painter.drawText(innerRect, Qt::AlignCenter, label);
+        }
 
         // 血量条（渐变）
         int barWidth = std::max(1, static_cast<int>(innerRect.width()) - 2);
@@ -1147,17 +1266,16 @@ void BattleView::showRadialMenu(int unitId, int pixelX, int pixelY)
         if (unit.id == unitId) { level = unit.level; break; }
     }
 
-    int btnWidth = 70, btnHeight = 36;
-
-    const int menuOffset = static_cast<int>(cellExtent());
-    m_btnUpgrade->setGeometry(pixelX - btnWidth / 2, pixelY - menuOffset - btnHeight - 5, btnWidth, btnHeight);
-    m_btnMove->setGeometry(pixelX - menuOffset - btnWidth - 5, pixelY + 10, btnWidth, btnHeight);
-    m_btnRetreat->setGeometry(pixelX + menuOffset + 5, pixelY + 10, btnWidth, btnHeight);
+    const QRectF ring = commandRingRect(QPointF(pixelX, pixelY), cellExtent(), size());
+    m_btnUpgrade->setGeometry(commandButtonRect(ring, QRectF(0.02, 0.02, 0.52, 0.31)));
+    m_btnMove->setGeometry(commandButtonRect(ring, QRectF(0.42, 0.20, 0.50, 0.38)));
+    m_btnRetreat->setGeometry(commandButtonRect(ring, QRectF(0.65, 0.57, 0.34, 0.42)));
 
     // 升级按钮状态
     m_btnUpgrade->setEnabled(level < game::core::constants::MaxCardLevel);
-    m_btnUpgrade->setText(level >= game::core::constants::MaxCardLevel ?
-                              "Max Level" : QString("Lv%1 > %2").arg(level).arg(level + 1));
+    m_btnUpgrade->setText(QString());
+    m_btnMove->setText(QString());
+    m_btnRetreat->setText(QString());
 
     m_btnUpgrade->show();
     m_btnMove->show();
@@ -1952,6 +2070,7 @@ void BattlePage::setupPvpMap()
         map.setGrid(pos, game::core::TerrainType::HighGround, 1);
     }
 
+    m_battleManager->rebuildMapOccupancy();
     m_battleManager->setPaths({pathToA, pathToB});
     m_battleView->setMapSize(map.rows(), map.cols());
     m_battleView->m_spawnPos = spawn1;
@@ -2241,6 +2360,7 @@ void BattlePage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
 // ========== startBattle() —— 开始战斗 ==========
 void BattlePage::startBattle()
 {
+    m_renderTick = 0;
     // 获取 BattleManager 引用（通过 MainWindow）
     MainWindow *mainWin = qobject_cast<MainWindow*>(window());
     if (mainWin) {
@@ -2363,6 +2483,28 @@ void BattlePage::startBattle()
 }
 
 // ========== onGameTick() —— 游戏主循环回调 ==========
+void BattlePage::setRevealPaused(bool paused)
+{
+    if (!m_gameTimer) return;
+    if (paused) {
+        m_gameTimer->stop();
+    } else if (m_inBattlePhase && !m_isPaused && !m_tutorialPaused) {
+        m_gameTimer->start(16);
+    }
+}
+
+void BattlePage::setShowGrid(bool show)
+{
+    if (m_battleView) m_battleView->setShowGrid(show);
+}
+
+void BattlePage::pauseForFocusLoss()
+{
+    if (m_inBattlePhase && !m_isPvp && !m_isPaused) {
+        setPaused(true);
+    }
+}
+
 void BattlePage::onGameTick()
 {
     if (!m_battleManager || m_isPaused || m_tutorialPaused) return;
@@ -2453,8 +2595,10 @@ void BattlePage::onGameTick()
     }
 
     // PVP: 定期同步资源
-    m_battleView->updateFromSnapshot(snap);
-    updateStatusBar(snap);
+    if ((++m_renderTick & 1) == 0) {
+        m_battleView->updateFromSnapshot(snap);
+        updateStatusBar(snap);
+    }
 
 }
 

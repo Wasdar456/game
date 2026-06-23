@@ -17,6 +17,7 @@
 #include "ui/MainWindow.h"
 #include <QApplication>
 #include <QPropertyAnimation>
+#include <QSettings>
 #include <QTimer>
 
 // ========== 寮曞叆鏍稿績灞傚ご鏂囦欢 ==========
@@ -49,6 +50,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_resultPage(nullptr)
     , m_transitionOverlay(nullptr)
     , m_previousPage(nullptr)
+    , m_battleRevealPlayed(false)
 {
     // ----- 鍒涘缓 BattleManager -----
     // BattleManager 鏄父鎴忔牳蹇冮€昏緫鐨勬€荤鐞嗗櫒
@@ -66,7 +68,31 @@ MainWindow::MainWindow(QWidget *parent)
     initUI();
     connectSignals();
     AudioManager::instance().initialize();
+    QSettings settings;
+    AudioManager::instance().setVolumes(settings.value("audio/bgm", 70).toInt(),
+                                        settings.value("audio/sfx", 85).toInt());
+    const bool showGrid = settings.value("game/showGrid", true).toBool();
+    m_battlePage->setShowGrid(showGrid);
+    m_deployPage->setShowGrid(showGrid);
+    const QSize resolution = settings.value("display/resolution", QSize(1280, 720)).toSize();
+    resize(resolution);
+    if (settings.value("display/fullscreen", false).toBool()) {
+        QTimer::singleShot(0, this, [this]() { showFullScreen(); });
+    }
     AudioManager::instance().setScene(AudioManager::Scene::Menu);
+}
+
+void MainWindow::changeEvent(QEvent *event)
+{
+    QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::WindowDeactivate) {
+        QSettings settings;
+        if (settings.value("game/autoPause", true).toBool()
+            && m_stackWidget
+            && m_stackWidget->currentWidget() == m_battlePage) {
+            m_battlePage->pauseForFocusLoss();
+        }
+    }
 }
 
 // ========== 鏋愭瀯鍑芥暟 ==========
@@ -125,15 +151,27 @@ void MainWindow::fadeToPage(QWidget *page)
         return;
     }
 
-    current->setGraphicsEffect(nullptr);
-    page->setGraphicsEffect(nullptr);
-    m_stackWidget->setCurrentWidget(page);
-    page->show();
-    page->update();
-    AudioManager::instance().setScene(
-        page == m_battlePage || page == m_deployPage
-            ? AudioManager::Scene::Battle
-            : AudioManager::Scene::Menu);
+    const auto switchPage = [this, current, page]() {
+        current->setGraphicsEffect(nullptr);
+        page->setGraphicsEffect(nullptr);
+        m_stackWidget->setCurrentWidget(page);
+        page->show();
+        page->update();
+        AudioManager::instance().setScene(
+            page == m_battlePage || page == m_deployPage
+                ? AudioManager::Scene::Battle
+                : AudioManager::Scene::Menu);
+    };
+
+    if (page == m_battlePage && m_transitionOverlay && !m_battleRevealPlayed) {
+        m_battleRevealPlayed = true;
+        m_battlePage->setRevealPaused(true);
+        m_transitionOverlay->play(
+            switchPage,
+            [this]() { m_battlePage->setRevealPaused(false); });
+        return;
+    }
+    switchPage();
 }
 
 // ========== connectSignals() 鈥斺€?杩炴帴淇″彿涓庢Ы ==========
@@ -179,6 +217,7 @@ void MainWindow::connectSignals()
             this, [this](const QString& mapId) {
                 m_networkContext = NetworkContext();  // 閲嶇疆涓洪粯璁わ紙闈濸VP锛?
                 m_networkContext.pveMapId = mapId;
+                m_battleRevealPlayed = false;
                 m_previousPage = m_lobbyPage;
                 fadeToPage(m_deckPage);
             });
@@ -187,6 +226,7 @@ void MainWindow::connectSignals()
     connect(m_lobbyPage, &LobbyPage::signalPvpReady,
             this, [this](const NetworkContext& ctx) {
                 m_networkContext = ctx;
+                m_battleRevealPlayed = false;
                 m_previousPage = m_lobbyPage;
                 fadeToPage(m_deckPage);
             });
@@ -320,5 +360,11 @@ void MainWindow::connectSignals()
     connect(m_settingsPage, &SettingsPage::signalVolumeChanged,
             this, [](int bgm, int sfx) {
                 AudioManager::instance().setVolumes(bgm, sfx);
+            });
+
+    connect(m_settingsPage, &SettingsPage::signalShowGridChanged,
+            this, [this](bool show) {
+                m_battlePage->setShowGrid(show);
+                m_deployPage->setShowGrid(show);
             });
 }

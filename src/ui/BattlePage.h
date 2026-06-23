@@ -82,6 +82,7 @@ public:
     void setImageCrop(int x, int y, int w, int h);
     void setImageOffset(int x, int y);
     void setArtworkOverlayMode(bool enabled);
+    void setShowGrid(bool show);
     void hideRadialMenu();
     void clearEffects();
 
@@ -154,6 +155,7 @@ private:
     int m_imageOffsetX;
     int m_imageOffsetY;
     bool m_artworkOverlayMode;
+    bool m_showGrid;
 
     void showRadialMenu(int unitId, int pixelX, int pixelY);
     int findUnitAt(int row, int col) const;
@@ -210,6 +212,9 @@ public:
      * 初始化战斗状态并启动游戏主循环
      */
     void startBattle();
+    void setRevealPaused(bool paused);
+    void setShowGrid(bool show);
+    void pauseForFocusLoss();
 
 signals:
     void signalBattleFinished(const BattleResult &result);
@@ -253,6 +258,7 @@ private:
     static constexpr double WAVE_INTERVAL = 15.0;  ///< 每波间隔 15 秒
     static constexpr int PVE_FINAL_WAVE = 10;
     bool m_resultEmitted = false;
+    int m_renderTick = 0;
 
     // ========== 核心层引用 ==========
     game::core::BattleManager *m_battleManager;  ///< 通过 MainWindow 获取

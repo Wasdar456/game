@@ -50,6 +50,7 @@ public:
     void updateFromSnapshot(const game::core::BattleSnapshot &snapshot);
     void setMapSize(int rows, int cols);
     void setArtworkOverlayMode(bool enabled);
+    void setShowGrid(bool show);
 
     // 交互状态
     enum class InteractionMode {
@@ -94,6 +95,7 @@ private:
     int m_mapRows;
     int m_mapCols;
     bool m_artworkOverlayMode;
+    bool m_showGrid;
     QPushButton *m_btnUpgrade;
     QPushButton *m_btnMove;
     QPushButton *m_btnRecall;
@@ -147,6 +149,7 @@ public:
      * 保留现有单位，允许补充部署
      */
     void reEnter();
+    void setShowGrid(bool show);
 
 signals:
     void signalBattleStart();  ///< 开战，进入战斗页面

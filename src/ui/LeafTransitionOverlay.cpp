@@ -2,53 +2,54 @@
 
 #include <QEasingCurve>
 #include <QPainter>
-#include <QPainterPath>
 #include <QVariantAnimation>
 #include <QtMath>
-
-namespace {
-constexpr qreal Pi = 3.14159265358979323846;
-}
 
 LeafTransitionOverlay::LeafTransitionOverlay(QWidget *parent)
     : QWidget(parent)
     , m_animation(new QVariantAnimation(this))
+    , m_smoke(":/images/new_art/battle_smoke.png")
     , m_progress(0.0)
-    , m_midpointDone(false)
 {
     setAttribute(Qt::WA_TranslucentBackground, true);
     hide();
 
-    m_animation->setDuration(620);
+    m_animation->setDuration(1350);
     m_animation->setStartValue(0.0);
     m_animation->setEndValue(1.0);
     m_animation->setEasingCurve(QEasingCurve::InOutCubic);
     connect(m_animation, &QVariantAnimation::valueChanged, this,
             [this](const QVariant &value) {
                 m_progress = value.toReal();
-                if (!m_midpointDone && m_progress >= 0.50) {
-                    m_midpointDone = true;
-                    if (m_midpointAction) {
-                        m_midpointAction();
-                    }
-                }
                 update();
             });
     connect(m_animation, &QVariantAnimation::finished, this, [this]() {
         hide();
-        m_midpointAction = {};
+        if (m_finishedAction) {
+            auto action = std::move(m_finishedAction);
+            action();
+        }
     });
 }
 
-void LeafTransitionOverlay::play(std::function<void()> midpointAction)
+void LeafTransitionOverlay::play(std::function<void()> revealAction,
+                                 std::function<void()> finishedAction)
 {
     if (isRunning()) {
         return;
     }
-    m_midpointAction = std::move(midpointAction);
-    m_midpointDone = false;
+    m_finishedAction = std::move(finishedAction);
     m_progress = 0.0;
+    if (revealAction) {
+        revealAction();
+    }
     setGeometry(parentWidget()->rect());
+    if (m_smokeViewport != size()) {
+        m_smokeViewport = size();
+        m_scaledSmoke = m_smoke.scaled(size(),
+                                       Qt::KeepAspectRatioByExpanding,
+                                       Qt::SmoothTransformation);
+    }
     show();
     raise();
     m_animation->start();
@@ -64,44 +65,20 @@ void LeafTransitionOverlay::paintEvent(QPaintEvent *event)
     Q_UNUSED(event);
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
+    const qreal reveal = m_progress;
+    const qreal remaining = 1.0 - reveal;
+    painter.fillRect(rect(), QColor(18, 16, 12, qRound(remaining * 168)));
 
-    const qreal cover = qSin(m_progress * Pi);
-    painter.fillRect(rect(), QColor(31, 28, 18, qRound(cover * 196)));
-
-    const int leafCount = 34;
-    for (int i = 0; i < leafCount; ++i) {
-        const qreal lane = (i + 0.5) / leafCount;
-        const qreal direction = (i % 2 == 0) ? 1.0 : -1.0;
-        const qreal startX = direction > 0 ? -100.0 : width() + 100.0;
-        const qreal endX = direction > 0 ? width() + 100.0 : -100.0;
-        const qreal local = qBound(0.0, m_progress * 1.45 - (i % 7) * 0.035, 1.0);
-        const qreal x = startX + (endX - startX) * local;
-        const qreal y = height() * lane
-                        + qSin(local * 8.0 + i * 0.71) * (22.0 + i % 4 * 5.0);
-        const qreal size = 18.0 + (i % 5) * 4.0;
-
+    if (!m_scaledSmoke.isNull()) {
+        const qreal scale = 1.0 + reveal * 0.13;
+        const QSizeF smokeSize(m_scaledSmoke.width() * scale,
+                               m_scaledSmoke.height() * scale);
+        const QPointF topLeft((width() - smokeSize.width()) * 0.5,
+                              (height() - smokeSize.height()) * 0.5);
         painter.save();
-        painter.translate(x, y);
-        painter.rotate(direction * (local * 320.0 + i * 19.0));
-        QPainterPath leaf;
-        leaf.moveTo(-size, 0);
-        leaf.cubicTo(-size * 0.35, -size * 0.72,
-                     size * 0.55, -size * 0.52,
-                     size, 0);
-        leaf.cubicTo(size * 0.4, size * 0.56,
-                     -size * 0.42, size * 0.65,
-                     -size, 0);
-        const QColor colors[] = {
-            QColor(73, 112, 55, 238),
-            QColor(120, 139, 62, 238),
-            QColor(173, 143, 57, 236),
-            QColor(67, 91, 48, 240)
-        };
-        painter.setPen(QPen(QColor(45, 63, 34, 210), 1.2));
-        painter.setBrush(colors[i % 4]);
-        painter.drawPath(leaf);
-        painter.drawLine(QPointF(-size * 0.72, 0), QPointF(size * 0.72, 0));
+        painter.setOpacity(qPow(remaining, 1.35));
+        painter.drawPixmap(QRectF(topLeft, smokeSize),
+                           m_scaledSmoke, QRectF(m_scaledSmoke.rect()));
         painter.restore();
     }
-
 }

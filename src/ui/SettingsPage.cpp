@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QSettings>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -70,6 +71,17 @@ SettingsPage::SettingsPage(QWidget *parent)
     , m_btnSave(nullptr)
 {
     initUI();
+
+    QSettings settings;
+    m_bgmSlider->setValue(settings.value("audio/bgm", 70).toInt());
+    m_sfxSlider->setValue(settings.value("audio/sfx", 85).toInt());
+    const QSize savedSize = settings.value("display/resolution", QSize(1280, 720)).toSize();
+    const int resolutionIndex = m_resolutionCombo->findData(savedSize);
+    m_resolutionCombo->setCurrentIndex(resolutionIndex >= 0 ? resolutionIndex : 0);
+    m_fullscreenCheck->setChecked(settings.value("display/fullscreen", false).toBool());
+    m_gridCheck->setChecked(settings.value("game/showGrid", true).toBool());
+    m_autoPauseCheck->setChecked(settings.value("game/autoPause", true).toBool());
+
     connectSignals();
 }
 
@@ -161,7 +173,10 @@ void SettingsPage::initUI()
     displayLayout->setContentsMargins(20, 25, 20, 15);
 
     m_resolutionCombo = new QComboBox(this);
-    m_resolutionCombo->addItems({"1280 x 720 (720p)", "1600 x 900 (900p)", "1920 x 1080 (1080p)", "2560 x 1440 (2K)"});
+    m_resolutionCombo->addItem("1280 x 720 (720p)", QSize(1280, 720));
+    m_resolutionCombo->addItem("1600 x 900 (900p)", QSize(1600, 900));
+    m_resolutionCombo->addItem("1920 x 1080 (1080p)", QSize(1920, 1080));
+    m_resolutionCombo->addItem("2560 x 1440 (2K)", QSize(2560, 1440));
     m_resolutionCombo->setFixedHeight(38);
     m_resolutionCombo->setStyleSheet(
         "QComboBox { background-color: rgba(255,244,211,0.78); color: #3B281C;"
@@ -229,6 +244,25 @@ void SettingsPage::connectSignals()
     });
 
     connect(m_btnSave, &QPushButton::clicked, this, [this]() {
+        QSettings settings;
+        settings.setValue("audio/bgm", m_bgmSlider->value());
+        settings.setValue("audio/sfx", m_sfxSlider->value());
+        settings.setValue("display/resolution", m_resolutionCombo->currentData().toSize());
+        settings.setValue("display/fullscreen", m_fullscreenCheck->isChecked());
+        settings.setValue("game/showGrid", m_gridCheck->isChecked());
+        settings.setValue("game/autoPause", m_autoPauseCheck->isChecked());
+        settings.sync();
+
+        emit signalVolumeChanged(m_bgmSlider->value(), m_sfxSlider->value());
+        emit signalShowGridChanged(m_gridCheck->isChecked());
+
+        QWidget *top = window();
+        if (m_fullscreenCheck->isChecked()) {
+            top->showFullScreen();
+        } else {
+            top->showNormal();
+            top->resize(m_resolutionCombo->currentData().toSize());
+        }
         m_btnSave->setText("已保存");
         QTimer::singleShot(2000, this, [this]() {
             m_btnSave->setText("保存设置");

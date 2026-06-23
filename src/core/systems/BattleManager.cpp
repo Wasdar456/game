@@ -142,6 +142,19 @@ void BattleManager::clearMonsters() {
     waveElapsedSeconds_ = 0.0;
 }
 
+void BattleManager::rebuildMapOccupancy() {
+    for (const auto& card : cardSystem_.cards()) {
+        if (card && !card->isDead()) {
+            map_.setOccupied(card->position(), true, card->id());
+        }
+    }
+    for (const auto& card : opponentCardSystem_.cards()) {
+        if (card && !card->isDead()) {
+            map_.setOccupied(card->position(), true, card->id() + 1000);
+        }
+    }
+}
+
 void BattleManager::syncPvpUnitsFromHostSnapshot(const BattleSnapshot& hostSnapshot, bool localIsHost) {
     auto syncSide = [this, &hostSnapshot](CardSystem& system, bool hostSide) {
         std::set<int> seen;
@@ -164,9 +177,13 @@ void BattleManager::syncPvpUnitsFromHostSnapshot(const BattleSnapshot& hostSnaps
             seen.insert(localId);
         }
 
-        for (auto& card : system.cards()) {
-            if (card && seen.find(card->id()) == seen.end()) {
-                card->setHp(0);
+        // End-of-wave snapshots may briefly omit a complete side while pages switch.
+        // Only an active battle snapshot is authoritative enough to remove missing units.
+        if (hostSnapshot.waveActive) {
+            for (auto& card : system.cards()) {
+                if (card && seen.find(card->id()) == seen.end()) {
+                    card->setHp(0);
+                }
             }
         }
         system.removeDead(map_);

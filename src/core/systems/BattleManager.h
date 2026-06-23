@@ -70,6 +70,7 @@ public:
     void clearBattle();
     void clearMonsters();
     void syncPvpUnitsFromHostSnapshot(const BattleSnapshot& hostSnapshot, bool localIsHost);
+    void rebuildMapOccupancy();
 
     int currentWave() const { return currentWave_; }
     int defeatedMonsters() const { return defeatedMonsters_; }

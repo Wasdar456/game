@@ -76,6 +76,9 @@ public:
      */
     game::core::BattleManager* battleManager() const { return m_battleManager; }
 
+protected:
+    void changeEvent(QEvent *event) override;
+
 private:
     // ========== 核心层实例 ==========
     game::core::BattleManager *m_battleManager;  ///< 战斗管理器（游戏核心）
@@ -98,6 +101,7 @@ private:
 
     // ========== 网络上下文（PVP 模式） ==========
     NetworkContext m_networkContext;  ///< 从 LobbyPage 传递到 BattlePage 的联机信息
+    bool m_battleRevealPlayed;
 
     // ========== 私有方法 ==========
     void initUI();           ///< 初始化 UI 组件和布局
