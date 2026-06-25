@@ -23,6 +23,7 @@ public:
 
 signals:
     void signalReplay();
+    void signalReport();
     void signalReturnToLobby();
 
 protected:
@@ -43,6 +44,7 @@ private:
     QLabel *m_messageLabel;
     QPushButton *m_replayButton;
     QPushButton *m_lobbyButton;
+    QPushButton *m_reportButton;
     QTimer m_animationTimer;
     qreal m_phase;
 

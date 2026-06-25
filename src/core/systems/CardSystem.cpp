@@ -4,9 +4,52 @@
 #include "core/units/AttackUnit.h"
 #include "core/units/HealUnit.h"
 #include "core/units/ProduceUnit.h"
+#include <QSettings>
 #include <algorithm>
 
 namespace game::core {
+
+namespace {
+
+QString collectionKey(CardKind kind)
+{
+    switch (kind) {
+    case CardKind::Attack: return "attack";
+    case CardKind::Sniper: return "sniper";
+    case CardKind::Aoe: return "aoe";
+    case CardKind::Specialist: return "specialist";
+    case CardKind::Produce: return "produce";
+    case CardKind::Arsenal: return "arsenal";
+    case CardKind::Heal: return "heal";
+    case CardKind::HeavyMedic: return "heavy_medic";
+    }
+    return "unknown";
+}
+
+int collectionLevel(CardKind kind)
+{
+    QSettings settings;
+    return qBound(1, settings.value(QString("collection/level/%1").arg(collectionKey(kind)), 1).toInt(), 3);
+}
+
+void applyCollectionBonus(const std::shared_ptr<Card>& card, CardKind kind)
+{
+    if (!card) return;
+    const int bonusSteps = qMax(0, collectionLevel(kind) - 1);
+    if (bonusSteps <= 0) return;
+
+    const int hpBonus = qRound(card->maxHp() * 0.03 * bonusSteps);
+    if (hpBonus > 0) {
+        card->setMaxHp(card->maxHp() + hpBonus);
+        card->heal(hpBonus);
+    }
+    if (card->attack() > 0) {
+        const int attackBonus = qMax(1, qRound(card->attack() * 0.03 * bonusSteps));
+        card->setAttack(card->attack() + attackBonus);
+    }
+}
+
+} // namespace
 
 CardSystem::CardSystem(int firstUnitId)
     : nextUnitId_(firstUnitId) {}
@@ -53,6 +96,7 @@ std::shared_ptr<Card> CardSystem::deploy(CardKind kind, MapPosition position,
 
     // 部署成功后同时更新卡牌列表和地图占用。
     if (!card) return nullptr;
+    applyCollectionBonus(card, kind);
     cards_.push_back(card);
     map.setOccupied(position, true, card->id());
     return card;

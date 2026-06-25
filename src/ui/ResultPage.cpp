@@ -36,6 +36,7 @@ ResultPage::ResultPage(QWidget *parent)
     , m_messageLabel(nullptr)
     , m_replayButton(nullptr)
     , m_lobbyButton(nullptr)
+    , m_reportButton(nullptr)
     , m_phase(0.0)
 {
     initUI();
@@ -100,8 +101,8 @@ void ResultPage::paintEvent(QPaintEvent *event)
         QFont rewardFont("Segoe UI", qMax(13, qRound(28 * scale)), QFont::Bold);
         painter.setFont(rewardFont);
         const QString reward = m_result.isPvp
-            ? QString("Enemy Core  %1").arg(m_result.opponentCoreHealth)
-            : QString("Escaped  %1").arg(m_result.escapedMonsters);
+            ? QString("Supply +%1").arg(m_result.supplyTicketsEarned)
+            : QString("Supply +%1").arg(m_result.supplyTicketsEarned);
         painter.drawText(mapped(won ? QRectF(780, 535, 355, 70)
                                     : QRectF(770, 535, 365, 70)),
                          Qt::AlignCenter, reward);
@@ -149,11 +150,14 @@ void ResultPage::initUI()
 
     m_replayButton = new QPushButton(this);
     m_lobbyButton = new QPushButton(this);
+    m_reportButton = new QPushButton(this);
     m_replayButton->setCursor(Qt::PointingHandCursor);
     m_lobbyButton->setCursor(Qt::PointingHandCursor);
+    m_reportButton->setCursor(Qt::PointingHandCursor);
 
     connect(m_replayButton, &QPushButton::clicked, this, &ResultPage::signalReplay);
     connect(m_lobbyButton, &QPushButton::clicked, this, &ResultPage::signalReturnToLobby);
+    connect(m_reportButton, &QPushButton::clicked, this, &ResultPage::signalReport);
 
     updateContent();
     updateLayout();
@@ -175,8 +179,10 @@ void ResultPage::updateContent()
         "QPushButton:pressed { background:rgba(70,45,24,48); }";
     m_replayButton->setStyleSheet(hotspotStyle);
     m_lobbyButton->setStyleSheet(hotspotStyle);
+    m_reportButton->setStyleSheet(hotspotStyle);
     m_replayButton->setToolTip(m_result.isPvp ? "Rematch" : "Retry");
     m_lobbyButton->setToolTip("Back to Menu");
+    m_reportButton->setToolTip("Battle replay and data report");
 }
 
 void ResultPage::updateLayout()
@@ -193,13 +199,16 @@ void ResultPage::updateLayout()
     if (victory) {
         m_replayButton->setGeometry(mapped(QRectF(320, 808, 292, 96)));
         m_lobbyButton->setGeometry(mapped(QRectF(653, 808, 315, 96)));
+        m_reportButton->setGeometry(mapped(QRectF(1033, 808, 330, 96)));
     } else {
         m_replayButton->setGeometry(mapped(QRectF(305, 816, 290, 98)));
         m_lobbyButton->setGeometry(mapped(QRectF(667, 816, 320, 98)));
+        m_reportButton->setGeometry(mapped(QRectF(1074, 816, 330, 98)));
     }
 
     for (QWidget *widget : {static_cast<QWidget*>(m_replayButton),
-                            static_cast<QWidget*>(m_lobbyButton)}) {
+                            static_cast<QWidget*>(m_lobbyButton),
+                            static_cast<QWidget*>(m_reportButton)}) {
         widget->raise();
     }
 }

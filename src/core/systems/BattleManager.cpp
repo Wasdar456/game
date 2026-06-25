@@ -230,6 +230,7 @@ BattleSnapshot BattleManager::snapshot() const {
         unit.level = card->level();
         unit.range = card->attackRange();
         unit.moveLimit = card->moveLimit();
+        unit.deployCost = card->deployCost();
         result.units.push_back(unit);
     }
 
@@ -248,6 +249,7 @@ BattleSnapshot BattleManager::snapshot() const {
             unit.level = card->level();
             unit.range = card->attackRange();
             unit.moveLimit = card->moveLimit();
+            unit.deployCost = card->deployCost();
             result.units.push_back(unit);
         }
     }
@@ -311,6 +313,7 @@ BattleSnapshot BattleManager::opponentSnapshot() const {
         unit.level = card->level();
         unit.range = card->attackRange();
         unit.moveLimit = card->moveLimit();
+        unit.deployCost = card->deployCost();
         result.units.push_back(unit);
     }
 
@@ -328,6 +331,7 @@ BattleSnapshot BattleManager::opponentSnapshot() const {
         unit.level = card->level();
         unit.range = card->attackRange();
         unit.moveLimit = card->moveLimit();
+        unit.deployCost = card->deployCost();
         result.units.push_back(unit);
     }
 

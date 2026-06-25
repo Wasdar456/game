@@ -2,6 +2,7 @@
 
 #include "ui/ArtHotspot.h"
 #include "ui/AudioManager.h"
+#include "ui/CardCollection.h"
 
 #include <QEasingCurve>
 #include <QGraphicsOpacityEffect>
@@ -14,6 +15,8 @@
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QShowEvent>
+#include <QStringList>
+#include <QTimer>
 #include <QToolTip>
 
 namespace {
@@ -75,14 +78,23 @@ DeckPage::DeckPage(QWidget *parent)
     , m_titleLabel(nullptr)
     , m_detailPanel(nullptr)
     , m_btnStartBattle(nullptr)
-    , m_selectedCardIndex(1)
+    , m_ticketLabel(nullptr)
+    , m_btnDrawPanel(nullptr)
+    , m_drawOverlay(nullptr)
+    , m_drawResultLabel(nullptr)
+    , m_btnDrawOne(nullptr)
+    , m_btnDrawTen(nullptr)
+    , m_btnCloseDraw(nullptr)
+    , m_btnUpgradeCard(nullptr)
+    , m_selectedCardIndex(0)
     , m_cardPoolScroll(nullptr)
     , m_backHotspot(nullptr)
     , m_startHotspot(nullptr)
 {
+    CardCollection::initializeDefaults();
     createCardPoolData();
 
-    m_selectedSlots = {1, 2, 3, 5, 6};
+    m_selectedSlots = {0, 4, -1, -1, -1};
     initUI();
     connectSignals();
     refreshDetailPanel(m_selectedCardIndex);
@@ -126,6 +138,7 @@ void DeckPage::showEvent(QShowEvent *event)
     }
     refreshDeckSlotsDisplay();
     updateStartBattleButton();
+    refreshCollectionDisplay();
     update();
 }
 
@@ -186,12 +199,17 @@ void DeckPage::initUI()
     );
 
     const QString artwork = ":/images/artwork/deck_atlas.png";
-    for (int i = 0; i < kCardRects.size(); ++i) {
+    for (int i = 0; i < m_allCards.size(); ++i) {
         auto *hotspot = new ArtHotspot(artwork, kCardRects[i], this);
         hotspot->setGlowColor(QColor(255, 220, 128));
         hotspot->setToolTip(m_allCards[i].name);
         hotspot->setClickHandler([this, i]() {
             refreshDetailPanel(i);
+            if (!CardCollection::isOwned(m_allCards[i].kind)) {
+                QToolTip::showText(mapToGlobal(scaledRect(kCardRects[i], m_canvasRect).center().toPoint()),
+                                   "Locked. Open Supply Draw to unlock this card.", this);
+                return;
+            }
             for (int slot = 0; slot < MAX_DECK_SLOTS; ++slot) {
                 if (m_selectedSlots[slot] == -1) {
                     m_selectedSlots[slot] = i;
@@ -204,6 +222,15 @@ void DeckPage::initUI()
                                "出战卡组已满，先点击下方卡牌移除一个槽位", this);
         });
         m_cardHotspots.append(hotspot);
+
+        auto *lockLabel = new QLabel("LOCK", this);
+        lockLabel->setAlignment(Qt::AlignCenter);
+        lockLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+        lockLabel->setStyleSheet(
+            "QLabel { color:#fff1c4; background:rgba(35,25,18,0.64);"
+            " border:2px solid rgba(255,218,115,0.72); border-radius:5px;"
+            " font-size:22px; font-weight:900; }");
+        m_cardLockLabels.append(lockLabel);
     }
 
     for (int i = 0; i < MAX_DECK_SLOTS; ++i) {
@@ -247,6 +274,52 @@ void DeckPage::initUI()
         }
     });
 
+    m_ticketLabel = new QLabel(this);
+    m_ticketLabel->setAlignment(Qt::AlignCenter);
+    m_ticketLabel->setStyleSheet(
+        "QLabel { color:#352314; background:rgba(244,224,174,0.96);"
+        " border:2px solid rgba(92,64,36,0.8); border-radius:8px;"
+        " font-size:15px; font-weight:900; padding:4px 8px; }");
+
+    m_btnDrawPanel = new QPushButton("Draw", this);
+    m_btnDrawPanel->setCursor(Qt::PointingHandCursor);
+    m_btnDrawPanel->setStyleSheet(
+        "QPushButton { color:#352314; background:rgba(246,218,147,0.97);"
+        " border:2px solid #704821; border-radius:9px; font-size:15px; font-weight:900; }"
+        "QPushButton:hover { background:#ffe4a0; border-color:#d4a047; }"
+        "QPushButton:pressed { background:#c99653; }");
+    connect(m_btnDrawPanel, &QPushButton::clicked, this, &DeckPage::openDrawPanel);
+
+    m_drawOverlay = new QWidget(this);
+    m_drawOverlay->hide();
+    m_drawOverlay->setStyleSheet(
+        "QWidget { background:rgba(37,51,35,0.88); border-radius:12px; }"
+        "QLabel { color:#fff3ce; background:transparent; font-size:16px; font-weight:800; }"
+        "QPushButton { color:#352314; background:#efd497; border:2px solid #704821;"
+        " border-radius:9px; font-size:15px; font-weight:900; padding:6px; }"
+        "QPushButton:hover { background:#ffe4a0; border-color:#d4a047; }"
+        "QPushButton:pressed { background:#c99653; }");
+    m_drawResultLabel = new QLabel(m_drawOverlay);
+    m_drawResultLabel->setAlignment(Qt::AlignCenter);
+    m_drawResultLabel->setWordWrap(true);
+    m_btnDrawOne = new QPushButton("x1", m_drawOverlay);
+    m_btnDrawTen = new QPushButton("x10", m_drawOverlay);
+    m_btnCloseDraw = new QPushButton("Close", m_drawOverlay);
+    connect(m_btnDrawOne, &QPushButton::clicked, this, [this]() { performDraw(1); });
+    connect(m_btnDrawTen, &QPushButton::clicked, this, [this]() { performDraw(10); });
+    connect(m_btnCloseDraw, &QPushButton::clicked, m_drawOverlay, &QWidget::hide);
+
+    m_btnUpgradeCard = new QPushButton("Lv Up", this);
+    m_btnUpgradeCard->setCursor(Qt::PointingHandCursor);
+    m_btnUpgradeCard->setStyleSheet(m_btnDrawPanel->styleSheet());
+    connect(m_btnUpgradeCard, &QPushButton::clicked, this, [this]() {
+        if (m_selectedCardIndex < 0 || m_selectedCardIndex >= m_allCards.size()) return;
+        if (CardCollection::upgrade(m_allCards[m_selectedCardIndex].kind)) {
+            refreshDetailPanel(m_selectedCardIndex);
+            refreshCollectionDisplay();
+        }
+    });
+
     updateArtworkLayout();
 }
 
@@ -272,10 +345,38 @@ void DeckPage::updateArtworkLayout()
 
     m_detailPanel->setGeometry(scaledRect(kDetailRect, m_canvasRect).toRect());
     m_detailPanel->raise();
+    m_ticketLabel->setGeometry(scaledRect(QRect(1214, 688, 280, 42), m_canvasRect).toRect());
+    m_btnDrawPanel->setGeometry(scaledRect(QRect(1214, 738, 132, 52), m_canvasRect).toRect());
+    m_btnUpgradeCard->setGeometry(scaledRect(QRect(1362, 738, 132, 52), m_canvasRect).toRect());
     m_backHotspot->setCanvasRect(scaledRect(kBackRect, m_canvasRect));
     m_startHotspot->setCanvasRect(scaledRect(kStartRect, m_canvasRect));
+
+    for (int i = 0; i < m_cardLockLabels.size(); ++i) {
+        QRect lockRect = scaledRect(kCardRects[i], m_canvasRect).toRect().adjusted(8, 8, -8, -8);
+        m_cardLockLabels[i]->setGeometry(lockRect);
+        m_cardLockLabels[i]->raise();
+    }
+    QRect overlayRect = scaledRect(QRect(468, 170, 760, 590), m_canvasRect).toRect();
+    m_drawOverlay->setGeometry(overlayRect);
+    const int overlayW = overlayRect.width();
+    const int overlayH = overlayRect.height();
+    const int margin = qMax(18, overlayW / 26);
+    const int gap = qMax(10, overlayW / 42);
+    const int buttonW = (overlayW - margin * 2 - gap * 2) / 3;
+    const int buttonH = qBound(42, overlayH / 9, 58);
+    const int buttonY = overlayH - margin - buttonH;
+    m_drawResultLabel->setGeometry(margin, margin, overlayW - margin * 2,
+                                   qMax(160, buttonY - margin * 2));
+    m_btnDrawOne->setGeometry(margin, buttonY, buttonW, buttonH);
+    m_btnDrawTen->setGeometry(margin + buttonW + gap, buttonY, buttonW, buttonH);
+    m_btnCloseDraw->setGeometry(margin + (buttonW + gap) * 2, buttonY, buttonW, buttonH);
+
+    m_ticketLabel->raise();
+    m_btnDrawPanel->raise();
+    m_btnUpgradeCard->raise();
     m_backHotspot->raise();
     m_startHotspot->raise();
+    if (m_drawOverlay->isVisible()) m_drawOverlay->raise();
     update();
 }
 
@@ -328,6 +429,25 @@ void DeckPage::animateCardToSlot(int cardIndex, int slotIndex)
 
 void DeckPage::refreshDeckSlotsDisplay()
 {
+    {
+        static QPixmap artwork(":/images/artwork/deck_atlas.png");
+        for (int i = 0; i < MAX_DECK_SLOTS; ++i) {
+            QPushButton *button = m_slotButtons[i];
+            const int cardIndex = m_selectedSlots[i];
+            if (cardIndex < 0 || cardIndex >= m_allCards.size()
+                || !CardCollection::isOwned(m_allCards[cardIndex].kind)) {
+                m_selectedSlots[i] = -1;
+                button->setIcon(QIcon());
+                button->setText(QString("Empty %1").arg(i + 1));
+                continue;
+            }
+            const QPixmap cardArt = artwork.copy(kCardRects[cardIndex]);
+            button->setText(QString());
+            button->setIcon(QIcon(cardArt));
+            button->setToolTip(QString("%1 - click to remove").arg(m_allCards[cardIndex].name));
+        }
+        return;
+    }
     static QPixmap artwork(":/images/artwork/deck_atlas.png");
     for (int i = 0; i < MAX_DECK_SLOTS; ++i) {
         QPushButton *button = m_slotButtons[i];
@@ -347,6 +467,51 @@ void DeckPage::refreshDeckSlotsDisplay()
 
 void DeckPage::refreshDetailPanel(int cardIndex)
 {
+    {
+        if (cardIndex < 0 || cardIndex >= m_allCards.size()) return;
+        m_selectedCardIndex = cardIndex;
+        for (int i = 0; i < m_cardHotspots.size(); ++i) {
+            m_cardHotspots[i]->setSelected(i == cardIndex);
+        }
+
+        const auto &card = m_allCards[cardIndex];
+        const bool owned = CardCollection::isOwned(card.kind);
+        const int level = CardCollection::level(card.kind);
+        const int fragments = CardCollection::fragments(card.kind);
+        const int upgradeCost = CardCollection::upgradeCost(card.kind);
+        m_detailPanel->setText(QString(
+            "<div style='font-size:20px; font-weight:800; margin-bottom:10px;'>%1</div>"
+            "<div style='color:#76552d; font-weight:700; margin-bottom:9px;'>%2 | %3</div>"
+            "<hr style='border:0; border-top:1px solid #9b7545;'>"
+            "<table cellspacing='5'>"
+            "<tr><td><b>HP</b></td><td>%4</td></tr>"
+            "<tr><td><b>ATK</b></td><td>%5</td></tr>"
+            "<tr><td><b>Range</b></td><td>%6</td></tr>"
+            "<tr><td><b>Interval</b></td><td>%7 s</td></tr>"
+            "<tr><td><b>Move</b></td><td>%8 cells</td></tr>"
+            "<tr><td><b>Cost</b></td><td>%9 Juice</td></tr>"
+            "</table>"
+            "<hr style='border:0; border-top:1px solid #9b7545;'>"
+            "<div><b>Collection</b><br>Level %10 | Shards %11/%12</div>"
+            "<div style='margin-top:9px;'><b>Battle Growth</b><br>%13</div>"
+            "<div style='margin-top:9px;'><b>Target Priority</b><br>%14</div>")
+            .arg(card.name)
+            .arg(cardTypeText(card.kind))
+            .arg(owned ? "Owned" : "Locked")
+            .arg(card.maxHp)
+            .arg(card.attack)
+            .arg(card.attackRange)
+            .arg(card.attackInterval)
+            .arg(card.moveLimit)
+            .arg(card.deployCost)
+            .arg(level)
+            .arg(fragments)
+            .arg(upgradeCost > 0 ? upgradeCost : 0)
+            .arg(card.upgradeCostDesc)
+            .arg(card.priorityDesc));
+        refreshCollectionDisplay();
+        return;
+    }
     if (cardIndex < 0 || cardIndex >= m_allCards.size()) {
         return;
     }
@@ -386,6 +551,24 @@ void DeckPage::refreshDetailPanel(int cardIndex)
 
 void DeckPage::updateStartBattleButton()
 {
+    {
+        int filledCount = 0;
+        for (int value : m_selectedSlots) {
+            if (value >= 0
+                && value < m_allCards.size()
+                && CardCollection::isOwned(m_allCards[value].kind)) {
+                ++filledCount;
+            }
+        }
+        const bool complete = filledCount == MAX_DECK_SLOTS;
+        m_btnStartBattle->setEnabled(complete);
+        m_btnStartBattle->setToolTip(
+            complete ? "Start battle" : QString("Choose %1 more owned cards").arg(MAX_DECK_SLOTS - filledCount));
+        if (m_startHotspot) {
+            m_startHotspot->setSelected(complete);
+        }
+        return;
+    }
     int filledCount = 0;
     for (int value : m_selectedSlots) {
         if (value >= 0) {
@@ -403,6 +586,17 @@ void DeckPage::updateStartBattleButton()
 
 QVector<game::core::CardKind> DeckPage::getSelectedKinds() const
 {
+    {
+        QVector<game::core::CardKind> kinds;
+        for (int cardIndex : m_selectedSlots) {
+            if (cardIndex >= 0
+                && cardIndex < m_allCards.size()
+                && CardCollection::isOwned(m_allCards[cardIndex].kind)) {
+                kinds.append(m_allCards[cardIndex].kind);
+            }
+        }
+        return kinds;
+    }
     QVector<game::core::CardKind> kinds;
     for (int cardIndex : m_selectedSlots) {
         if (cardIndex >= 0 && cardIndex < m_allCards.size()) {
@@ -410,6 +604,108 @@ QVector<game::core::CardKind> DeckPage::getSelectedKinds() const
         }
     }
     return kinds;
+}
+
+void DeckPage::refreshCollectionDisplay()
+{
+    if (!m_ticketLabel) return;
+    m_ticketLabel->setText(QString("Tickets %1").arg(CardCollection::tickets()));
+
+    for (int i = 0; i < m_cardLockLabels.size() && i < m_allCards.size(); ++i) {
+        const bool owned = CardCollection::isOwned(m_allCards[i].kind);
+        m_cardLockLabels[i]->setVisible(!owned);
+        if (!owned) {
+            m_cardLockLabels[i]->raise();
+        }
+        m_cardHotspots[i]->setToolTip(owned
+            ? QString("%1  Lv%2  Shards %3")
+                  .arg(m_allCards[i].name)
+                  .arg(CardCollection::level(m_allCards[i].kind))
+                  .arg(CardCollection::fragments(m_allCards[i].kind))
+            : QString("%1 - locked, draw to unlock").arg(m_allCards[i].name));
+    }
+
+    if (m_selectedCardIndex >= 0 && m_selectedCardIndex < m_allCards.size()) {
+        const auto kind = m_allCards[m_selectedCardIndex].kind;
+        m_btnUpgradeCard->setVisible(CardCollection::isOwned(kind));
+        m_btnUpgradeCard->setEnabled(CardCollection::canUpgrade(kind));
+        const int cost = CardCollection::upgradeCost(kind);
+        m_btnUpgradeCard->setText(cost > 0
+                                      ? QString("Lv Up %1/%2")
+                                            .arg(CardCollection::fragments(kind))
+                                            .arg(cost)
+                                      : "Max Lv");
+    }
+    refreshDeckSlotsDisplay();
+    updateStartBattleButton();
+}
+
+void DeckPage::openDrawPanel()
+{
+    m_drawResultLabel->setText(
+        QString("<div style='font-size:24px; font-weight:900;'>Supply Draw</div>"
+                "<div style='margin-top:18px;'>Tickets: %1</div>"
+                "<div style='margin-top:22px; color:#ffe3a4;'>New cards unlock towers.</div>"
+                "<div style='margin-top:12px;'>Duplicates become shards for small level bonuses.</div>")
+            .arg(CardCollection::tickets()));
+    m_drawOverlay->show();
+    m_drawOverlay->raise();
+}
+
+void DeckPage::performDraw(int count)
+{
+    const QVector<DrawResult> results = CardCollection::drawMany(count);
+    if (results.isEmpty()) {
+        m_drawResultLabel->setText(
+            "<div style='font-size:24px; font-weight:900;'>No tickets left</div>"
+            "<div style='margin-top:22px;'>Finish a battle to earn more supply tickets.</div>");
+        refreshCollectionDisplay();
+        return;
+    }
+
+    QStringList lines;
+    int newCount = 0;
+    int shardCount = 0;
+    for (const DrawResult& result : results) {
+        if (result.isNew) {
+            ++newCount;
+            lines << QString("<span style='color:#fff4a8;'>NEW!</span> %1")
+                         .arg(cardNameForKind(result.kind));
+        } else {
+            shardCount += result.fragmentsGained;
+            lines << QString("%1  +%2 shards")
+                         .arg(cardNameForKind(result.kind))
+                         .arg(result.fragmentsGained);
+        }
+    }
+
+    m_drawResultLabel->setText(QString(
+        "<div style='font-size:24px; font-weight:900;'>Supply Opened</div>"
+        "<div style='margin-top:12px;'>New cards: %1 &nbsp;&nbsp; Shards: %2</div>"
+        "<div style='margin-top:20px; line-height:135%;'>%3</div>"
+        "<div style='margin-top:18px;'>Tickets left: %4</div>")
+        .arg(newCount)
+        .arg(shardCount)
+        .arg(lines.join("<br>"))
+        .arg(CardCollection::tickets()));
+    refreshDetailPanel(qMax(0, m_selectedCardIndex));
+    refreshCollectionDisplay();
+}
+
+QString DeckPage::cardNameForKind(game::core::CardKind kind) const
+{
+    const int index = indexForKind(kind);
+    return index >= 0 ? m_allCards[index].name : QString("Unknown Card");
+}
+
+int DeckPage::indexForKind(game::core::CardKind kind) const
+{
+    for (int i = 0; i < m_allCards.size(); ++i) {
+        if (m_allCards[i].kind == kind) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 void DeckPage::connectSignals()

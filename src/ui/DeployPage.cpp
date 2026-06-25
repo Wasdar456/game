@@ -46,13 +46,14 @@ const QPixmap* unitArtwork(const game::core::UnitSnapshot& unit)
     static const QPixmap healer(":/images/new_art/unit_peach_healer.png");
     static const QPixmap defender(":/images/new_art/unit_coco_defender.png");
 
+    const int baseMaxHp = unit.maxHp - qMax(0, unit.level - 1) * 20;
     if (unit.type == game::core::ObjectType::CardHeal) {
-        return unit.maxHp >= 500 ? &defender : &healer;
+        return unit.deployCost == 60 || baseMaxHp >= 500 ? &defender : &healer;
     }
     if (unit.type == game::core::ObjectType::CardAttack) {
-        if (unit.maxHp == 400) return &sniper;
-        if (unit.maxHp == 500) return &bomber;
-        if (unit.maxHp == 450) return &tank;
+        if (unit.deployCost == 50 || baseMaxHp == 400) return &sniper;
+        if (unit.deployCost == 60 || baseMaxHp == 500) return &bomber;
+        if (unit.deployCost == 55 || baseMaxHp == 450) return &tank;
     }
     return nullptr;
 }

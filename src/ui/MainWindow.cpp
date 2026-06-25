@@ -31,6 +31,8 @@
 #include "ui/DeckPage.h"
 #include "ui/DeployPage.h"
 #include "ui/BattlePage.h"
+#include "ui/BattleReportPage.h"
+#include "ui/CardCollection.h"
 #include "ui/SettingsPage.h"
 #include "ui/ResultPage.h"
 #include "ui/AudioManager.h"
@@ -46,6 +48,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_deckPage(nullptr)
     , m_deployPage(nullptr)
     , m_battlePage(nullptr)
+    , m_battleReportPage(nullptr)
     , m_settingsPage(nullptr)
     , m_resultPage(nullptr)
     , m_transitionOverlay(nullptr)
@@ -118,6 +121,7 @@ void MainWindow::initUI()
     m_deckPage     = new DeckPage(this);
     m_deployPage   = new DeployPage(this);
     m_battlePage   = new BattlePage(this);
+    m_battleReportPage = new BattleReportPage(this);
     m_settingsPage = new SettingsPage(this);
     m_resultPage   = new ResultPage(this);
 
@@ -127,8 +131,9 @@ void MainWindow::initUI()
     m_stackWidget->addWidget(m_deckPage);       // index 2
     m_stackWidget->addWidget(m_deployPage);     // index 3
     m_stackWidget->addWidget(m_battlePage);     // index 4
-    m_stackWidget->addWidget(m_settingsPage);   // index 5
-    m_stackWidget->addWidget(m_resultPage);     // index 6
+    m_stackWidget->addWidget(m_battleReportPage); // index 5
+    m_stackWidget->addWidget(m_settingsPage);   // index 6
+    m_stackWidget->addWidget(m_resultPage);     // index 7
 
     // ----- 璁剧疆鍫嗗彔绐楀彛涓轰富绐楀彛鐨勪腑澶帶浠?-----
     this->setCentralWidget(m_stackWidget);
@@ -295,7 +300,14 @@ void MainWindow::connectSignals()
 
     connect(m_battlePage, &BattlePage::signalBattleFinished,
             this, [this](const BattleResult &result) {
-                m_resultPage->setResult(result);
+                BattleResult rewardedResult = result;
+                rewardedResult.supplyTicketsEarned =
+                    result.outcome == BattleOutcome::Victory ? 3 : 2;
+                if (result.isPvp && result.outcome == BattleOutcome::Draw) {
+                    rewardedResult.supplyTicketsEarned = 2;
+                }
+                CardCollection::addTickets(rewardedResult.supplyTicketsEarned);
+                m_resultPage->setResult(rewardedResult);
                 fadeToPage(m_resultPage);
             });
 
@@ -339,8 +351,27 @@ void MainWindow::connectSignals()
                 }
             });
 
+    connect(m_resultPage, &ResultPage::signalReport,
+            this, [this]() {
+                m_battleReportPage->setResult(m_resultPage->result());
+                fadeToPage(m_battleReportPage);
+            });
+
     connect(m_resultPage, &ResultPage::signalReturnToLobby,
             this, [this]() {
+                m_battleManager->clearBattle();
+                m_lobbyPage->setMode(m_resultPage->result().isPvp
+                                         ? LobbyPage::Mode::PVP
+                                         : LobbyPage::Mode::PVE);
+                m_previousPage = m_lobbyPage;
+                fadeToPage(m_lobbyPage);
+            });
+
+    m_battleReportPage->setNavigationHandlers(
+            [this]() {
+                fadeToPage(m_resultPage);
+            },
+            [this]() {
                 m_battleManager->clearBattle();
                 m_lobbyPage->setMode(m_resultPage->result().isPvp
                                          ? LobbyPage::Mode::PVP

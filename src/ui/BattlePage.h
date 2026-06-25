@@ -44,6 +44,8 @@
 #include <QPaintEvent>
 #include <QMouseEvent>
 #include <QPixmap>
+#include <QHash>
+#include <QSet>
 
 // ========== 核心层头文件 ==========
 #include "core/systems/BattleManager.h"     // 战斗总管理器
@@ -259,6 +261,18 @@ private:
     static constexpr int PVE_FINAL_WAVE = 10;
     bool m_resultEmitted = false;
     int m_renderTick = 0;
+    BattleReplayData m_replayData;
+    game::core::BattleSnapshot m_lastReplaySnapshot;
+    QHash<int, BattleStatEntry> m_replayUnitStats;
+    QHash<int, BattleMonsterStatEntry> m_replayMonsterStats;
+    QSet<int> m_seenReplayUnits;
+    QSet<int> m_seenReplayMonsters;
+    QVector<int> m_deathHeatCells;
+    QVector<int> m_deployHeatCells;
+    double m_replayClock = 0.0;
+    double m_replaySampleTimer = 0.0;
+    int m_previousReplayResources = -1;
+    bool m_hasReplaySnapshot = false;
 
     // ========== 核心层引用 ==========
     game::core::BattleManager *m_battleManager;  ///< 通过 MainWindow 获取
@@ -307,6 +321,11 @@ private:
     void connectSignals();
     void updateStatusBar(const game::core::BattleSnapshot &snapshot);
     void finishBattle(const game::core::BattleSnapshot &snapshot, bool pveVictory = false);
+    void resetReplayRecorder();
+    void recordReplaySnapshot(const game::core::BattleSnapshot &snapshot,
+                              double deltaSeconds,
+                              bool force = false);
+    void attachReplayToResult(BattleResult &result);
     void setPaused(bool paused);
     void refreshCardDisplay();
     void updateCardVisualState(int resources);

@@ -124,6 +124,57 @@ QString mapDisplayName(const QString& mapId)
     return "Jungle Ruins";
 }
 
+QString replayUnitName(const game::core::UnitSnapshot& unit)
+{
+    const int baseMaxHp = unit.maxHp - qMax(0, unit.level - 1) * 20;
+    if (unit.type == game::core::ObjectType::CardHeal) {
+        return unit.deployCost == 60 || baseMaxHp >= 500 ? "Coco Defender" : "Peach Healer";
+    }
+    if (unit.type == game::core::ObjectType::CardProduce) {
+        return unit.deployCost == 80 || baseMaxHp >= 500 ? "Mango Engineer" : "Miner Pine";
+    }
+    if (unit.type == game::core::ObjectType::CardAttack) {
+        if (unit.deployCost == 50 || baseMaxHp == 400) return "Sniper Berry";
+        if (unit.deployCost == 60 || baseMaxHp == 500) return "Orange Bomber";
+        if (unit.deployCost == 55 || baseMaxHp == 450) return "Berry Tank";
+        return "Kiwi Scout";
+    }
+    return QString("Unit %1").arg(unit.id);
+}
+
+QString replayMonsterName(game::core::MonsterKind kind)
+{
+    switch (kind) {
+    case game::core::MonsterKind::ResBasic: return "Juice Thief";
+    case game::core::MonsterKind::ResFast: return "Swift Thief";
+    case game::core::MonsterKind::ResTank: return "Vault Breaker";
+    case game::core::MonsterKind::AtkNormal: return "Beach Raider";
+    case game::core::MonsterKind::AtkTank: return "Shell Crusher";
+    case game::core::MonsterKind::AtkFast: return "Needle Runner";
+    case game::core::MonsterKind::AtkSapper: return "Bomb Sprout";
+    case game::core::MonsterKind::AtkBerserk: return "Rage Melon";
+    case game::core::MonsterKind::AtkRanged: return "Spore Archer";
+    case game::core::MonsterKind::AtkRegen: return "Moss Brute";
+    }
+    return "Unknown Threat";
+}
+
+int heatIndex(int row, int col, int cols)
+{
+    return row * cols + col;
+}
+
+void addHeat(QVector<int>& heat, int rows, int cols, int row, int col)
+{
+    if (row < 0 || col < 0 || row >= rows || col >= cols || cols <= 0) {
+        return;
+    }
+    const int index = heatIndex(row, col, cols);
+    if (index >= 0 && index < heat.size()) {
+        heat[index] += 1;
+    }
+}
+
 QRectF cardSourceRect(game::core::CardKind kind)
 {
     switch (kind) {
@@ -147,13 +198,14 @@ const QPixmap* unitArtwork(const game::core::UnitSnapshot& unit)
     static const QPixmap healer(":/images/new_art/unit_peach_healer.png");
     static const QPixmap defender(":/images/new_art/unit_coco_defender.png");
 
+    const int baseMaxHp = unit.maxHp - qMax(0, unit.level - 1) * 20;
     if (unit.type == game::core::ObjectType::CardHeal) {
-        return unit.maxHp >= 500 ? &defender : &healer;
+        return unit.deployCost == 60 || baseMaxHp >= 500 ? &defender : &healer;
     }
     if (unit.type == game::core::ObjectType::CardAttack) {
-        if (unit.maxHp == 400) return &sniper;
-        if (unit.maxHp == 500) return &bomber;
-        if (unit.maxHp == 450) return &tank;
+        if (unit.deployCost == 50 || baseMaxHp == 400) return &sniper;
+        if (unit.deployCost == 60 || baseMaxHp == 500) return &bomber;
+        if (unit.deployCost == 55 || baseMaxHp == 450) return &tank;
     }
     return nullptr;
 }
@@ -2218,6 +2270,7 @@ void BattlePage::handleRemoteBattleState(const game::core::BattleSnapshot& snaps
         m_battleManager->syncPvpUnitsFromHostSnapshot(snapshot, m_isHost);
     }
 
+    recordReplaySnapshot(snapshot, 0.10);
     m_battleView->updateFromSnapshot(snapshot);
     updateStatusBar(snapshot);
 
@@ -2415,6 +2468,10 @@ void BattlePage::startBattle()
 
     // 重置状态
     m_isPaused = false;
+    if (!m_isPvp || m_battleManager->currentWave() <= 0 || m_replayData.frames.isEmpty()) {
+        resetReplayRecorder();
+    }
+
     m_btnPause->setText(QString());
     m_pauseOverlay->closeMenu();
     m_pauseOverlay->setPvpMode(m_isPvp);
@@ -2471,6 +2528,7 @@ void BattlePage::startBattle()
     game::core::BattleSnapshot snap = m_battleManager->snapshot();
     m_battleView->updateFromSnapshot(snap);
     updateStatusBar(snap);
+    recordReplaySnapshot(snap, 0.0, true);
 
     if (!m_isPvp) {
         QSettings settings;
@@ -2528,6 +2586,7 @@ void BattlePage::onGameTick()
 
     m_battleManager->update(deltaSeconds);
     game::core::BattleSnapshot snap = m_battleManager->snapshot();
+    recordReplaySnapshot(snap, deltaSeconds);
 
     if (m_isPvp && m_isHost) {
         m_stateSyncTimer += deltaSeconds;
@@ -2541,6 +2600,7 @@ void BattlePage::onGameTick()
         if (m_isPvp && m_isHost) {
             sendBattleState(snap);
         }
+        recordReplaySnapshot(snap, 0.0, true);
         m_battleView->updateFromSnapshot(snap);
         updateStatusBar(snap);
         finishBattle(snap);
@@ -2570,6 +2630,7 @@ void BattlePage::onGameTick()
         }
 
         game::core::BattleSnapshot currentSnap = m_battleManager->snapshot();
+        recordReplaySnapshot(currentSnap, 0.0, true);
         m_battleView->updateFromSnapshot(currentSnap);
         updateStatusBar(currentSnap);
         return;
@@ -2578,6 +2639,7 @@ void BattlePage::onGameTick()
     // PVE: 自动下一波
     if (!m_isPvp && !snap.waveActive) {
         if (m_currentWaveId >= PVE_FINAL_WAVE) {
+            recordReplaySnapshot(snap, 0.0, true);
             m_battleView->updateFromSnapshot(snap);
             updateStatusBar(snap);
             finishBattle(snap, true);
@@ -2657,6 +2719,248 @@ void BattleView::drawEffects(QPainter &painter)
     }
 }
 
+void BattlePage::resetReplayRecorder()
+{
+    m_replayData = BattleReplayData();
+    m_replayUnitStats.clear();
+    m_replayMonsterStats.clear();
+    m_seenReplayUnits.clear();
+    m_seenReplayMonsters.clear();
+    m_deathHeatCells.clear();
+    m_deployHeatCells.clear();
+    m_replayClock = 0.0;
+    m_replaySampleTimer = 0.0;
+    m_previousReplayResources = -1;
+    m_hasReplaySnapshot = false;
+    m_lastReplaySnapshot = game::core::BattleSnapshot();
+}
+
+void BattlePage::recordReplaySnapshot(const game::core::BattleSnapshot &snapshot,
+                                      double deltaSeconds,
+                                      bool force)
+{
+    if (snapshot.map.rows <= 0 || snapshot.map.cols <= 0) {
+        return;
+    }
+
+    if (m_replayData.rows != snapshot.map.rows || m_replayData.cols != snapshot.map.cols) {
+        m_replayData.rows = snapshot.map.rows;
+        m_replayData.cols = snapshot.map.cols;
+        m_deathHeatCells.fill(0, snapshot.map.rows * snapshot.map.cols);
+        m_deployHeatCells.fill(0, snapshot.map.rows * snapshot.map.cols);
+    }
+
+    auto ensureUnitStat = [this](const game::core::UnitSnapshot& unit) -> BattleStatEntry& {
+        BattleStatEntry &entry = m_replayUnitStats[unit.id];
+        entry.unitId = unit.id;
+        entry.name = replayUnitName(unit);
+        entry.type = unit.type;
+        entry.row = unit.row;
+        entry.col = unit.col;
+        entry.level = unit.level;
+        return entry;
+    };
+
+    QHash<int, game::core::UnitSnapshot> currentUnits;
+    QHash<int, game::core::MonsterSnapshot> currentMonsters;
+    QHash<int, int> currentTargetSource;
+    QHash<int, int> previousTargetSource;
+
+    for (const auto& unit : snapshot.units) {
+        currentUnits.insert(unit.id, unit);
+        ensureUnitStat(unit);
+        if (!m_seenReplayUnits.contains(unit.id)) {
+            m_seenReplayUnits.insert(unit.id);
+            addHeat(m_deployHeatCells, m_replayData.rows, m_replayData.cols, unit.row, unit.col);
+        }
+    }
+    for (const auto& monster : snapshot.monsters) {
+        currentMonsters.insert(monster.id, monster);
+        const int kindKey = static_cast<int>(monster.kind);
+        BattleMonsterStatEntry &monsterEntry = m_replayMonsterStats[kindKey];
+        monsterEntry.kind = monster.kind;
+        monsterEntry.name = replayMonsterName(monster.kind);
+        monsterEntry.peakHp = qMax(monsterEntry.peakHp, monster.maxHp);
+        monsterEntry.threatScore = qMax(monsterEntry.threatScore, monster.maxHp / 10);
+        if (!m_seenReplayMonsters.contains(monster.id)) {
+            m_seenReplayMonsters.insert(monster.id);
+            monsterEntry.seen += 1;
+            monsterEntry.threatScore += qMax(1, monster.maxHp / 25);
+        }
+    }
+    for (const auto& projectile : snapshot.projectiles) {
+        currentTargetSource.insert(projectile.targetId, projectile.sourceId);
+    }
+    for (const auto& projectile : m_lastReplaySnapshot.projectiles) {
+        previousTargetSource.insert(projectile.targetId, projectile.sourceId);
+    }
+
+    if (m_hasReplaySnapshot) {
+        QHash<int, game::core::MonsterSnapshot> previousMonsters;
+        QHash<int, game::core::UnitSnapshot> previousUnits;
+        for (const auto& monster : m_lastReplaySnapshot.monsters) {
+            previousMonsters.insert(monster.id, monster);
+        }
+        for (const auto& unit : m_lastReplaySnapshot.units) {
+            previousUnits.insert(unit.id, unit);
+        }
+
+        auto nearestAttacker = [&snapshot](const game::core::MonsterSnapshot& monster) {
+            int bestId = -1;
+            int bestDistance = 9999;
+            for (const auto& unit : snapshot.units) {
+                if (unit.type != game::core::ObjectType::CardAttack) continue;
+                const int distance = qAbs(unit.row - monster.row) + qAbs(unit.col - monster.col);
+                if (distance <= qMax(1, unit.range) && distance < bestDistance) {
+                    bestDistance = distance;
+                    bestId = unit.id;
+                }
+            }
+            return bestId;
+        };
+
+        for (const auto& monster : snapshot.monsters) {
+            if (!previousMonsters.contains(monster.id)) continue;
+            const auto previous = previousMonsters.value(monster.id);
+            const int damage = qMax(0, previous.hp - monster.hp);
+            if (damage <= 0) continue;
+            int sourceId = currentTargetSource.value(monster.id,
+                                                     previousTargetSource.value(monster.id, -1));
+            if (sourceId < 0) {
+                sourceId = nearestAttacker(monster);
+            }
+            if (sourceId >= 0 && m_replayUnitStats.contains(sourceId)) {
+                m_replayUnitStats[sourceId].damage += damage;
+            }
+            m_replayData.totalDamage += damage;
+        }
+
+        for (const auto& previous : m_lastReplaySnapshot.monsters) {
+            if (!currentMonsters.contains(previous.id)) {
+                BattleMonsterStatEntry &monsterEntry =
+                    m_replayMonsterStats[static_cast<int>(previous.kind)];
+                monsterEntry.kind = previous.kind;
+                monsterEntry.name = replayMonsterName(previous.kind);
+                monsterEntry.peakHp = qMax(monsterEntry.peakHp, previous.maxHp);
+                if (previous.escaped) {
+                    monsterEntry.escaped += 1;
+                    monsterEntry.threatScore += previous.maxHp / 5 + 120;
+                } else {
+                    monsterEntry.defeated += 1;
+                    monsterEntry.threatScore += previous.maxHp / 20 + 10;
+                    addHeat(m_deathHeatCells, m_replayData.rows, m_replayData.cols,
+                            previous.row, previous.col);
+                }
+            }
+        }
+
+        auto nearestHealer = [&snapshot](const game::core::UnitSnapshot& healedUnit) {
+            int bestId = -1;
+            int bestDistance = 9999;
+            for (const auto& unit : snapshot.units) {
+                if (unit.type != game::core::ObjectType::CardHeal) continue;
+                const int distance = qAbs(unit.row - healedUnit.row) + qAbs(unit.col - healedUnit.col);
+                if (distance <= qMax(1, unit.range) && distance < bestDistance) {
+                    bestDistance = distance;
+                    bestId = unit.id;
+                }
+            }
+            return bestId;
+        };
+
+        for (const auto& unit : snapshot.units) {
+            if (!previousUnits.contains(unit.id)) continue;
+            const int healing = qMax(0, unit.hp - previousUnits.value(unit.id).hp);
+            if (healing <= 0) continue;
+            const int healerId = nearestHealer(unit);
+            const int statId = healerId >= 0 ? healerId : unit.id;
+            if (m_replayUnitStats.contains(statId)) {
+                m_replayUnitStats[statId].healing += healing;
+            }
+            m_replayData.totalHealing += healing;
+        }
+    }
+
+    if (m_previousReplayResources >= 0 && snapshot.resources > m_previousReplayResources) {
+        const int gain = snapshot.resources - m_previousReplayResources;
+        QVector<int> producers;
+        for (const auto& unit : snapshot.units) {
+            if (unit.type == game::core::ObjectType::CardProduce) {
+                producers.append(unit.id);
+            }
+        }
+        if (!producers.isEmpty()) {
+            const int share = qMax(1, gain / producers.size());
+            for (int id : producers) {
+                if (m_replayUnitStats.contains(id)) {
+                    m_replayUnitStats[id].resources += share;
+                }
+            }
+        }
+        m_replayData.totalResourceGain += gain;
+    }
+
+    m_previousReplayResources = snapshot.resources;
+    m_replayClock += qMax(0.0, deltaSeconds);
+    m_replaySampleTimer += qMax(0.0, deltaSeconds);
+    if (force || m_replayData.frames.isEmpty() || m_replaySampleTimer >= 0.20) {
+        m_replaySampleTimer = 0.0;
+        BattleReplayFrame frame;
+        frame.timeSeconds = m_replayClock;
+        frame.snapshot = snapshot;
+        m_replayData.frames.append(frame);
+        m_replayData.durationSeconds = m_replayClock;
+    }
+
+    m_lastReplaySnapshot = snapshot;
+    m_hasReplaySnapshot = true;
+}
+
+void BattlePage::attachReplayToResult(BattleResult &result)
+{
+    BattleReplayData replay = m_replayData;
+    replay.unitStats.clear();
+    replay.unitStats.reserve(m_replayUnitStats.size());
+    for (auto it = m_replayUnitStats.constBegin(); it != m_replayUnitStats.constEnd(); ++it) {
+        replay.unitStats.append(it.value());
+    }
+    replay.monsterStats.clear();
+    replay.monsterStats.reserve(m_replayMonsterStats.size());
+    for (auto it = m_replayMonsterStats.constBegin(); it != m_replayMonsterStats.constEnd(); ++it) {
+        replay.monsterStats.append(it.value());
+    }
+    std::sort(replay.unitStats.begin(), replay.unitStats.end(),
+              [](const BattleStatEntry& a, const BattleStatEntry& b) {
+                  const int scoreA = a.damage + a.healing + a.resources;
+                  const int scoreB = b.damage + b.healing + b.resources;
+                  if (scoreA != scoreB) return scoreA > scoreB;
+                  return a.unitId < b.unitId;
+              });
+    std::sort(replay.monsterStats.begin(), replay.monsterStats.end(),
+              [](const BattleMonsterStatEntry& a, const BattleMonsterStatEntry& b) {
+                  if (a.threatScore != b.threatScore) return a.threatScore > b.threatScore;
+                  return a.seen > b.seen;
+              });
+
+    auto collectHeat = [](const QVector<int>& cells, int rows, int cols) {
+        QVector<BattleHeatPoint> points;
+        for (int row = 0; row < rows; ++row) {
+            for (int col = 0; col < cols; ++col) {
+                const int index = heatIndex(row, col, cols);
+                if (index < 0 || index >= cells.size() || cells[index] <= 0) continue;
+                points.append({row, col, cells[index]});
+            }
+        }
+        return points;
+    };
+    replay.deathHeat = collectHeat(m_deathHeatCells, replay.rows, replay.cols);
+    replay.deploymentHeat = collectHeat(m_deployHeatCells, replay.rows, replay.cols);
+    if (!replay.frames.isEmpty()) {
+        replay.durationSeconds = replay.frames.last().timeSeconds;
+    }
+    result.replay = replay;
+}
+
 void BattlePage::finishBattle(const game::core::BattleSnapshot &snapshot, bool pveVictory)
 {
     if (m_resultEmitted) {
@@ -2675,6 +2979,7 @@ void BattlePage::finishBattle(const game::core::BattleSnapshot &snapshot, bool p
     result.localCoreHealth = snapshot.baseHealth;
     result.opponentCoreHealth = snapshot.opponentBaseHealth;
     result.mapId = m_netCtx.pveMapId;
+    recordReplaySnapshot(snapshot, 0.0, true);
 
     if (!m_isPvp) {
         result.outcome = pveVictory ? BattleOutcome::Victory : BattleOutcome::Defeat;
@@ -2686,6 +2991,7 @@ void BattlePage::finishBattle(const game::core::BattleSnapshot &snapshot, bool p
         result.outcome = BattleOutcome::Defeat;
     }
 
+    attachReplayToResult(result);
     emit signalBattleFinished(result);
 }
 

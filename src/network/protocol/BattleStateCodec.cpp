@@ -30,7 +30,8 @@ QByteArray BattleStateCodec::encodeHostSnapshot(const game::core::BattleSnapshot
             << static_cast<qint32>(unit.attack)
             << static_cast<qint16>(unit.level)
             << static_cast<qint16>(unit.range)
-            << static_cast<qint16>(unit.moveLimit);
+            << static_cast<qint16>(unit.moveLimit)
+            << static_cast<qint32>(unit.deployCost);
     }
 
     out << static_cast<quint16>(snapshot.monsters.size());
@@ -105,7 +106,9 @@ BattleStateDecodeResult BattleStateCodec::decodeHostSnapshot(const QByteArray& b
         qint16 level = 0;
         qint16 range = 0;
         qint16 moveLimit = 0;
-        in >> id >> type >> row >> col >> hp >> maxHp >> attack >> level >> range >> moveLimit;
+        qint32 deployCost = 0;
+        in >> id >> type >> row >> col >> hp >> maxHp >> attack >> level >> range >> moveLimit
+           >> deployCost;
         if (in.status() != QDataStream::Ok) return result;
 
         game::core::UnitSnapshot unit;
@@ -119,6 +122,7 @@ BattleStateDecodeResult BattleStateCodec::decodeHostSnapshot(const QByteArray& b
         unit.level = level;
         unit.range = range;
         unit.moveLimit = moveLimit;
+        unit.deployCost = deployCost;
         snapshot.units.push_back(unit);
     }
 
@@ -223,6 +227,7 @@ quint32 BattleStateCodec::checksum(const game::core::BattleSnapshot& snapshot)
         mix(static_cast<quint32>(unit.col));
         mix(static_cast<quint32>(unit.hp));
         mix(static_cast<quint32>(unit.maxHp));
+        mix(static_cast<quint32>(unit.deployCost));
     }
     for (const auto& monster : snapshot.monsters) {
         mix(static_cast<quint32>(monster.id));

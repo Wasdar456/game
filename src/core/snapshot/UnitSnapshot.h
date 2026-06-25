@@ -25,6 +25,7 @@ struct UnitSnapshot {
     int level = 1;
     int range = 0;
     int moveLimit = 0;
+    int deployCost = 0;
 };
 
 } // namespace game::core

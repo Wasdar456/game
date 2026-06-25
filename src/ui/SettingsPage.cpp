@@ -1,5 +1,7 @@
 #include "ui/SettingsPage.h"
 
+#include "ui/CardCollection.h"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
@@ -69,6 +71,7 @@ SettingsPage::SettingsPage(QWidget *parent)
     , m_gridCheck(nullptr)
     , m_autoPauseCheck(nullptr)
     , m_btnSave(nullptr)
+    , m_btnResetProgress(nullptr)
 {
     initUI();
 
@@ -215,8 +218,16 @@ void SettingsPage::initUI()
     m_btnSave->setStyleSheet(woodButtonStyle());
     m_btnSave->setCursor(Qt::PointingHandCursor);
 
+    m_btnResetProgress = new QPushButton("Reset Tutorial + Draw", this);
+    m_btnResetProgress->setFixedSize(250, 50);
+    m_btnResetProgress->setStyleSheet(woodButtonStyle().replace("font-size: 16px", "font-size: 14px"));
+    m_btnResetProgress->setCursor(Qt::PointingHandCursor);
+    m_btnResetProgress->setToolTip("Reset tutorial, draw tickets, unlocked cards, shards, and card levels.");
+
     QHBoxLayout *saveLayout = new QHBoxLayout();
     saveLayout->addStretch();
+    saveLayout->addWidget(m_btnResetProgress);
+    saveLayout->addSpacing(18);
     saveLayout->addWidget(m_btnSave);
     saveLayout->addStretch();
     mainLayout->addLayout(saveLayout);
@@ -241,6 +252,18 @@ void SettingsPage::connectSignals()
 
     connect(m_gridCheck, &QCheckBox::checkStateChanged, this, [this](Qt::CheckState state) {
         emit signalShowGridChanged(state == Qt::Checked);
+    });
+
+    connect(m_btnResetProgress, &QPushButton::clicked, this, [this]() {
+        QSettings settings;
+        settings.remove("tutorial");
+        CardCollection::resetToDefaults();
+        settings.sync();
+
+        m_btnResetProgress->setText("Reset Done");
+        QTimer::singleShot(1800, this, [this]() {
+            m_btnResetProgress->setText("Reset Tutorial + Draw");
+        });
     });
 
     connect(m_btnSave, &QPushButton::clicked, this, [this]() {

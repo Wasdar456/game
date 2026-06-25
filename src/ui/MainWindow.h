@@ -43,6 +43,7 @@ class LobbyPage;
 class DeckPage;
 class DeployPage;
 class BattlePage;
+class BattleReportPage;
 class SettingsPage;
 class ResultPage;
 class LeafTransitionOverlay;
@@ -92,6 +93,7 @@ private:
     DeckPage     *m_deckPage;
     DeployPage   *m_deployPage;  ///< 迷雾部署页面（PVP）
     BattlePage   *m_battlePage;
+    BattleReportPage *m_battleReportPage;
     SettingsPage *m_settingsPage;
     ResultPage   *m_resultPage;
     LeafTransitionOverlay *m_transitionOverlay;

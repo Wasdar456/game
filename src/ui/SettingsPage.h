@@ -64,6 +64,7 @@ private:
 
     // 操作按钮
     QPushButton *m_btnSave;
+    QPushButton *m_btnResetProgress;
 
     void initUI();
     void connectSignals();
