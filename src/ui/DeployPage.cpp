@@ -34,26 +34,36 @@ QString cardName(game::core::CardKind kind)
     case game::core::CardKind::Arsenal: return "Mango Engineer";
     case game::core::CardKind::Heal: return "Peach Healer";
     case game::core::CardKind::HeavyMedic: return "Coco Defender";
+    case game::core::CardKind::Attack2: return "Grape Blaster";
+    case game::core::CardKind::Heal2: return "Papaya Support";
     }
     return "Unknown";
 }
 
 const QPixmap* unitArtwork(const game::core::UnitSnapshot& unit)
 {
+    static const QPixmap kiwi(":/images/new_art/unit_kiwi_scout.png");
+    static const QPixmap miner(":/images/new_art/unit_miner_pine.png");
+    static const QPixmap mango(":/images/new_art/unit_mango_engineer.png");
     static const QPixmap sniper(":/images/new_art/unit_sniper_berry.png");
     static const QPixmap bomber(":/images/new_art/unit_orange_bomber.png");
     static const QPixmap tank(":/images/new_art/unit_berry_tank.png");
     static const QPixmap healer(":/images/new_art/unit_peach_healer.png");
     static const QPixmap defender(":/images/new_art/unit_coco_defender.png");
+    static const QPixmap grape(":/images/new_art/unit_grape_blaster.png");
+    static const QPixmap papaya(":/images/new_art/unit_papaya_support.png");
 
-    const int baseMaxHp = unit.maxHp - qMax(0, unit.level - 1) * 20;
-    if (unit.type == game::core::ObjectType::CardHeal) {
-        return unit.deployCost == 60 || baseMaxHp >= 500 ? &defender : &healer;
-    }
-    if (unit.type == game::core::ObjectType::CardAttack) {
-        if (unit.deployCost == 50 || baseMaxHp == 400) return &sniper;
-        if (unit.deployCost == 60 || baseMaxHp == 500) return &bomber;
-        if (unit.deployCost == 55 || baseMaxHp == 450) return &tank;
+    switch (unit.kind) {
+    case game::core::CardKind::Attack: return &kiwi;
+    case game::core::CardKind::Sniper: return &sniper;
+    case game::core::CardKind::Aoe: return &bomber;
+    case game::core::CardKind::Specialist: return &tank;
+    case game::core::CardKind::Produce: return &miner;
+    case game::core::CardKind::Arsenal: return &mango;
+    case game::core::CardKind::Heal: return &healer;
+    case game::core::CardKind::HeavyMedic: return &defender;
+    case game::core::CardKind::Attack2: return &grape;
+    case game::core::CardKind::Heal2: return &papaya;
     }
     return nullptr;
 }
@@ -207,6 +217,8 @@ QRectF cardSourceRect(game::core::CardKind kind)
     case game::core::CardKind::Aoe: return {272, 428, 153, 198};
     case game::core::CardKind::HeavyMedic: return {441, 428, 161, 198};
     case game::core::CardKind::Arsenal: return {619, 428, 160, 198};
+    case game::core::CardKind::Attack2: return {795, 423, 160, 201};
+    case game::core::CardKind::Heal2: return {968, 423, 164, 201};
     }
     return {440, 214, 162, 199};
 }

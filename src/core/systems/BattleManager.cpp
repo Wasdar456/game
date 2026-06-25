@@ -30,6 +30,10 @@ void BattleManager::setRandomSeed(std::uint32_t seed) {
     waveSpawner_.setSeed(seed);
 }
 
+void BattleManager::setPveDifficulty(int difficulty) {
+    waveSpawner_.setDifficulty(difficulty);
+}
+
 std::shared_ptr<Card> BattleManager::deployCard(CardKind kind, MapPosition position) {
     return cardSystem_.deploy(kind, position, map_, resources_);
 }
@@ -221,6 +225,7 @@ BattleSnapshot BattleManager::snapshot() const {
         if (!card) continue;
         UnitSnapshot unit;
         unit.id = card->id();
+        unit.kind = card->kind();
         unit.type = card->type();
         unit.row = card->row();
         unit.col = card->col();
@@ -240,6 +245,7 @@ BattleSnapshot BattleManager::snapshot() const {
             if (!card) continue;
             UnitSnapshot unit;
             unit.id = card->id() + 1000;  // 对方单位 ID + 1000
+            unit.kind = card->kind();
             unit.type = card->type();
             unit.row = card->row();
             unit.col = card->col();
@@ -304,6 +310,7 @@ BattleSnapshot BattleManager::opponentSnapshot() const {
         if (!card) continue;
         UnitSnapshot unit;
         unit.id = card->id();
+        unit.kind = card->kind();
         unit.type = card->type();
         unit.row = card->row();
         unit.col = card->col();
@@ -322,6 +329,7 @@ BattleSnapshot BattleManager::opponentSnapshot() const {
         if (!card) continue;
         UnitSnapshot unit;
         unit.id = card->id() + 1000;
+        unit.kind = card->kind();
         unit.type = card->type();
         unit.row = card->row();
         unit.col = card->col();

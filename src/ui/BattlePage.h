@@ -256,9 +256,9 @@ private:
     bool m_isPaused;                ///< 是否暂停
     double m_speedMultiplier;       ///< 速度倍率（1.0 或 2.0）
     int m_currentWaveId;            ///< 当前波次 ID（用于自动推进）
+    int m_pveFinalWave;             ///< PVE 当前难度下的最终波次
     double m_waveTimer;             ///< 波次间隔计时器（秒）
     static constexpr double WAVE_INTERVAL = 15.0;  ///< 每波间隔 15 秒
-    static constexpr int PVE_FINAL_WAVE = 10;
     bool m_resultEmitted = false;
     int m_renderTick = 0;
     BattleReplayData m_replayData;

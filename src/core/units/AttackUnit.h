@@ -9,7 +9,8 @@ namespace game::core {
 // 自动技能会在冷却完成时选择范围内最高优先级怪物并造成伤害。
 class AttackUnit : public Card {
 public:
-    explicit AttackUnit(int id, MapPosition position);
+    explicit AttackUnit(int id, MapPosition position,
+                        CardKind kind = CardKind::Attack);
     AttackUnit(int id,
                MapPosition position,
                int maxHp,
@@ -18,6 +19,7 @@ public:
                int moveLimit,
                double skillCooldownSeconds,
                int deployCost,
+               CardKind kind = CardKind::Attack,
                ProjectileKind projectileKind = ProjectileKind::Bullet,
                int splashRadius = 0);
 

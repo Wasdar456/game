@@ -22,6 +22,7 @@ QByteArray BattleStateCodec::encodeHostSnapshot(const game::core::BattleSnapshot
 
     for (const auto& unit : snapshot.units) {
         out << static_cast<qint32>(unit.id)
+            << static_cast<quint8>(unit.kind)
             << static_cast<quint8>(unit.type)
             << static_cast<qint16>(unit.row)
             << static_cast<qint16>(unit.col)
@@ -97,6 +98,7 @@ BattleStateDecodeResult BattleStateCodec::decodeHostSnapshot(const QByteArray& b
     snapshot.units.reserve(unitCount);
     for (quint16 i = 0; i < unitCount; ++i) {
         qint32 id = 0;
+        quint8 kind = 0;
         quint8 type = 0;
         qint16 row = 0;
         qint16 col = 0;
@@ -107,12 +109,13 @@ BattleStateDecodeResult BattleStateCodec::decodeHostSnapshot(const QByteArray& b
         qint16 range = 0;
         qint16 moveLimit = 0;
         qint32 deployCost = 0;
-        in >> id >> type >> row >> col >> hp >> maxHp >> attack >> level >> range >> moveLimit
+        in >> id >> kind >> type >> row >> col >> hp >> maxHp >> attack >> level >> range >> moveLimit
            >> deployCost;
         if (in.status() != QDataStream::Ok) return result;
 
         game::core::UnitSnapshot unit;
         unit.id = id;
+        unit.kind = static_cast<game::core::CardKind>(kind);
         unit.type = static_cast<game::core::ObjectType>(type);
         unit.row = row;
         unit.col = col;
@@ -222,6 +225,7 @@ quint32 BattleStateCodec::checksum(const game::core::BattleSnapshot& snapshot)
 
     for (const auto& unit : snapshot.units) {
         mix(static_cast<quint32>(unit.id));
+        mix(static_cast<quint32>(unit.kind));
         mix(static_cast<quint32>(unit.type));
         mix(static_cast<quint32>(unit.row));
         mix(static_cast<quint32>(unit.col));

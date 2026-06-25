@@ -107,7 +107,7 @@ LobbyPage::LobbyPage(QWidget *parent)
     , m_client(nullptr)
     , m_lobbyManager(nullptr)
     , m_panelStack(nullptr)
-    , m_selectedDifficulty(1)
+    , m_selectedDifficulty(0)
     , m_selectedPvpMap(0)
 {
     initUI();
@@ -172,7 +172,7 @@ void LobbyPage::createPvePanel()
         m_difficultyGroup->addButton(radio, i);
         radio->hide();
     }
-    m_difficultyGroup->button(1)->setChecked(true);
+    m_difficultyGroup->button(0)->setChecked(true);
 
     m_btnBack = new QPushButton(m_pvePanel);
     m_btnBack->hide();
@@ -432,8 +432,8 @@ void LobbyPage::connectSignals()
     // PVE 纭鎸夐挳 鈫?鍙戝嚭閰嶇疆瀹屾垚淇″彿
     connect(m_btnPveConfirm, &QPushButton::clicked, this, [this]() {
         const QString mapId = m_mapSelector->currentData().toString();
-        // int difficulty = m_difficultyGroup->checkedId();
-        emit signalConfigDone(mapId.isEmpty() ? QString("lab_map_01") : mapId);
+        emit signalConfigDone(mapId.isEmpty() ? QString("lab_map_01") : mapId,
+                              m_selectedDifficulty);
     });
 
     // PVP 鍒涘缓鎴块棿鎸夐挳 鈫?浣跨敤 GameServer 鍚姩鐩戝惉

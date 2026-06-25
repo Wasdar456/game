@@ -22,6 +22,8 @@ QString collectionKey(CardKind kind)
     case CardKind::Arsenal: return "arsenal";
     case CardKind::Heal: return "heal";
     case CardKind::HeavyMedic: return "heavy_medic";
+    case CardKind::Attack2: return "attack2";
+    case CardKind::Heal2: return "heal2";
     }
     return "unknown";
 }
@@ -66,31 +68,42 @@ std::shared_ptr<Card> CardSystem::deploy(CardKind kind, MapPosition position,
     int id = nextUnitId_++;
     switch (kind) {
         case CardKind::Attack:
-            card = std::make_shared<AttackUnit>(id, position);
+            card = std::make_shared<AttackUnit>(id, position, CardKind::Attack);
             break;
         case CardKind::Sniper:
             card = std::make_shared<AttackUnit>(id, position, 400, 35, 5, 1, 2.0, 50,
+                                                CardKind::Sniper,
                                                 ProjectileKind::Sniper, 0);
             break;
         case CardKind::Aoe:
             card = std::make_shared<AttackUnit>(id, position, 500, 18, 3, 1, 1.5, 60,
+                                                CardKind::Aoe,
                                                 ProjectileKind::Aoe, 1);
             break;
         case CardKind::Specialist:
             card = std::make_shared<AttackUnit>(id, position, 450, 30, 4, 3, 1.2, 55,
+                                                CardKind::Specialist,
                                                 ProjectileKind::Bullet, 0);
             break;
         case CardKind::Produce:
-            card = std::make_shared<ProduceUnit>(id, position);
+            card = std::make_shared<ProduceUnit>(id, position, CardKind::Produce);
             break;
         case CardKind::Arsenal:
-            card = std::make_shared<ProduceUnit>(id, position, 500, 0, 4.0, 80, 40);
+            card = std::make_shared<ProduceUnit>(id, position, 500, 0, 4.0, 80,
+                                                 CardKind::Arsenal, 40);
             break;
         case CardKind::Heal:
-            card = std::make_shared<HealUnit>(id, position);
+            card = std::make_shared<HealUnit>(id, position, CardKind::Heal);
             break;
         case CardKind::HeavyMedic:
-            card = std::make_shared<HealUnit>(id, position, 600, 2, 1, 2.5, 60, 25);
+            card = std::make_shared<HealUnit>(id, position, 600, 2, 1, 2.5, 60,
+                                              CardKind::HeavyMedic, 25);
+            break;
+        case CardKind::Attack2:
+            card = std::make_shared<AttackUnit>(id, position, CardKind::Attack2);
+            break;
+        case CardKind::Heal2:
+            card = std::make_shared<HealUnit>(id, position, CardKind::Heal2);
             break;
     }
 
@@ -167,6 +180,8 @@ int CardSystem::deployCost(CardKind kind) {
         case CardKind::Arsenal: return 80;
         case CardKind::Heal: return constants::DeployCostHeal;
         case CardKind::HeavyMedic: return 60;
+        case CardKind::Attack2: return constants::DeployCostAttack;
+        case CardKind::Heal2: return constants::DeployCostHeal;
     }
     return 0;
 }

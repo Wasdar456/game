@@ -43,6 +43,7 @@ public:
 
     // PVP 模式下由网络层同步 seed 后调用。
     void setRandomSeed(std::uint32_t seed);
+    void setPveDifficulty(int difficulty);
 
     // 设置 PVP 模式
     void setPvpMode(bool isPvp) { isPvp_ = isPvp; }

@@ -6,8 +6,8 @@
 
 namespace game::core {
 
-AttackUnit::AttackUnit(int id, MapPosition position)
-    : Card(id, position, ObjectType::CardAttack, 100, 20, 3, 2, 1.0,
+AttackUnit::AttackUnit(int id, MapPosition position, CardKind kind)
+    : Card(id, position, kind, ObjectType::CardAttack, 100, 20, 3, 2, 1.0,
            constants::DeployCostAttack),
       projectileKind_(ProjectileKind::Bullet),
       splashRadius_(0) {
@@ -33,9 +33,10 @@ AttackUnit::AttackUnit(int id,
                        int moveLimit,
                        double skillCooldownSeconds,
                        int deployCost,
+                       CardKind kind,
                        ProjectileKind projectileKind,
                        int splashRadius)
-    : Card(id, position, ObjectType::CardAttack, maxHp, attack, attackRange,
+    : Card(id, position, kind, ObjectType::CardAttack, maxHp, attack, attackRange,
            moveLimit, skillCooldownSeconds, deployCost),
       projectileKind_(projectileKind),
       splashRadius_(splashRadius) {

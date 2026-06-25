@@ -219,9 +219,10 @@ void MainWindow::connectSignals()
 
     // PVE 澶у巺閰嶇疆瀹屾垚 鈫?鍒囨崲鍒伴€夊崱椤碉紙璁板綍鏉ユ簮锛氬ぇ鍘呴〉锛?
     connect(m_lobbyPage, &LobbyPage::signalConfigDone,
-            this, [this](const QString& mapId) {
+            this, [this](const QString& mapId, int difficulty) {
                 m_networkContext = NetworkContext();  // 閲嶇疆涓洪粯璁わ紙闈濸VP锛?
                 m_networkContext.pveMapId = mapId;
+                m_networkContext.pveDifficulty = difficulty;
                 m_battleRevealPlayed = false;
                 m_previousPage = m_lobbyPage;
                 fadeToPage(m_deckPage);

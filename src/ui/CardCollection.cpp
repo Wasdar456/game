@@ -33,9 +33,11 @@ struct DrawPoolEntry {
 const QVector<DrawPoolEntry>& drawPool()
 {
     static const QVector<DrawPoolEntry> pool = {
-        {game::core::CardKind::Attack, 22},
+        {game::core::CardKind::Attack, 11},
+        {game::core::CardKind::Attack2, 11},
         {game::core::CardKind::Produce, 20},
-        {game::core::CardKind::Heal, 16},
+        {game::core::CardKind::Heal, 8},
+        {game::core::CardKind::Heal2, 8},
         {game::core::CardKind::Sniper, 14},
         {game::core::CardKind::Specialist, 10},
         {game::core::CardKind::Aoe, 8},
@@ -217,6 +219,8 @@ QString CardCollection::key(game::core::CardKind kind)
     case game::core::CardKind::Arsenal: return "arsenal";
     case game::core::CardKind::Heal: return "heal";
     case game::core::CardKind::HeavyMedic: return "heavy_medic";
+    case game::core::CardKind::Attack2: return "attack2";
+    case game::core::CardKind::Heal2: return "heal2";
     }
     return "unknown";
 }

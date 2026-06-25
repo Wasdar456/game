@@ -20,10 +20,15 @@
         <file alias="images/artwork/battle_pve_ui_overlay.png">../assets/ui/artwork/battle_pve_ui_overlay.png</file>
         <file alias="images/artwork/battle_pve_ui_overlay_v2.png">../assets/ui/artwork/battle_pve_ui_overlay_v2.png</file>
         <file alias="images/new_art/unit_peach_healer.png">../assets/ui/new_art/unit_peach_healer.png</file>
+        <file alias="images/new_art/unit_miner_pine.png">../assets/ui/new_art/unit_miner_pine.png</file>
+        <file alias="images/new_art/unit_kiwi_scout.png">../assets/ui/new_art/unit_kiwi_scout.png</file>
+        <file alias="images/new_art/unit_mango_engineer.png">../assets/ui/new_art/unit_mango_engineer.png</file>
         <file alias="images/new_art/unit_sniper_berry.png">../assets/ui/new_art/unit_sniper_berry.png</file>
         <file alias="images/new_art/unit_coco_defender.png">../assets/ui/new_art/unit_coco_defender.png</file>
         <file alias="images/new_art/unit_orange_bomber.png">../assets/ui/new_art/unit_orange_bomber.png</file>
         <file alias="images/new_art/unit_berry_tank.png">../assets/ui/new_art/unit_berry_tank.png</file>
+        <file alias="images/new_art/unit_grape_blaster.png">../assets/ui/new_art/unit_grape_blaster.png</file>
+        <file alias="images/new_art/unit_papaya_support.png">../assets/ui/new_art/unit_papaya_support.png</file>
         <file alias="images/new_art/command_ring.png">../assets/ui/new_art/command_ring.png</file>
         <file alias="images/new_art/battle_smoke.png">../assets/ui/new_art/battle_smoke.png</file>
         <file alias="images/new_art/result_victory.png">../assets/ui/new_art/result_victory.png</file>

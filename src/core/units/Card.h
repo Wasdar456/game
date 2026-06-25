@@ -17,7 +17,7 @@ class ResourceManager;
 // 召回退款和通用索敌。具体技能效果由 AttackUnit/ProduceUnit/HealUnit 实现。
 class Card : public Entity {
 public:
-    Card(int id, MapPosition position, ObjectType type, int maxHp, int attack,
+    Card(int id, MapPosition position, CardKind kind, ObjectType type, int maxHp, int attack,
          int attackRange, int moveLimit, double skillCooldownSeconds,
          int deployCost);
     ~Card() override = default;
@@ -25,6 +25,7 @@ public:
     void update(double deltaSeconds) override;
 
     int level() const { return level_; }
+    CardKind kind() const { return kind_; }
     int attackRange() const { return attackRange_; }
     int moveLimit() const { return moveLimit_; }
     int deployCost() const { return deployCost_; }
@@ -61,6 +62,8 @@ public:
                            ProjectileOwner projectileOwner = ProjectileOwner::PlayerA) = 0;
 
 protected:
+    // 卡牌身份枚举，供快照、收藏和 UI 精确区分同 ObjectType 的不同单位。
+    CardKind kind_;
     // 当前等级，范围 1..MaxCardLevel。
     int level_;
     // 基础攻击/治疗范围。

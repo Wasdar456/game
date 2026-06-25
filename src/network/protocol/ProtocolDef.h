@@ -140,7 +140,9 @@ enum class CardKind : quint8 {
     PRODUCE = 4,
     ARSENAL = 5,
     HEAL    = 6,
-    HEAVY_MEDIC = 7
+    HEAVY_MEDIC = 7,
+    ATTACK2 = 8,
+    HEAL2 = 9
 };
 
 // ─── WAVE_START 消息 payload（4 字节）───

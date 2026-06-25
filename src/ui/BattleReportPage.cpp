@@ -57,10 +57,15 @@ QString typeName(game::core::ObjectType type)
 
 QString unitImagePath(const BattleStatEntry& entry)
 {
+    if (entry.name.contains("Kiwi")) return ":/images/new_art/unit_kiwi_scout.png";
+    if (entry.name.contains("Miner")) return ":/images/new_art/unit_miner_pine.png";
+    if (entry.name.contains("Mango")) return ":/images/new_art/unit_mango_engineer.png";
     if (entry.name.contains("Sniper")) return ":/images/new_art/unit_sniper_berry.png";
     if (entry.name.contains("Orange")) return ":/images/new_art/unit_orange_bomber.png";
     if (entry.name.contains("Berry Tank")) return ":/images/new_art/unit_berry_tank.png";
+    if (entry.name.contains("Grape")) return ":/images/new_art/unit_grape_blaster.png";
     if (entry.name.contains("Peach")) return ":/images/new_art/unit_peach_healer.png";
+    if (entry.name.contains("Papaya")) return ":/images/new_art/unit_papaya_support.png";
     if (entry.name.contains("Coco")) return ":/images/new_art/unit_coco_defender.png";
     return ":/images/new_art/unit_orange_bomber.png";
 }

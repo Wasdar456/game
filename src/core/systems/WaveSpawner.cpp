@@ -5,6 +5,55 @@
 
 namespace game::core {
 
+namespace {
+
+int normalizedDifficulty(int difficulty)
+{
+    return std::clamp(difficulty, 0, 2);
+}
+
+double difficultyHealthMultiplier(int difficulty)
+{
+    switch (normalizedDifficulty(difficulty)) {
+    case 1: return 1.15;
+    case 2: return 1.35;
+    default: return 1.0;
+    }
+}
+
+double difficultyAttackMultiplier(int difficulty)
+{
+    switch (normalizedDifficulty(difficulty)) {
+    case 1: return 1.10;
+    case 2: return 1.25;
+    default: return 1.0;
+    }
+}
+
+int difficultyBudgetBonus(int difficulty)
+{
+    switch (normalizedDifficulty(difficulty)) {
+    case 1: return 3;
+    case 2: return 6;
+    default: return 0;
+    }
+}
+
+void applyMonsterScaling(const WaveConfig& config, Monster& monster)
+{
+    if (config.healthMultiplier != 1.0) {
+        const int scaledHp = static_cast<int>(monster.maxHp() * config.healthMultiplier);
+        monster.setMaxHp(std::max(1, scaledHp));
+        monster.setHp(monster.maxHp());
+    }
+    if (config.attackMultiplier != 1.0) {
+        const int scaledAtk = static_cast<int>(monster.attack() * config.attackMultiplier);
+        monster.setAttack(std::max(1, scaledAtk));
+    }
+}
+
+} // namespace
+
 WaveSpawner::WaveSpawner(int firstMonsterId)
     : nextMonsterId_(firstMonsterId),
       spawnPoint_(0, 0),
@@ -13,6 +62,10 @@ WaveSpawner::WaveSpawner(int firstMonsterId)
 void WaveSpawner::setSeed(std::uint32_t seed) {
     seed_ = seed;
     rng_.seed(seed);
+}
+
+void WaveSpawner::setDifficulty(int difficulty) {
+    difficulty_ = normalizedDifficulty(difficulty);
 }
 
 void WaveSpawner::setDefaultPath(std::vector<MapPosition> path) {
@@ -64,12 +117,7 @@ std::vector<ScheduledMonsterSpawn> WaveSpawner::scheduleWave(const WaveConfig& c
 
         auto monster = createMonster(config.kind, nextMonsterId_++, spawnPoint);
         if (!monster) continue;
-        if (config.healthMultiplier != 1.0) {
-            // 根据波次配置缩放生命值。
-            int scaled = static_cast<int>(monster->maxHp() * config.healthMultiplier);
-            monster->setMaxHp(std::max(1, scaled));
-            monster->setHp(monster->maxHp());
-        }
+        applyMonsterScaling(config, *monster);
         // PVP 使用多路线轮流分配，避免所有怪物只压一方核心。
         monster->setPath(path);
         const double spawnTime = (pathCount > 0)
@@ -132,12 +180,7 @@ std::vector<ScheduledMonsterSpawn> WaveSpawner::scheduleDeterministicWave(int wa
         const int monsterId = 1000 + waveId * 100 + i;
         auto monster = createMonster(kind, monsterId, spawnPoint);
         if (!monster) continue;
-
-        if (config.healthMultiplier != 1.0) {
-            int scaled = static_cast<int>(monster->maxHp() * config.healthMultiplier);
-            monster->setMaxHp(std::max(1, scaled));
-            monster->setHp(monster->maxHp());
-        }
+        applyMonsterScaling(config, *monster);
         monster->setPath(path);
 
         const double spawnTime = (pathCount > 0)
@@ -171,7 +214,8 @@ WaveConfig WaveSpawner::deterministicConfig(int waveId) const {
         config.count = 0;
     }
     config.intervalSeconds = 0.9;
-    config.healthMultiplier = 1.0 + waveId * 0.08;
+    config.healthMultiplier = (1.0 + waveId * 0.08) * difficultyHealthMultiplier(difficulty_);
+    config.attackMultiplier = (1.0 + waveId * 0.05) * difficultyAttackMultiplier(difficulty_);
     return config;
 }
 
@@ -266,7 +310,10 @@ int WaveSpawner::monsterBudgetCost(MonsterKind kind) const {
 
 int WaveSpawner::waveBudget(int waveId) const {
     const int safeWave = std::max(1, waveId);
-    return 8 + safeWave * 5;
+    int base = 8 + safeWave * 5;
+    base += (safeWave / 3) * 4;
+    base += difficultyBudgetBonus(difficulty_);
+    return base;
 }
 
 } // namespace game::core

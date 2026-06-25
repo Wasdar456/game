@@ -17,6 +17,7 @@ struct WaveConfig {
     int count = 5;
     double intervalSeconds = 1.0;
     double healthMultiplier = 1.0;
+    double attackMultiplier = 1.0;
 };
 
 struct ScheduledMonsterSpawn {
@@ -34,6 +35,7 @@ public:
     explicit WaveSpawner(int firstMonsterId = 1000);
 
     void setSeed(std::uint32_t seed);
+    void setDifficulty(int difficulty);
     void setSpawnPoint(MapPosition spawnPoint) { spawnPoint_ = spawnPoint; }
     void setDefaultPath(std::vector<MapPosition> path);
     void setDefaultPaths(std::vector<std::vector<MapPosition>> paths);
@@ -69,6 +71,7 @@ private:
     // 同步随机数引擎。网络层同步 seed 后应调用 setSeed。
     std::uint32_t seed_ = 0;
     std::mt19937 rng_;
+    int difficulty_ = 0;
 };
 
 } // namespace game::core

@@ -8,6 +8,7 @@
 #include <QGraphicsOpacityEffect>
 #include <QIcon>
 #include <QLabel>
+#include <QFontMetrics>
 #include <QParallelAnimationGroup>
 #include <QPainter>
 #include <QPaintEvent>
@@ -81,7 +82,10 @@ DeckPage::DeckPage(QWidget *parent)
     , m_ticketLabel(nullptr)
     , m_btnDrawPanel(nullptr)
     , m_drawOverlay(nullptr)
+    , m_drawTitleLabel(nullptr)
+    , m_drawBodyLabel(nullptr)
     , m_drawResultLabel(nullptr)
+    , m_drawCardsPanel(nullptr)
     , m_btnDrawOne(nullptr)
     , m_btnDrawTen(nullptr)
     , m_btnCloseDraw(nullptr)
@@ -90,6 +94,8 @@ DeckPage::DeckPage(QWidget *parent)
     , m_cardPoolScroll(nullptr)
     , m_backHotspot(nullptr)
     , m_startHotspot(nullptr)
+    , m_lastDrawResultCount(0)
+    , m_drawOverlayVisible(false)
 {
     CardCollection::initializeDefaults();
     createCardPoolData();
@@ -167,9 +173,9 @@ void DeckPage::createCardPoolData()
          "受伤友方 > 自身周围单位", "Lv2: 50  Lv3: 100", QColor(104, 78, 46)},
         {game::core::CardKind::Arsenal, "Mango Engineer", 3, 540, 0, 0, 0, 0.0,
          "强化资源产出并支援防御设施", "Lv2: 45  Lv3: 90", QColor(218, 146, 47)},
-        {game::core::CardKind::Attack, "Grape Blaster", 4, 520, 145, 4, 2, 1.3,
+        {game::core::CardKind::Attack2, "Grape Blaster", 4, 520, 145, 4, 2, 1.3,
          "远程敌人 > 普通敌人 > 资源单位", "Lv2: 50  Lv3: 100", QColor(113, 70, 139)},
-        {game::core::CardKind::Heal, "Papaya Support", 3, 430, 55, 4, 3, 1.7,
+        {game::core::CardKind::Heal2, "Papaya Support", 3, 430, 55, 4, 3, 1.7,
          "受伤友方 > 最低血量友方", "Lv2: 40  Lv3: 80", QColor(219, 132, 43)},
     };
 }
@@ -299,15 +305,31 @@ void DeckPage::initUI()
         " border-radius:9px; font-size:15px; font-weight:900; padding:6px; }"
         "QPushButton:hover { background:#ffe4a0; border-color:#d4a047; }"
         "QPushButton:pressed { background:#c99653; }");
+    m_drawTitleLabel = new QLabel(m_drawOverlay);
+    m_drawTitleLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    m_drawTitleLabel->setStyleSheet(
+        "QLabel { color:#fff3ce; background:transparent; border:none;"
+        " font-size:26px; font-weight:900; }");
+    m_drawBodyLabel = new QLabel(m_drawOverlay);
+    m_drawBodyLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    m_drawBodyLabel->setWordWrap(true);
+    m_drawBodyLabel->setStyleSheet(
+        "QLabel { color:#ffe7b0; background:transparent; border:none;"
+        " font-size:15px; font-weight:800; line-height:1.25; }");
     m_drawResultLabel = new QLabel(m_drawOverlay);
-    m_drawResultLabel->setAlignment(Qt::AlignCenter);
+    m_drawResultLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     m_drawResultLabel->setWordWrap(true);
+    m_drawResultLabel->setStyleSheet(
+        "QLabel { color:#fff1c8; background:transparent; border:none;"
+        " font-size:15px; font-weight:800; }");
+    m_drawCardsPanel = new QWidget(m_drawOverlay);
+    m_drawCardsPanel->setStyleSheet("QWidget { background: transparent; border: none; }");
     m_btnDrawOne = new QPushButton("x1", m_drawOverlay);
     m_btnDrawTen = new QPushButton("x10", m_drawOverlay);
     m_btnCloseDraw = new QPushButton("Close", m_drawOverlay);
     connect(m_btnDrawOne, &QPushButton::clicked, this, [this]() { performDraw(1); });
     connect(m_btnDrawTen, &QPushButton::clicked, this, [this]() { performDraw(10); });
-    connect(m_btnCloseDraw, &QPushButton::clicked, m_drawOverlay, &QWidget::hide);
+    connect(m_btnCloseDraw, &QPushButton::clicked, this, [this]() { setDrawOverlayVisible(false); });
 
     m_btnUpgradeCard = new QPushButton("Lv Up", this);
     m_btnUpgradeCard->setCursor(Qt::PointingHandCursor);
@@ -354,29 +376,18 @@ void DeckPage::updateArtworkLayout()
     for (int i = 0; i < m_cardLockLabels.size(); ++i) {
         QRect lockRect = scaledRect(kCardRects[i], m_canvasRect).toRect().adjusted(8, 8, -8, -8);
         m_cardLockLabels[i]->setGeometry(lockRect);
-        m_cardLockLabels[i]->raise();
     }
     QRect overlayRect = scaledRect(QRect(468, 170, 760, 590), m_canvasRect).toRect();
     m_drawOverlay->setGeometry(overlayRect);
-    const int overlayW = overlayRect.width();
-    const int overlayH = overlayRect.height();
-    const int margin = qMax(18, overlayW / 26);
-    const int gap = qMax(10, overlayW / 42);
-    const int buttonW = (overlayW - margin * 2 - gap * 2) / 3;
-    const int buttonH = qBound(42, overlayH / 9, 58);
-    const int buttonY = overlayH - margin - buttonH;
-    m_drawResultLabel->setGeometry(margin, margin, overlayW - margin * 2,
-                                   qMax(160, buttonY - margin * 2));
-    m_btnDrawOne->setGeometry(margin, buttonY, buttonW, buttonH);
-    m_btnDrawTen->setGeometry(margin + buttonW + gap, buttonY, buttonW, buttonH);
-    m_btnCloseDraw->setGeometry(margin + (buttonW + gap) * 2, buttonY, buttonW, buttonH);
+    refreshDrawOverlayLayout();
 
     m_ticketLabel->raise();
     m_btnDrawPanel->raise();
     m_btnUpgradeCard->raise();
     m_backHotspot->raise();
     m_startHotspot->raise();
-    if (m_drawOverlay->isVisible()) m_drawOverlay->raise();
+    updateLockLabelVisibilityForOverlay();
+    if (m_drawOverlayVisible) m_drawOverlay->raise();
     update();
 }
 
@@ -613,10 +624,6 @@ void DeckPage::refreshCollectionDisplay()
 
     for (int i = 0; i < m_cardLockLabels.size() && i < m_allCards.size(); ++i) {
         const bool owned = CardCollection::isOwned(m_allCards[i].kind);
-        m_cardLockLabels[i]->setVisible(!owned);
-        if (!owned) {
-            m_cardLockLabels[i]->raise();
-        }
         m_cardHotspots[i]->setToolTip(owned
             ? QString("%1  Lv%2  Shards %3")
                   .arg(m_allCards[i].name)
@@ -636,58 +643,217 @@ void DeckPage::refreshCollectionDisplay()
                                             .arg(cost)
                                       : "Max Lv");
     }
+    updateLockLabelVisibilityForOverlay();
     refreshDeckSlotsDisplay();
     updateStartBattleButton();
 }
 
+void DeckPage::ensureDrawCardWidgets(int count)
+{
+    while (m_drawCardFrames.size() < count) {
+        auto *frame = new QWidget(m_drawCardsPanel);
+        frame->hide();
+        frame->setStyleSheet(
+            "QWidget { background: rgba(246,228,179,0.98);"
+            " border: 2px solid rgba(112,72,33,0.92); border-radius: 10px; }");
+
+        auto *artLabel = new QLabel(frame);
+        artLabel->setAlignment(Qt::AlignCenter);
+        artLabel->setStyleSheet("QLabel { background: transparent; border: none; }");
+
+        auto *nameLabel = new QLabel(frame);
+        nameLabel->setAlignment(Qt::AlignCenter);
+        nameLabel->setWordWrap(true);
+        nameLabel->setStyleSheet(
+            "QLabel { color:#362313; background: transparent; border: none;"
+            " font-size:12px; font-weight:900; padding:0px 4px; }");
+
+        auto *badgeLabel = new QLabel(frame);
+        badgeLabel->setAlignment(Qt::AlignCenter);
+        badgeLabel->setStyleSheet(
+            "QLabel { color:#2d1b0f; background: rgba(255,236,167,0.96);"
+            " border: 2px solid rgba(148,104,38,0.95); border-radius: 10px;"
+            " font-size:11px; font-weight:900; padding:1px 6px; }");
+
+        m_drawCardFrames.append(frame);
+        m_drawCardArtLabels.append(artLabel);
+        m_drawCardNameLabels.append(nameLabel);
+        m_drawCardBadgeLabels.append(badgeLabel);
+    }
+}
+
+void DeckPage::layoutDrawCards()
+{
+    if (!m_drawCardsPanel) return;
+
+    const QRect panelRect = m_drawCardsPanel->rect();
+    const int count = m_lastDrawResultCount;
+    for (int i = 0; i < m_drawCardFrames.size(); ++i) {
+        const bool visible = i < count;
+        m_drawCardFrames[i]->setVisible(visible);
+        if (!visible) {
+            continue;
+        }
+
+        QRect frameRect;
+        if (count == 1) {
+            const int width = qMin(panelRect.width(), qMax(220, panelRect.width() * 45 / 100));
+            const int height = panelRect.height();
+            frameRect = QRect((panelRect.width() - width) / 2, 0, width, height);
+        } else {
+            const int columns = qMin(5, count);
+            const int rows = (count + columns - 1) / columns;
+            const int gap = qMax(8, qMin(panelRect.width(), panelRect.height()) / 28);
+            const int tileW = (panelRect.width() - gap * (columns - 1)) / columns;
+            const int tileH = (panelRect.height() - gap * qMax(0, rows - 1)) / qMax(1, rows);
+            const int row = i / columns;
+            const int col = i % columns;
+            frameRect = QRect(col * (tileW + gap), row * (tileH + gap), tileW, tileH);
+        }
+
+        m_drawCardFrames[i]->setGeometry(frameRect);
+
+        const int badgeW = qMin(frameRect.width() - 12, qMax(70, frameRect.width() / 2));
+        const int badgeH = qBound(22, frameRect.height() / 7, 30);
+        m_drawCardBadgeLabels[i]->setGeometry(frameRect.width() - badgeW - 8, 8, badgeW, badgeH);
+
+        const int nameH = qBound(28, frameRect.height() / 5, 48);
+        m_drawCardNameLabels[i]->setGeometry(8, frameRect.height() - nameH - 8,
+                                             frameRect.width() - 16, nameH);
+
+        const QRect artRect(8, 12 + badgeH, frameRect.width() - 16,
+                            qMax(40, frameRect.height() - nameH - badgeH - 28));
+        m_drawCardArtLabels[i]->setGeometry(artRect);
+
+        const int cardIndex = m_drawCardFrames[i]->property("cardIndex").toInt();
+        if (cardIndex >= 0 && cardIndex < kCardRects.size()) {
+            static QPixmap artwork(":/images/artwork/deck_atlas.png");
+            const QPixmap cardArt = artwork.copy(kCardRects[cardIndex]);
+            m_drawCardArtLabels[i]->setPixmap(cardArt.scaled(
+                artRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        }
+    }
+}
+
+void DeckPage::clearDrawCards()
+{
+    m_lastDrawResultCount = 0;
+    for (int i = 0; i < m_drawCardFrames.size(); ++i) {
+        m_drawCardFrames[i]->hide();
+        m_drawCardArtLabels[i]->clear();
+        m_drawCardNameLabels[i]->clear();
+        m_drawCardBadgeLabels[i]->clear();
+        m_drawCardFrames[i]->setProperty("cardIndex", -1);
+    }
+}
+
+void DeckPage::showDrawInstructions()
+{
+    clearDrawCards();
+    m_drawTitleLabel->setText("Supply Draw");
+    m_drawBodyLabel->setText(
+        QString("Tickets: %1\n\nNew cards unlock unique towers.\nDuplicates become shards for the exact same card.")
+            .arg(CardCollection::tickets()));
+    m_drawBodyLabel->show();
+    m_drawResultLabel->clear();
+    m_drawResultLabel->hide();
+    refreshDrawOverlayLayout();
+}
+
+void DeckPage::populateDrawResults(const QVector<DrawResult>& results)
+{
+    m_lastDrawResultCount = results.size();
+    ensureDrawCardWidgets(results.size());
+
+    int newCount = 0;
+    int shardCount = 0;
+    for (int i = 0; i < results.size(); ++i) {
+        const DrawResult& result = results[i];
+        const int cardIndex = indexForKind(result.kind);
+        m_drawCardFrames[i]->setProperty("cardIndex", cardIndex);
+        m_drawCardNameLabels[i]->setText(cardNameForKind(result.kind));
+        if (result.isNew) {
+            ++newCount;
+            m_drawCardBadgeLabels[i]->setText("NEW");
+            m_drawCardBadgeLabels[i]->setStyleSheet(
+                "QLabel { color:#2d1b0f; background: rgba(255,236,167,0.98);"
+                " border: 2px solid rgba(148,104,38,0.95); border-radius: 10px;"
+                " font-size:11px; font-weight:900; padding:1px 6px; }");
+        } else {
+            shardCount += result.fragmentsGained;
+            m_drawCardBadgeLabels[i]->setText(QString("+%1 shards").arg(result.fragmentsGained));
+            m_drawCardBadgeLabels[i]->setStyleSheet(
+                "QLabel { color:#16351f; background: rgba(199,244,196,0.98);"
+                " border: 2px solid rgba(61,128,76,0.95); border-radius: 10px;"
+                " font-size:11px; font-weight:900; padding:1px 6px; }");
+        }
+    }
+
+    m_drawTitleLabel->setText("Supply Opened");
+    m_drawBodyLabel->hide();
+    m_drawResultLabel->setText(QString(
+        "New cards: %1    Shards: %2\nTickets left: %3")
+        .arg(newCount)
+        .arg(shardCount)
+        .arg(CardCollection::tickets()));
+    m_drawResultLabel->show();
+    refreshDrawOverlayLayout();
+    AudioManager::instance().playCardSelect();
+    for (int i = 0; i < results.size(); ++i) {
+        QWidget *frame = m_drawCardFrames[i];
+        QRect finalRect = frame->geometry();
+        QRect startRect = finalRect.adjusted(finalRect.width() / 10, finalRect.height() / 10,
+                                             -finalRect.width() / 10, -finalRect.height() / 10);
+        frame->setGeometry(startRect);
+        frame->show();
+        frame->raise();
+
+        auto *effect = qobject_cast<QGraphicsOpacityEffect*>(frame->graphicsEffect());
+        if (!effect) {
+            effect = new QGraphicsOpacityEffect(frame);
+            frame->setGraphicsEffect(effect);
+        }
+        effect->setOpacity(0.0);
+
+        auto *group = new QParallelAnimationGroup(frame);
+        auto *move = new QPropertyAnimation(frame, "geometry", group);
+        move->setDuration(260);
+        move->setStartValue(startRect);
+        move->setEndValue(finalRect);
+        move->setEasingCurve(QEasingCurve::OutBack);
+
+        auto *fade = new QPropertyAnimation(effect, "opacity", group);
+        fade->setDuration(220);
+        fade->setStartValue(0.0);
+        fade->setEndValue(1.0);
+
+        QTimer::singleShot(i * 70, frame, [group]() {
+            group->start(QAbstractAnimation::DeleteWhenStopped);
+        });
+    }
+}
+
 void DeckPage::openDrawPanel()
 {
-    m_drawResultLabel->setText(
-        QString("<div style='font-size:24px; font-weight:900;'>Supply Draw</div>"
-                "<div style='margin-top:18px;'>Tickets: %1</div>"
-                "<div style='margin-top:22px; color:#ffe3a4;'>New cards unlock towers.</div>"
-                "<div style='margin-top:12px;'>Duplicates become shards for small level bonuses.</div>")
-            .arg(CardCollection::tickets()));
-    m_drawOverlay->show();
-    m_drawOverlay->raise();
+    showDrawInstructions();
+    setDrawOverlayVisible(true);
 }
 
 void DeckPage::performDraw(int count)
 {
     const QVector<DrawResult> results = CardCollection::drawMany(count);
     if (results.isEmpty()) {
-        m_drawResultLabel->setText(
-            "<div style='font-size:24px; font-weight:900;'>No tickets left</div>"
-            "<div style='margin-top:22px;'>Finish a battle to earn more supply tickets.</div>");
+        m_drawTitleLabel->setText("No tickets left");
+        m_drawBodyLabel->setText("Finish a battle to earn more supply tickets.");
+        m_drawBodyLabel->show();
+        m_drawResultLabel->clear();
+        m_drawResultLabel->hide();
+        clearDrawCards();
+        refreshDrawOverlayLayout();
         refreshCollectionDisplay();
         return;
     }
-
-    QStringList lines;
-    int newCount = 0;
-    int shardCount = 0;
-    for (const DrawResult& result : results) {
-        if (result.isNew) {
-            ++newCount;
-            lines << QString("<span style='color:#fff4a8;'>NEW!</span> %1")
-                         .arg(cardNameForKind(result.kind));
-        } else {
-            shardCount += result.fragmentsGained;
-            lines << QString("%1  +%2 shards")
-                         .arg(cardNameForKind(result.kind))
-                         .arg(result.fragmentsGained);
-        }
-    }
-
-    m_drawResultLabel->setText(QString(
-        "<div style='font-size:24px; font-weight:900;'>Supply Opened</div>"
-        "<div style='margin-top:12px;'>New cards: %1 &nbsp;&nbsp; Shards: %2</div>"
-        "<div style='margin-top:20px; line-height:135%;'>%3</div>"
-        "<div style='margin-top:18px;'>Tickets left: %4</div>")
-        .arg(newCount)
-        .arg(shardCount)
-        .arg(lines.join("<br>"))
-        .arg(CardCollection::tickets()));
+    populateDrawResults(results);
     refreshDetailPanel(qMax(0, m_selectedCardIndex));
     refreshCollectionDisplay();
 }
@@ -716,4 +882,93 @@ void DeckPage::connectSignals()
         emit signalDeckSelected(kinds);
         emit signalBattleStart();
     });
+}
+
+void DeckPage::refreshDrawOverlayLayout()
+{
+    if (!m_drawOverlay || !m_drawTitleLabel || !m_drawBodyLabel || !m_drawResultLabel || !m_drawCardsPanel) {
+        return;
+    }
+
+    const QRect overlayRect = m_drawOverlay->rect();
+    const int overlayW = overlayRect.width();
+    const int overlayH = overlayRect.height();
+    const int margin = qMax(18, overlayW / 26);
+    const int gap = qMax(10, overlayW / 42);
+    const int contentW = qMax(0, overlayW - margin * 2);
+    const int buttonW = (overlayW - margin * 2 - gap * 2) / 3;
+    const int buttonH = qBound(42, overlayH / 9, 58);
+    const int buttonY = overlayH - margin - buttonH;
+    const int blockGap = qMax(10, overlayH / 40);
+    const int sectionGap = qMax(14, overlayH / 30);
+    const auto wrappedHeight = [contentW](QLabel *label, int minHeight, int maxHeight) {
+        if (!label || !label->isVisible() || label->text().isEmpty() || contentW <= 0) {
+            return 0;
+        }
+        const QFontMetrics metrics(label->font());
+        const QRect bounds = metrics.boundingRect(QRect(0, 0, contentW, 2000),
+                                                  Qt::TextWordWrap, label->text());
+        return qBound(minHeight, bounds.height() + 8, maxHeight);
+    };
+
+    int top = margin;
+    const int titleH = qBound(42, overlayH / 10, 60);
+    m_drawTitleLabel->setGeometry(margin, top, contentW, titleH);
+    top += titleH + blockGap;
+
+    const int bodyH = wrappedHeight(m_drawBodyLabel, 70, qMax(110, overlayH / 3));
+    if (bodyH > 0) {
+        m_drawBodyLabel->setGeometry(margin, top, contentW, bodyH);
+        top += bodyH + sectionGap;
+    } else {
+        m_drawBodyLabel->setGeometry(0, 0, 0, 0);
+    }
+
+    const int summaryH = wrappedHeight(m_drawResultLabel, 42, qMax(72, overlayH / 5));
+    if (summaryH > 0) {
+        m_drawResultLabel->setGeometry(margin, top, contentW, summaryH);
+        top += summaryH + sectionGap;
+    } else {
+        m_drawResultLabel->setGeometry(0, 0, 0, 0);
+    }
+
+    const int cardsBottom = buttonY - qMax(14, overlayH / 34);
+    const bool showCards = m_lastDrawResultCount > 0;
+    m_drawCardsPanel->setVisible(showCards);
+    m_drawCardsPanel->setGeometry(margin, top, contentW, qMax(0, cardsBottom - top));
+    layoutDrawCards();
+
+    m_btnDrawOne->setGeometry(margin, buttonY, buttonW, buttonH);
+    m_btnDrawTen->setGeometry(margin + buttonW + gap, buttonY, buttonW, buttonH);
+    m_btnCloseDraw->setGeometry(margin + (buttonW + gap) * 2, buttonY, buttonW, buttonH);
+}
+
+void DeckPage::setDrawOverlayVisible(bool visible)
+{
+    m_drawOverlayVisible = visible;
+    if (m_drawOverlay) {
+        m_drawOverlay->setVisible(visible);
+        if (visible) {
+            m_drawOverlay->raise();
+        }
+    }
+    updateLockLabelVisibilityForOverlay();
+    if (!visible) {
+        refreshCollectionDisplay();
+    }
+}
+
+void DeckPage::updateLockLabelVisibilityForOverlay()
+{
+    for (int i = 0; i < m_cardLockLabels.size() && i < m_allCards.size(); ++i) {
+        const bool owned = CardCollection::isOwned(m_allCards[i].kind);
+        if (m_drawOverlayVisible) {
+            m_cardLockLabels[i]->hide();
+            continue;
+        }
+        m_cardLockLabels[i]->setVisible(!owned);
+        if (!owned) {
+            m_cardLockLabels[i]->raise();
+        }
+    }
 }

@@ -8,10 +8,11 @@
 
 namespace game::core {
 
-Card::Card(int id, MapPosition position, ObjectType type, int maxHp, int attack,
+Card::Card(int id, MapPosition position, CardKind kind, ObjectType type, int maxHp, int attack,
            int attackRange, int moveLimit, double skillCooldownSeconds,
            int deployCost)
     : Entity(id, position, type, Team::Player, maxHp, attack),
+      kind_(kind),
       level_(1),
       attackRange_(attackRange),
       moveLimit_(moveLimit),

@@ -113,6 +113,8 @@ QString cardDisplayName(game::core::CardKind kind)
     case game::core::CardKind::Arsenal: return "Mango Engineer";
     case game::core::CardKind::Heal: return "Peach Healer";
     case game::core::CardKind::HeavyMedic: return "Coco Defender";
+    case game::core::CardKind::Attack2: return "Grape Blaster";
+    case game::core::CardKind::Heal2: return "Papaya Support";
     }
     return "Unknown";
 }
@@ -126,20 +128,7 @@ QString mapDisplayName(const QString& mapId)
 
 QString replayUnitName(const game::core::UnitSnapshot& unit)
 {
-    const int baseMaxHp = unit.maxHp - qMax(0, unit.level - 1) * 20;
-    if (unit.type == game::core::ObjectType::CardHeal) {
-        return unit.deployCost == 60 || baseMaxHp >= 500 ? "Coco Defender" : "Peach Healer";
-    }
-    if (unit.type == game::core::ObjectType::CardProduce) {
-        return unit.deployCost == 80 || baseMaxHp >= 500 ? "Mango Engineer" : "Miner Pine";
-    }
-    if (unit.type == game::core::ObjectType::CardAttack) {
-        if (unit.deployCost == 50 || baseMaxHp == 400) return "Sniper Berry";
-        if (unit.deployCost == 60 || baseMaxHp == 500) return "Orange Bomber";
-        if (unit.deployCost == 55 || baseMaxHp == 450) return "Berry Tank";
-        return "Kiwi Scout";
-    }
-    return QString("Unit %1").arg(unit.id);
+    return cardDisplayName(unit.kind);
 }
 
 QString replayMonsterName(game::core::MonsterKind kind)
@@ -186,26 +175,36 @@ QRectF cardSourceRect(game::core::CardKind kind)
     case game::core::CardKind::Aoe: return {272, 428, 153, 198};
     case game::core::CardKind::HeavyMedic: return {441, 428, 161, 198};
     case game::core::CardKind::Arsenal: return {619, 428, 160, 198};
+    case game::core::CardKind::Attack2: return {795, 423, 160, 201};
+    case game::core::CardKind::Heal2: return {968, 423, 164, 201};
     }
     return {440, 214, 162, 199};
 }
 
 const QPixmap* unitArtwork(const game::core::UnitSnapshot& unit)
 {
+    static const QPixmap kiwi(":/images/new_art/unit_kiwi_scout.png");
+    static const QPixmap miner(":/images/new_art/unit_miner_pine.png");
+    static const QPixmap mango(":/images/new_art/unit_mango_engineer.png");
     static const QPixmap sniper(":/images/new_art/unit_sniper_berry.png");
     static const QPixmap bomber(":/images/new_art/unit_orange_bomber.png");
     static const QPixmap tank(":/images/new_art/unit_berry_tank.png");
     static const QPixmap healer(":/images/new_art/unit_peach_healer.png");
     static const QPixmap defender(":/images/new_art/unit_coco_defender.png");
+    static const QPixmap grape(":/images/new_art/unit_grape_blaster.png");
+    static const QPixmap papaya(":/images/new_art/unit_papaya_support.png");
 
-    const int baseMaxHp = unit.maxHp - qMax(0, unit.level - 1) * 20;
-    if (unit.type == game::core::ObjectType::CardHeal) {
-        return unit.deployCost == 60 || baseMaxHp >= 500 ? &defender : &healer;
-    }
-    if (unit.type == game::core::ObjectType::CardAttack) {
-        if (unit.deployCost == 50 || baseMaxHp == 400) return &sniper;
-        if (unit.deployCost == 60 || baseMaxHp == 500) return &bomber;
-        if (unit.deployCost == 55 || baseMaxHp == 450) return &tank;
+    switch (unit.kind) {
+    case game::core::CardKind::Attack: return &kiwi;
+    case game::core::CardKind::Sniper: return &sniper;
+    case game::core::CardKind::Aoe: return &bomber;
+    case game::core::CardKind::Specialist: return &tank;
+    case game::core::CardKind::Produce: return &miner;
+    case game::core::CardKind::Arsenal: return &mango;
+    case game::core::CardKind::Heal: return &healer;
+    case game::core::CardKind::HeavyMedic: return &defender;
+    case game::core::CardKind::Attack2: return &grape;
+    case game::core::CardKind::Heal2: return &papaya;
     }
     return nullptr;
 }
@@ -1435,6 +1434,9 @@ BattlePage::BattlePage(QWidget *parent)
     , m_tutorialOverlay(nullptr)
     , m_isPaused(false)
     , m_speedMultiplier(1.0)
+    , m_currentWaveId(0)
+    , m_pveFinalWave(10)
+    , m_waveTimer(0.0)
     , m_battleManager(nullptr)
     , m_isPvp(false)
     , m_isHost(false)
@@ -2433,6 +2435,8 @@ void BattlePage::startBattle()
 
         // 启用 PVP 模式
         m_battleManager->setPvpMode(true);
+        m_battleManager->setPveDifficulty(0);
+        m_pveFinalWave = 10;
 
         // 应用同步的随机种子
         m_battleManager->setRandomSeed(m_netCtx.seed);
@@ -2459,6 +2463,13 @@ void BattlePage::startBattle()
         qDebug() << "[BattlePage] PVP mode started, isHost:" << m_isHost << "seed:" << m_netCtx.seed;
     } else {
         setupPveMap();
+        m_battleManager->setPvpMode(false);
+        m_battleManager->setPveDifficulty(m_netCtx.pveDifficulty);
+        switch (std::clamp(m_netCtx.pveDifficulty, 0, 2)) {
+        case 1: m_pveFinalWave = 13; break;
+        case 2: m_pveFinalWave = 15; break;
+        default: m_pveFinalWave = 10; break;
+        }
 
         // 隐藏对手信息
         if (m_opponentLabel) {
@@ -2638,7 +2649,7 @@ void BattlePage::onGameTick()
 
     // PVE: 自动下一波
     if (!m_isPvp && !snap.waveActive) {
-        if (m_currentWaveId >= PVE_FINAL_WAVE) {
+        if (m_currentWaveId >= m_pveFinalWave) {
             recordReplaySnapshot(snap, 0.0, true);
             m_battleView->updateFromSnapshot(snap);
             updateStatusBar(snap);
@@ -3007,7 +3018,11 @@ void BattlePage::updateStatusBar(const game::core::BattleSnapshot &snapshot)
     m_displayOpponentCoreHealth = snapshot.opponentBaseHealth;
     m_displayResources = snapshot.resources;
 
-    m_waveLabel->setText(QString("Wave %1").arg(snapshot.currentWave));
+    if (!m_isPvp) {
+        m_waveLabel->setText(QString("Wave %1/%2").arg(snapshot.currentWave).arg(m_pveFinalWave));
+    } else {
+        m_waveLabel->setText(QString("Wave %1").arg(snapshot.currentWave));
+    }
     m_phaseLabel->setText(m_isPvp
                               ? (snapshot.waveActive ? "Battle Phase" : "Resource Phase")
                               : mapDisplayName(m_activePveMapId));

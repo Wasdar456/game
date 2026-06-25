@@ -62,7 +62,9 @@ enum class CardKind : std::uint8_t {
     Produce,
     Arsenal,
     Heal,
-    HeavyMedic
+    HeavyMedic,
+    Attack2,
+    Heal2
 };
 
 // 怪物分类。顺序与网络模块 ProtocolDef.h 中的 MonsterKind 设计一致。
@@ -105,12 +107,14 @@ inline ObjectType toObjectType(CardKind kind) {
         case CardKind::Sniper:
         case CardKind::Aoe:
         case CardKind::Specialist:
+        case CardKind::Attack2:
             return ObjectType::CardAttack;
         case CardKind::Produce:
         case CardKind::Arsenal:
             return ObjectType::CardProduce;
         case CardKind::Heal:
         case CardKind::HeavyMedic:
+        case CardKind::Heal2:
             return ObjectType::CardHeal;
     }
     return ObjectType::None;
@@ -120,7 +124,8 @@ inline bool isAttackCardKind(CardKind kind) {
     return kind == CardKind::Attack ||
            kind == CardKind::Sniper ||
            kind == CardKind::Aoe ||
-           kind == CardKind::Specialist;
+           kind == CardKind::Specialist ||
+           kind == CardKind::Attack2;
 }
 
 inline bool isProduceCardKind(CardKind kind) {
@@ -130,7 +135,8 @@ inline bool isProduceCardKind(CardKind kind) {
 
 inline bool isHealCardKind(CardKind kind) {
     return kind == CardKind::Heal ||
-           kind == CardKind::HeavyMedic;
+           kind == CardKind::HeavyMedic ||
+           kind == CardKind::Heal2;
 }
 
 // 将怪物种类转换成具体对象类型，供 Monster 基类构造使用。

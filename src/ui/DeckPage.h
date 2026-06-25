@@ -1,7 +1,7 @@
 #ifndef DECKPAGE_H
 #define DECKPAGE_H
 
-#include "core/base/CoreTypes.h"
+#include "ui/CardCollection.h"
 
 #include <QColor>
 #include <QLabel>
@@ -57,7 +57,10 @@ private:
     QLabel      *m_ticketLabel;
     QPushButton *m_btnDrawPanel;
     QWidget     *m_drawOverlay;
+    QLabel      *m_drawTitleLabel;
+    QLabel      *m_drawBodyLabel;
     QLabel      *m_drawResultLabel;
+    QWidget     *m_drawCardsPanel;
     QPushButton *m_btnDrawOne;
     QPushButton *m_btnDrawTen;
     QPushButton *m_btnCloseDraw;
@@ -74,6 +77,12 @@ private:
     QVector<QLabel*> m_cardLockLabels;
     ArtHotspot *m_backHotspot;
     ArtHotspot *m_startHotspot;
+    QVector<QWidget*> m_drawCardFrames;
+    QVector<QLabel*> m_drawCardArtLabels;
+    QVector<QLabel*> m_drawCardNameLabels;
+    QVector<QLabel*> m_drawCardBadgeLabels;
+    int m_lastDrawResultCount;
+    bool m_drawOverlayVisible;
 
     void initUI();
     void createCardPoolData();
@@ -88,6 +97,14 @@ private:
     void performDraw(int count);
     QString cardNameForKind(game::core::CardKind kind) const;
     int indexForKind(game::core::CardKind kind) const;
+    void ensureDrawCardWidgets(int count);
+    void layoutDrawCards();
+    void showDrawInstructions();
+    void clearDrawCards();
+    void populateDrawResults(const QVector<DrawResult>& results);
+    void refreshDrawOverlayLayout();
+    void setDrawOverlayVisible(bool visible);
+    void updateLockLabelVisibilityForOverlay();
 };
 
 #endif // DECKPAGE_H

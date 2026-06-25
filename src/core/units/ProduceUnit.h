@@ -9,13 +9,15 @@ namespace game::core {
 // 冷却完成后自动向 ResourceManager 增加资源。
 class ProduceUnit : public Card {
 public:
-    explicit ProduceUnit(int id, MapPosition position);
+    explicit ProduceUnit(int id, MapPosition position,
+                         CardKind kind = CardKind::Produce);
     ProduceUnit(int id,
                 MapPosition position,
                 int maxHp,
                 int moveLimit,
                 double skillCooldownSeconds,
                 int deployCost,
+                CardKind kind,
                 int resourceYield);
 
     int resourceYield() const { return resourceYield_; }

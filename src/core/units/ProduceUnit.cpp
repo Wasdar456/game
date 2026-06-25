@@ -4,8 +4,8 @@
 
 namespace game::core {
 
-ProduceUnit::ProduceUnit(int id, MapPosition position)
-    : Card(id, position, ObjectType::CardProduce, 80, 0, 0, 1, 5.0,
+ProduceUnit::ProduceUnit(int id, MapPosition position, CardKind kind)
+    : Card(id, position, kind, ObjectType::CardProduce, 80, 0, 0, 1, 5.0,
            constants::DeployCostProduce),
       resourceYield_(25) {}
 
@@ -15,8 +15,9 @@ ProduceUnit::ProduceUnit(int id,
                          int moveLimit,
                          double skillCooldownSeconds,
                          int deployCost,
+                         CardKind kind,
                          int resourceYield)
-    : Card(id, position, ObjectType::CardProduce, maxHp, 0, 0, moveLimit,
+    : Card(id, position, kind, ObjectType::CardProduce, maxHp, 0, 0, moveLimit,
            skillCooldownSeconds, deployCost),
       resourceYield_(resourceYield) {}
 
