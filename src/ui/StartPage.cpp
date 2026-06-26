@@ -53,19 +53,36 @@ void drawCover(QPainter &painter, const QPixmap &pixmap, const QRect &target)
 
 StartPage::StartPage(QWidget *parent)
     : QWidget(parent)
-    , m_splashActive(true)
+    , m_introActive(true)
+    , m_splashActive(false)
     , m_menuLayer(nullptr)
+    , m_fadeOverlay(nullptr)
     , m_pressHint(nullptr)
     , m_ambientPhase(0.0)
+    , m_introElapsed(0.0)
+    , m_menuRevealProgress(0.0)
 {
     initUI();
 
     m_ambientTimer.setInterval(50);
     connect(&m_ambientTimer, &QTimer::timeout, this, [this]() {
         m_ambientPhase += 0.025;
-        if (!m_splashActive) {
+        if (m_introActive) {
+            m_introElapsed += 0.05;
+            if (m_introElapsed >= 2.35) {
+                finishIntro();
+            }
             update();
+            return;
         }
+        if (m_menuRevealProgress < 1.0) {
+            m_menuRevealProgress = qMin<qreal>(1.0, m_menuRevealProgress + 0.055);
+            if (m_menuLayer) {
+                m_menuLayer->show();
+            }
+            updateFadeOverlay();
+        }
+        update();
     });
     m_ambientTimer.start();
 }
@@ -76,6 +93,36 @@ void StartPage::paintEvent(QPaintEvent *event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    if (m_introActive) {
+        painter.fillRect(rect(), QColor(0, 0, 0));
+        const qreal fadeIn = qBound<qreal>(0.0, m_introElapsed / 0.75, 1.0);
+        const qreal fadeOut = qBound<qreal>(0.0, (2.35 - m_introElapsed) / 0.55, 1.0);
+        const qreal alpha = qMin(fadeIn, fadeOut);
+        const qreal lift = (1.0 - fadeIn) * 18.0;
+
+        painter.save();
+        painter.setOpacity(alpha);
+        QFont titleFont("Microsoft YaHei UI", qMax(28, height() / 15), QFont::Black);
+        painter.setFont(titleFont);
+        painter.setPen(QColor(255, 238, 178));
+        QRectF titleRect(0, height() * 0.40 - lift, width(), height() * 0.12);
+        painter.drawText(titleRect, Qt::AlignCenter, "Defense & Juice");
+
+        QFont subFont("Microsoft YaHei UI", qMax(12, height() / 42), QFont::DemiBold);
+        painter.setFont(subFont);
+        painter.setPen(QColor(162, 229, 196, 215));
+        painter.drawText(QRectF(0, titleRect.bottom() + 8, width(), 38),
+                         Qt::AlignCenter, "Berrybyte Lab Defense Protocol");
+
+        QRadialGradient glow(QPointF(width() * 0.5, height() * 0.50), width() * 0.32);
+        glow.setColorAt(0.0, QColor(255, 210, 116, qRound(alpha * 42)));
+        glow.setColorAt(0.55, QColor(92, 206, 170, qRound(alpha * 16)));
+        glow.setColorAt(1.0, QColor(0, 0, 0, 0));
+        painter.fillRect(rect(), glow);
+        painter.restore();
+        return;
+    }
 
     if (m_splashActive) {
         static QPixmap splash(":/images/ui/scene_lab_03.png");
@@ -174,10 +221,16 @@ void StartPage::paintEvent(QPaintEvent *event)
     vignette.setColorAt(0.5, QColor(24, 35, 24, 0));
     vignette.setColorAt(1.0, QColor(22, 26, 18, 30));
     painter.fillRect(m_canvasRect, vignette);
+
 }
 
 void StartPage::keyPressEvent(QKeyEvent *event)
 {
+    if (m_introActive) {
+        finishIntro();
+        event->accept();
+        return;
+    }
     if (m_splashActive) {
         revealMenu();
         event->accept();
@@ -188,6 +241,11 @@ void StartPage::keyPressEvent(QKeyEvent *event)
 
 void StartPage::mousePressEvent(QMouseEvent *event)
 {
+    if (m_introActive) {
+        finishIntro();
+        event->accept();
+        return;
+    }
     if (m_splashActive) {
         revealMenu();
         event->accept();
@@ -200,7 +258,7 @@ void StartPage::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
     setFocus(Qt::OtherFocusReason);
-    if (!m_splashActive) {
+    if (!m_splashActive && !m_introActive) {
         updateArtworkLayout();
         playEnterAnimation();
     }
@@ -211,6 +269,9 @@ void StartPage::resizeEvent(QResizeEvent *event)
     QWidget::resizeEvent(event);
     if (m_menuLayer) {
         m_menuLayer->setGeometry(rect());
+    }
+    if (m_fadeOverlay) {
+        m_fadeOverlay->setGeometry(rect());
     }
     if (m_pressHint) {
         m_pressHint->move((width() - m_pressHint->width()) / 2,
@@ -226,11 +287,12 @@ void StartPage::playEnterAnimation()
     }
 
     m_menuLayer->setGraphicsEffect(nullptr);
-    m_menuLayer->show();
+    m_menuLayer->setVisible(!m_introActive);
     m_menuLayer->raise();
     for (ArtHotspot *button : m_buttons) {
         button->refreshVisual();
     }
+    updateFadeOverlay();
     update();
 }
 
@@ -242,6 +304,11 @@ void StartPage::initUI()
     m_menuLayer = new QWidget(this);
     m_menuLayer->setAttribute(Qt::WA_TranslucentBackground);
     m_menuLayer->hide();
+
+    m_fadeOverlay = new QWidget(this);
+    m_fadeOverlay->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_fadeOverlay->setGeometry(rect());
+    m_fadeOverlay->hide();
 
     const QString artwork = ":/images/artwork/main_menu.jpg";
     for (int i = 0; i < kMenuHotspots.size(); ++i) {
@@ -274,8 +341,28 @@ void StartPage::initUI()
         " font-weight: 700;"
         "}"
     );
+    m_pressHint->hide();
 
     updateArtworkLayout();
+}
+
+void StartPage::finishIntro()
+{
+    if (!m_introActive) {
+        return;
+    }
+    m_introActive = false;
+    m_splashActive = false;
+    m_menuRevealProgress = 0.0;
+    if (m_pressHint) {
+        m_pressHint->hide();
+    }
+    if (m_menuLayer) {
+        m_menuLayer->show();
+    }
+    updateArtworkLayout();
+    updateFadeOverlay();
+    update();
 }
 
 void StartPage::revealMenu()
@@ -285,8 +372,10 @@ void StartPage::revealMenu()
     }
 
     m_splashActive = false;
+    m_menuRevealProgress = 1.0;
     m_pressHint->hide();
     m_menuLayer->show();
+    updateFadeOverlay();
     updateArtworkLayout();
     playEnterAnimation();
 }
@@ -322,5 +411,25 @@ void StartPage::updateArtworkLayout()
         m_buttons[i]->setCanvasRect(target);
         m_buttons[i]->raise();
     }
+    updateFadeOverlay();
     update();
+}
+
+void StartPage::updateFadeOverlay()
+{
+    if (!m_fadeOverlay) {
+        return;
+    }
+
+    m_fadeOverlay->setGeometry(rect());
+    if (m_introActive || m_menuRevealProgress >= 1.0) {
+        m_fadeOverlay->hide();
+        return;
+    }
+
+    const int alpha = qBound(0, qRound((1.0 - m_menuRevealProgress) * 255), 255);
+    m_fadeOverlay->setStyleSheet(
+        QString("background-color: rgba(0, 0, 0, %1);").arg(alpha));
+    m_fadeOverlay->show();
+    m_fadeOverlay->raise();
 }

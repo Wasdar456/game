@@ -27,6 +27,7 @@
 #include <QPen>
 #include <QBrush>
 #include <QConicalGradient>
+#include <QPainterPath>
 #include <QRadialGradient>
 #include <QLinearGradient>
 #include <vector>
@@ -1141,54 +1142,87 @@ void BattleView::drawMonsters(QPainter &painter)
     }
 }
 
-// ========== drawProjectiles() —— 绘制投射物占位特效 ==========
+// ========== drawProjectiles() —— 绘制投射物特效 ==========
 void BattleView::drawProjectiles(QPainter &painter)
 {
     for (const auto &projectile : m_snapshot.projectiles) {
         const double progress = std::clamp(projectile.progress, 0.0, 1.0);
         const QPointF start = cellCenter(projectile.fromRow, projectile.fromCol);
         const QPointF end = cellCenter(projectile.toRow, projectile.toCol);
-        const double startX = start.x();
-        const double startY = start.y();
-        const double endX = end.x();
-        const double endY = end.y();
-        const double x = startX + (endX - startX) * progress;
-        const double y = startY + (endY - startY) * progress;
+        const QPointF delta = end - start;
+        const double distance = std::hypot(delta.x(), delta.y());
+        const QPointF normal = distance > 0.001
+                                   ? QPointF(-delta.y() / distance, delta.x() / distance)
+                                   : QPointF(0.0, -1.0);
+        const double arc = qSin(progress * M_PI) * cellExtent() * 0.16;
+        const QPointF current = start + delta * progress + normal * arc;
 
         QColor color(255, 220, 80);
-        int radius = 5;
+        QColor coreColor(255, 252, 210);
+        qreal radius = cellExtent() * 0.085;
+        qreal trailWidth = 3.0;
         if (projectile.kind == game::core::ProjectileKind::Sniper) {
             color = QColor(80, 190, 255);
-            radius = 4;
+            coreColor = QColor(220, 248, 255);
+            radius = cellExtent() * 0.065;
+            trailWidth = 2.2;
         } else if (projectile.kind == game::core::ProjectileKind::Aoe) {
             color = QColor(255, 110, 40);
-            radius = 7;
+            coreColor = QColor(255, 239, 184);
+            radius = cellExtent() * 0.12;
+            trailWidth = 4.4;
         } else if (projectile.kind == game::core::ProjectileKind::Monster) {
             color = QColor(210, 70, 255);
-            radius = 5;
+            coreColor = QColor(249, 212, 255);
+            radius = cellExtent() * 0.09;
+            trailWidth = 3.2;
         }
 
-        painter.setRenderHint(QPainter::Antialiasing, true);
-        painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 110), 2));
-        painter.drawLine(QPointF(startX, startY), QPointF(x, y));
+        QPainterPath path;
+        path.moveTo(start);
+        path.quadTo((start + end) * 0.5 + normal * cellExtent() * 0.18, current);
 
-        QRadialGradient glow(QPointF(x, y), radius * 2.5);
-        glow.setColorAt(0, QColor(color.red(), color.green(), color.blue(), 220));
-        glow.setColorAt(1, QColor(color.red(), color.green(), color.blue(), 0));
+        painter.save();
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.setCompositionMode(QPainter::CompositionMode_Screen);
+
+        QPen wideTrail(QColor(color.red(), color.green(), color.blue(), 42), trailWidth * 3.4,
+                       Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.setPen(wideTrail);
+        painter.drawPath(path);
+
+        QPen hotTrail(QColor(color.red(), color.green(), color.blue(), 150), trailWidth,
+                      Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.setPen(hotTrail);
+        painter.drawPath(path);
+
+        QRadialGradient glow(current, radius * 4.2);
+        glow.setColorAt(0.0, QColor(coreColor.red(), coreColor.green(), coreColor.blue(), 235));
+        glow.setColorAt(0.35, QColor(color.red(), color.green(), color.blue(), 185));
+        glow.setColorAt(1.0, QColor(color.red(), color.green(), color.blue(), 0));
         painter.setPen(Qt::NoPen);
         painter.setBrush(glow);
-        painter.drawEllipse(QPointF(x, y), radius * 2.5, radius * 2.5);
+        painter.drawEllipse(current, radius * 4.2, radius * 4.2);
 
+        painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
         painter.setBrush(color);
-        painter.drawEllipse(QPointF(x, y), radius, radius);
+        painter.drawEllipse(current, radius, radius);
+        painter.setBrush(coreColor);
+        painter.drawEllipse(current, radius * 0.42, radius * 0.42);
 
         if (projectile.kind == game::core::ProjectileKind::Aoe && projectile.splashRadius > 0) {
             const double splashPixels = projectile.splashRadius * cellExtent();
-            QColor splashColor(color.red(), color.green(), color.blue(), 35);
-            painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 80), 1, Qt::DashLine));
+            const qreal pulse = 0.55 + 0.25 * qSin(m_animFrame * 0.25);
+            QColor splashColor(color.red(), color.green(), color.blue(), qRound(28 + pulse * 22));
+            painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), qRound(95 + pulse * 60)),
+                                1.5, Qt::DashLine));
             painter.setBrush(splashColor);
-            painter.drawEllipse(QPointF(endX, endY), splashPixels, splashPixels);
+            painter.drawEllipse(end, splashPixels, splashPixels);
+            painter.setPen(QPen(QColor(255, 238, 180, qRound(80 + pulse * 75)), 1.2));
+            painter.drawEllipse(end, splashPixels * (0.68 + pulse * 0.08),
+                                splashPixels * (0.68 + pulse * 0.08));
         }
+        painter.restore();
     }
 }
 
@@ -2707,19 +2741,50 @@ void BattleView::drawEffects(QPainter &painter)
             painter.setPen(Qt::NoPen);
             painter.setBrush(flash);
             painter.drawEllipse(center, extent * 0.48, extent * 0.48);
-            painter.setPen(QPen(QColor(255, 238, 171, qRound(alpha * 225)), 2));
-            for (int i = 0; i < 6; ++i) {
-                const qreal angle = i * 1.047 + progress;
-                painter.drawLine(center + QPointF(qCos(angle), qSin(angle)) * extent * 0.18,
-                                 center + QPointF(qCos(angle), qSin(angle)) * extent * 0.48);
+
+            painter.setCompositionMode(QPainter::CompositionMode_Screen);
+            for (int i = 0; i < 8; ++i) {
+                const qreal angle = i * M_PI / 4.0 + progress * 1.5;
+                const qreal inner = extent * (0.12 + progress * 0.08);
+                const qreal outer = extent * (0.34 + progress * 0.24);
+                painter.setPen(QPen(QColor(255, 238, 171, qRound(alpha * (190 - i * 7))),
+                                    i % 2 ? 1.4 : 2.2, Qt::SolidLine, Qt::RoundCap));
+                painter.drawLine(center + QPointF(qCos(angle), qSin(angle)) * inner,
+                                 center + QPointF(qCos(angle), qSin(angle)) * outer);
             }
+            painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+            painter.setPen(QPen(QColor(92, 58, 26, qRound(alpha * 110)), 1.2));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawEllipse(center, extent * (0.18 + progress * 0.20),
+                                extent * (0.10 + progress * 0.12));
         } else {
             const qreal alpha = 1.0 - progress;
-            const qreal radius = extent * (0.20 + progress * 0.38);
+            const qreal radius = extent * (0.16 + progress * 0.42);
+
+            QRadialGradient burst(center, radius * 1.8);
+            burst.setColorAt(0.0, QColor(255, 250, 222, qRound(alpha * 180)));
+            burst.setColorAt(0.32, QColor(255, 95, 65, qRound(alpha * 95)));
+            burst.setColorAt(1.0, QColor(255, 58, 46, 0));
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(burst);
+            painter.drawEllipse(center, radius * 1.8, radius * 1.8);
+
             painter.setPen(QPen(QColor(255, 244, 218, qRound(alpha * 235)),
                                 3.0 - progress * 1.6));
-            painter.setBrush(QColor(255, 76, 61, qRound(alpha * 72)));
+            painter.setBrush(QColor(255, 76, 61, qRound(alpha * 54)));
             painter.drawEllipse(center, radius, radius);
+
+            painter.setCompositionMode(QPainter::CompositionMode_Screen);
+            for (int i = 0; i < 7; ++i) {
+                const qreal angle = i * 0.897 + effect.col * 0.13;
+                const qreal dist = extent * (0.18 + progress * (0.34 + (i % 3) * 0.04));
+                const QPointF spark = center + QPointF(qCos(angle), qSin(angle) * 0.72) * dist;
+                const qreal sparkRadius = extent * (0.045 + (i % 2) * 0.018) * alpha;
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(QColor(255, 210, 120, qRound(alpha * 190)));
+                painter.drawEllipse(spark, sparkRadius, sparkRadius);
+            }
+            painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
             painter.setPen(QPen(QColor(255, 91, 67, qRound(alpha * 210)), 2));
             painter.drawLine(center + QPointF(-extent * 0.23, -extent * 0.18),
                              center + QPointF(extent * 0.23, extent * 0.18));

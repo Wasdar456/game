@@ -37,8 +37,10 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private:
+    bool m_introActive;
     bool m_splashActive;
     QWidget *m_menuLayer;
+    QWidget *m_fadeOverlay;
     QLabel *m_pressHint;
     QRectF m_canvasRect;
     QPixmap m_menuCache;
@@ -46,10 +48,14 @@ private:
     QVector<ArtHotspot*> m_buttons;
     QTimer m_ambientTimer;
     qreal m_ambientPhase;
+    qreal m_introElapsed;
+    qreal m_menuRevealProgress;
 
     void initUI();
+    void finishIntro();
     void revealMenu();
     void updateArtworkLayout();
+    void updateFadeOverlay();
 };
 
 #endif // STARTPAGE_H
