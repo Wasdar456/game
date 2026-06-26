@@ -6,6 +6,7 @@
 #include "ui/DeployPage.h"
 #include "ui/MainWindow.h"
 #include "ui/AudioManager.h"
+#include "ui/PvpMapLayout.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -1159,49 +1160,14 @@ void DeployPage::setupCardButtonConnections()
 void DeployPage::setupMap()
 {
     auto& map = m_battleManager->map();
-    map.resize(8, 18, game::core::TerrainType::FlatLand, 0);
-
-    const game::core::MapPosition spawn1(0, 8);
-    const game::core::MapPosition spawn2(7, 9);
-    const game::core::MapPosition coreA(4, 0);
-    const game::core::MapPosition coreB(4, 17);
-    map.setGrid(spawn1, game::core::TerrainType::SpawnPoint, 0);
-    map.setGrid(spawn2, game::core::TerrainType::SpawnPoint, 0);
-    map.setGrid(coreA, game::core::TerrainType::CoreA, 0);
-    map.setGrid(coreB, game::core::TerrainType::CoreB, 0);
-
-    std::vector<game::core::MapPosition> pathToA = {
-        spawn1, {1,8}, {2,8}, {3,8}, {4,8},
-        {4,7}, {4,6}, {4,5}, {4,4}, {4,3}, {4,2}, {4,1}, coreA
-    };
-    std::vector<game::core::MapPosition> pathToB = {
-        spawn2, {6,9}, {5,9}, {4,9},
-        {4,10}, {4,11}, {4,12}, {4,13}, {4,14}, {4,15}, {4,16}, coreB
-    };
-    for (const auto& pos : pathToA) {
-        if (pos != spawn1 && pos != coreA) {
-            map.setGrid(pos, game::core::TerrainType::Path, 0);
-        }
-    }
-    for (const auto& pos : pathToB) {
-        if (pos != spawn2 && pos != coreB) {
-            map.setGrid(pos, game::core::TerrainType::Path, 0);
-        }
-    }
-
-    std::vector<game::core::MapPosition> highGround = {
-        {1,2}, {1,4}, {2,6}, {6,2}, {6,5},
-        {1,13}, {1,15}, {2,11}, {6,12}, {6,15}
-    };
-    for (const auto& pos : highGround) {
-        map.setGrid(pos, game::core::TerrainType::HighGround, 1);
-    }
+    const auto layout = game::ui::makePvpMapLayout();
+    game::ui::applyPvpMapLayout(map, layout);
 
     m_battleManager->rebuildMapOccupancy();
-    m_battleManager->setPaths({pathToA, pathToB});
+    m_battleManager->setPaths({layout.pathToA, layout.pathToB});
     m_deployView->setMapSize(map.rows(), map.cols());
-    m_deployView->m_spawnPos = spawn1;
-    m_deployView->m_corePos = m_isHost ? coreA : coreB;
+    m_deployView->m_spawnPos = layout.spawnA;
+    m_deployView->m_corePos = m_isHost ? layout.coreA : layout.coreB;
 }
 
 void DeployPage::updateDeployCount()
