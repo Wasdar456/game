@@ -17,6 +17,7 @@
 #include "ui/MainWindow.h"
 #include <QApplication>
 #include <QPropertyAnimation>
+#include <QScreen>
 #include <QSettings>
 #include <QTimer>
 
@@ -37,6 +38,22 @@
 #include "ui/ResultPage.h"
 #include "ui/AudioManager.h"
 #include "ui/LeafTransitionOverlay.h"
+
+namespace {
+
+QSize clampWindowSizeToScreen(QSize size)
+{
+    const QSize minimum(1280, 720);
+    QScreen *screen = QApplication::primaryScreen();
+    if (!screen) return size;
+
+    const QSize available = screen->availableGeometry().size();
+    size.setWidth(qMax(minimum.width(), qMin(size.width(), available.width())));
+    size.setHeight(qMax(minimum.height(), qMin(size.height(), available.height())));
+    return size;
+}
+
+} // namespace
 
 // ========== 鏋勯€犲嚱鏁?==========
 MainWindow::MainWindow(QWidget *parent)
@@ -77,7 +94,7 @@ MainWindow::MainWindow(QWidget *parent)
     const bool showGrid = settings.value("game/showGrid", true).toBool();
     m_battlePage->setShowGrid(showGrid);
     m_deployPage->setShowGrid(showGrid);
-    const QSize resolution = settings.value("display/resolution", QSize(1280, 720)).toSize();
+    const QSize resolution = clampWindowSizeToScreen(settings.value("display/resolution", QSize(1280, 720)).toSize());
     resize(resolution);
     if (settings.value("display/fullscreen", false).toBool()) {
         QTimer::singleShot(0, this, [this]() { showFullScreen(); });

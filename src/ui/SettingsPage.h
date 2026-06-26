@@ -24,6 +24,7 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include <QPaintEvent>
+#include <QVector>
 
 class SettingsPage : public QWidget
 {
@@ -42,6 +43,8 @@ signals:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     // 导航组件
@@ -65,9 +68,15 @@ private:
     // 操作按钮
     QPushButton *m_btnSave;
     QPushButton *m_btnResetProgress;
+    QLabel      *m_statusLabel;
+    QLabel      *m_easterEggLabel;
+    QVector<int> m_keySequence;
 
     void initUI();
     void connectSignals();
+    void showStatusMessage(const QString& message);
+    void showEasterEgg();
+    void handleSecretKey(int key);
 };
 
 #endif // SETTINGSPAGE_H
