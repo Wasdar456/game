@@ -186,12 +186,12 @@
             "col": 16
           },
           {
-            "row": 9,
-            "col": 17
+            "row": 8,
+            "col": 16
           },
           {
-            "row": 8,
-            "col": 17
+            "row": 7,
+            "col": 16
           },
           {
             "row": 7,
@@ -508,7 +508,9 @@
     {
       "row": 7,
       "col": 16,
-      "type": "DEPLOY_A"
+      "type": "PATH_A",
+      "routeIndexA": 21,
+      "routeLabelA": "A2:21"
     },
     {
       "row": 7,
@@ -611,14 +613,14 @@
     {
       "row": 8,
       "col": 16,
-      "type": "DEPLOY_A"
+      "type": "PATH_A",
+      "routeIndexA": 20,
+      "routeLabelA": "A2:20"
     },
     {
       "row": 8,
       "col": 17,
-      "type": "PATH_A",
-      "routeIndexA": 21,
-      "routeLabelA": "A2:21"
+      "type": "DEPLOY_A"
     },
     {
       "row": 8,
@@ -728,9 +730,7 @@
     {
       "row": 9,
       "col": 17,
-      "type": "PATH_A",
-      "routeIndexA": 20,
-      "routeLabelA": "A2:20"
+      "type": "DEPLOY_A"
     },
     {
       "row": 9,

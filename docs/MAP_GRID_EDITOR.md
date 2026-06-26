@@ -1,160 +1,231 @@
 # 地图网格标注工具
 
-这个工具用于把美术给的地图底图切成规则网格，并手动标注每个格子的玩法含义。当前工具先独立存在，不接入游戏运行时，等地图规则稳定后再让 C++ 读取导出的 JSON/CSV。
+`tools/map_grid_editor.py` 用于编辑 `assets/maps/*.json`。游戏运行时会读取这些 JSON 来生成地图、部署区和怪物路线。
+
+核心规则只有一条：怪物移动看 `routes.A/B[*].path`，不是看 `tiles` 里画了什么颜色。
 
 ## 启动方式
 
 在项目根目录运行：
 
 ```bash
-python3 tools/map_grid_editor.py --image assets/maps/map_01.png --rows 12 --cols 16 --cell-size 48 --output data/maps/map_01.json
+python3 tools/map_grid_editor.py --load assets/maps/lab_map_01.json
 ```
 
-如果暂时没有底图，也可以直接启动空白网格：
+新建地图时可以指定底图、行列和默认输出：
 
 ```bash
-python3 tools/map_grid_editor.py --rows 12 --cols 16 --cell-size 48
+python3 tools/map_grid_editor.py \
+  --image assets/maps/lab_map_01.png \
+  --rows 17 \
+  --cols 28 \
+  --cell-size 19 \
+  --output assets/maps/lab_map_01.json
 ```
 
-继续编辑已有 JSON：
+没有底图时也可以打开空白网格：
 
 ```bash
-python3 tools/map_grid_editor.py --load data/maps/map_01.json
+python3 tools/map_grid_editor.py --rows 17 --cols 28 --cell-size 19
 ```
+
+## 坐标规则
+
+JSON 使用 0 基坐标：
+
+| 视觉行列 | JSON 坐标 |
+| --- | --- |
+| 第 1 行，第 1 列 | `{ "row": 0, "col": 0 }` |
+| 第 10 行，第 17 列 | `{ "row": 9, "col": 16 }` |
+| 第 8 行，第 25 列 | `{ "row": 7, "col": 24 }` |
+
+编辑器右侧会显示鼠标当前格子的两套坐标：
+
+```text
+JSON: row=9, col=16 | 视觉: 第 10 行，第 17 列
+```
+
+写 JSON、看代码、查运行逻辑时用 `row/col`。和策划、美术沟通时通常说“第几行第几列”。
+
+## routes 和 tiles
+
+`routes` 是怪物实际移动路线。每只怪物出生时会拿到其中一条 path，然后按 path 的点逐格移动。
+
+```json
+"routes": {
+  "A": [
+    {
+      "id": "A2",
+      "path": [
+        { "row": 9, "col": 16 },
+        { "row": 8, "col": 16 },
+        { "row": 7, "col": 16 },
+        { "row": 7, "col": 17 }
+      ]
+    }
+  ]
+}
+```
+
+`tiles` 是地块标注。它决定格子在游戏里是路径、部署区、出生点、核心、高台或障碍，也决定编辑器里的颜色和 route label 显示。
+
+```json
+"tiles": [
+  {
+    "row": 9,
+    "col": 16,
+    "type": "PATH_A",
+    "routeIndexA": 19,
+    "routeLabelA": "A2:19"
+  }
+]
+```
+
+只把一个格子画成 `PATH_A` 不会改变怪物路线。必须在 `记录 A 路顺序` 或 `记录 B 路顺序` 模式下点击格子，或直接修改 `routes.A/B[*].path`。
 
 ## 基本操作
 
-- 左键：绘制当前选中的地块类型。
-- 左键拖拽：批量绘制普通地块。
-- 右键：擦除当前格子。
-- 地图模式：`PVE` 允许只有 A 方路线和多个 A 出怪口；`PVP` 会额外要求 B 方出生点、核心和路线。
-- `A路线号` / `B路线号`：选择当前正在记录第几条路线。
-- `新增 A 路线` / `新增 B 路线`：给多出生点地图增加一条独立路线。
-- `清空当前 A/B 路线`：只清空当前路线号对应的路径顺序，不清空地块标注。
-- `适配左侧窗口显示全图`：把底图和格子缩到左侧区域内，保证整张图能一起看到。
-- `恢复原图尺寸`：按图片原始尺寸显示，适合精细检查。
-- 保存 JSON：导出完整地图配置，后续游戏优先读这个。
-- 导出 CSV：导出扁平表格，方便人工检查或给表格工具处理。
+- `普通地块标注（只改 tiles）`：用来画部署区、障碍、高台、路径颜色等地块类型。
+- `记录 A 路顺序（改怪物路线）`：按怪物移动顺序点击格子，写入 `routes.A`。
+- `记录 B 路顺序（改怪物路线）`：按怪物移动顺序点击格子，写入 `routes.B`。
+- `A路线号` / `B路线号`：选择当前正在编辑第几条路线。
+- `新增 A 路线` / `新增 B 路线`：给多出生点地图增加独立路线。
+- `清空当前 A/B 路线`：只清空当前路线顺序，不清空其他地块。
+- `校验地图`：检查出生点、核心、路线连续性，以及 `tiles` 和 `routes` 是否不一致。
+- `保存 JSON`：导出游戏可读取的地图配置。
 
-默认开启“加载底图后自动适配”。如果打开图片后只看到格子、看不到地图，通常是旧版本空白格遮住了底图；当前版本空白格只画网格线，不再填充遮挡。
+左键点击会按当前模式绘制。左键拖拽只在普通地块标注模式下批量绘制。右键会擦除当前格子，并从路线中移除这个点。
 
-## 地块类型
+## A2 拐弯示例
 
-| 类型 | 含义 |
-| --- | --- |
-| `EMPTY` | 空地/普通地块 |
-| `BLOCKED` | 障碍，不可走、不可部署 |
-| `PATH_A` | A 路怪物路径 |
-| `PATH_B` | B 路怪物路径 |
-| `PATH_SHARED` | 公共路径 |
-| `SPAWN_A` | A 路出生点 |
-| `SPAWN_B` | B 路出生点 |
-| `CORE_A` | A 方核心 |
-| `CORE_B` | B 方核心 |
-| `DEPLOY_A` | A 方初始部署区 |
-| `DEPLOY_B` | B 方初始部署区 |
-| `DEPLOY_NEUTRAL` | 双方/中立可部署区 |
-| `VISION_BLOCK` | 视野阻挡 |
-| `HIGH_GROUND` | 高台/特殊地形 |
-| `RESOURCE` | 资源点/特殊点位 |
+需求：A2 从视觉上的第 10 行第 17 列向上走两格，然后向右拐。
 
-## 路径顺序
+对应 JSON path 应该是：
 
-怪物移动可以让程序根据路径格自动寻路，但项目里建议仍然标出路径顺序，原因是：
+```json
+[
+  { "row": 9, "col": 16 },
+  { "row": 8, "col": 16 },
+  { "row": 7, "col": 16 },
+  { "row": 7, "col": 17 },
+  { "row": 7, "col": 18 }
+]
+```
 
-- 多个出生点时，可以明确每个出生点对应哪条路线。
-- 路径有岔路时，避免程序自动选到设计不想要的路线。
-- 后续随机刷怪、波次分配、剧情路线能直接引用路线编号。
+不要写成：
 
-工具里有两个模式：
+```json
+[
+  { "row": 9, "col": 17 },
+  { "row": 8, "col": 17 },
+  { "row": 7, "col": 17 }
+]
+```
 
-- `记录 A 路顺序`：按怪物移动顺序点击格子，生成 `routes.A`。
-- `记录 B 路顺序`：按怪物移动顺序点击格子，生成 `routes.B`。
+这会让怪物在视觉上的第 18 列向上走。
 
-单机 PVE 多出怪口时，做法是：
+## JSON 结构
 
-1. 设置地图模式为 `PVE`。
-2. 标出多个 `SPAWN_A` 和至少一个 `CORE_A`。
-3. `A路线号 = 1`，选择 `记录 A 路顺序`，从第一个出生点一路点到核心。
-4. 点击 `新增 A 路线`，或把 `A路线号` 调到 `2`，从第二个出生点一路点到核心。
-5. 每个出怪口一条路线，路线首格建议是 `SPAWN_A`，末格建议是 `CORE_A`。
-
-## JSON 输出结构
-
-导出的 JSON 大致如下：
+地图 JSON 的主要字段：
 
 ```json
 {
   "schemaVersion": 1,
-  "name": "map_01",
+  "name": "lab_map_01",
   "mode": "PVE",
-  "image": "../../assets/maps/map_01.png",
+  "image": "lab_map_01.png",
   "grid": {
-    "rows": 12,
-    "cols": 16,
-    "cellSize": 48
+    "rows": 17,
+    "cols": 28,
+    "cellSize": 19,
+    "cellSizeX": 19,
+    "cellSizeY": 19
   },
   "routes": {
     "A": [
       {
         "id": "A1",
-        "spawn": {"row": 0, "col": 4},
-        "core": {"row": 11, "col": 3},
-        "path": [{"row": 0, "col": 4}, {"row": 1, "col": 4}]
+        "spawn": { "row": 3, "col": 16 },
+        "core": { "row": 7, "col": 24 },
+        "path": [
+          { "row": 3, "col": 16 },
+          { "row": 4, "col": 16 }
+        ]
       }
     ],
     "B": []
   },
   "points": {
-    "SPAWN_A": [{"row": 0, "col": 4}],
-    "SPAWN_B": [{"row": 0, "col": 11}],
-    "CORE_A": [{"row": 11, "col": 3}],
-    "CORE_B": [{"row": 11, "col": 12}],
+    "SPAWN_A": [{ "row": 3, "col": 16 }],
+    "SPAWN_B": [],
+    "CORE_A": [{ "row": 7, "col": 24 }],
+    "CORE_B": [],
     "RESOURCE": []
   },
   "tiles": [
-    {"row": 0, "col": 4, "type": "SPAWN_A", "routeIndexA": 0}
+    {
+      "row": 3,
+      "col": 16,
+      "type": "SPAWN_A",
+      "routeIndexA": 0,
+      "routeLabelA": "A1:0"
+    }
   ]
 }
 ```
 
-## 给美术的要求
+## 地块类型
 
-- 地图底图尽量做成规则网格比例，例如 `16 x 12` 或 `20 x 14`。
-- 重要点位不要画在格子边界线上，避免判断不清。
-- 后续需要透明 PNG 资源：塔、怪物、子弹、火球、爆炸、核心、出生点提示、路径高亮。
+| 类型 | 游戏含义 |
+| --- | --- |
+| `EMPTY` | 未标注，运行时通常不会导出 |
+| `BLOCKED` | 障碍，不可走、不可部署 |
+| `PATH_A` | A 路怪物路径地块 |
+| `PATH_B` | B 路怪物路径地块 |
+| `PATH_SHARED` | 公共路径地块 |
+| `SPAWN_A` | A 路出生点 |
+| `SPAWN_B` | B 路出生点 |
+| `CORE_A` | A 方核心 |
+| `CORE_B` | B 方核心 |
+| `DEPLOY_A` | A 方可部署地块 |
+| `DEPLOY_B` | B 方可部署地块 |
+| `DEPLOY_NEUTRAL` | 双方/中立可部署地块 |
+| `VISION_BLOCK` | 视野阻挡，当前主要是预留标注 |
+| `HIGH_GROUND` | 高台，运行时会转成高度 1 |
+| `RESOURCE` | 资源点，当前主要是预留标注 |
 
-## 给规则同学的要求
+## 接入游戏的运行逻辑
 
-- 确定地图尺寸：行数、列数、单格像素。
-- 确定 A/B 双路出生点、核心位置和路径顺序。
-- 确定哪些地块允许初始部署，哪些地块要靠视野扩张解锁。
-- 确定是否存在高台、障碍、资源点、公共路径。
+单机 PVE 读取 `assets/maps/<mapId>.json`。读取成功后：
 
-## 后续接入游戏
+- `grid.rows` / `grid.cols` 重建地图尺寸。
+- `tiles` 决定格子类型，未标注格子默认是 `NoDeploy`。
+- `DEPLOY_A` / `DEPLOY_NEUTRAL` 会变成可部署普通地块。
+- `PATH_A` / `PATH_SHARED` 会变成路径地块。
+- `SPAWN_A` 会变成出生点。
+- `CORE_A` 会变成核心。
+- `routes.A` 会传给 `BattleManager::setPaths()`，刷怪时按多条路线分配。
 
-当前单机 PVE 已经优先尝试读取：
+如果 JSON 不存在或解析失败，游戏会回退到旧的硬编码测试地图。
 
-```text
-assets/maps/lab_map_01.json
-```
+## 常见问题
 
-读取成功后：
+**为什么我把格子画成 `PATH_A`，怪物还是不走那里？**
 
-- `grid.rows` / `grid.cols` 会重建核心地图尺寸。
-- 未标注格子默认视为 `NoDeploy`，不可走、不可部署。
-- `DEPLOY_A` / `DEPLOY_NEUTRAL` 会转换为可部署普通地块。
-- `PATH_A` 会转换为怪物路径。
-- `SPAWN_A` 会转换为出生点。
-- `CORE_A` 会转换为单机核心。
-- `routes.A` 中的多条路线会传给 `BattleManager::setPaths()`，多出怪口会按路线分配刷怪。
+因为你只改了 `tiles`。怪物移动只看 `routes.A/B[*].path`。切到 `记录 A 路顺序` 后按顺序点路径，或者直接改 path。
 
-如果 JSON 不存在或解析失败，游戏会回退到原来的硬编码测试地图。
+**为什么怪物看起来从第 18 列走，而我 JSON 写的是 `col:17`？**
 
-建议继续优先接 JSON，不建议先接 CSV。JSON 保留了路径顺序、点位、图例和网格元信息；CSV 更适合人工检查。
+JSON 是 0 基坐标，`col:17` 是视觉第 18 列。视觉第 17 列要写 `col:16`。
 
-推荐后续新增：
+**为什么 `routeLabelA` 要同步？**
 
-- 把 `assets/maps/lab_map_01.json` 做成关卡选择参数，而不是写死在 PVE。
-- 后续让 `BattleView` 支持绘制地图底图图片。
-- 后续扩展 `MapGrid`，区分 `DEPLOY_A` / `DEPLOY_B` / 视野阻挡等更细的玩法标签。
+`routeLabelA` 不直接驱动怪物移动，但它让编辑器显示路径序号。如果 label 和 `routes` 不一致，你看到的路径标号会误导后续编辑。
+
+**为什么保存时出现 PATH 地块不在 routes 中的警告？**
+
+这说明某个格子只是被画成路径颜色，但没有加入实际路线。它可以作为视觉标记存在，但怪物不会按这个格子走。
+
+**为什么 route 点的 tile 是 `DEPLOY_A` 会被提醒？**
+
+这说明实际路线经过了一个部署地块。游戏仍会按 route 移动，但地图显示、部署逻辑和调试判断会混乱，建议改成 `PATH_A`、出生点或核心。

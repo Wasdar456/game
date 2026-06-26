@@ -106,6 +106,7 @@ class MapGridEditor(tk.Tk):
         self.show_labels = tk.BooleanVar(value=True)
         self.show_grid = tk.BooleanVar(value=True)
         self.auto_fit_image = tk.BooleanVar(value=True)
+        self.cursor_var = tk.StringVar(value="鼠标坐标：移到网格上查看")
 
         self.source_background_image: Optional[tk.PhotoImage] = None
         self.background_image: Optional[tk.PhotoImage] = None
@@ -150,6 +151,8 @@ class MapGridEditor(tk.Tk):
         self.canvas.bind("<ButtonRelease-1>", self._on_button_release)
         self.canvas.bind("<Button-2>", self._on_right_click)
         self.canvas.bind("<Button-3>", self._on_right_click)
+        self.canvas.bind("<Motion>", self._on_mouse_move)
+        self.canvas.bind("<Leave>", self._on_mouse_leave)
 
         side_container = ttk.Frame(main)
         main.add(side_container, weight=1)
@@ -196,9 +199,12 @@ class MapGridEditor(tk.Tk):
 
         mode_box = ttk.LabelFrame(side, text="绘制/路线")
         mode_box.pack(fill="x", pady=6)
-        ttk.Radiobutton(mode_box, text="普通地块标注", variable=self.paint_mode, value="type").pack(anchor="w", padx=8)
-        ttk.Radiobutton(mode_box, text="记录 A 路顺序", variable=self.paint_mode, value="route_a").pack(anchor="w", padx=8)
-        ttk.Radiobutton(mode_box, text="记录 B 路顺序", variable=self.paint_mode, value="route_b").pack(anchor="w", padx=8)
+        ttk.Radiobutton(mode_box, text="普通地块标注（只改 tiles）", variable=self.paint_mode, value="type",
+                        command=self._update_status_summary).pack(anchor="w", padx=8)
+        ttk.Radiobutton(mode_box, text="记录 A 路顺序（改怪物路线）", variable=self.paint_mode, value="route_a",
+                        command=self._update_status_summary).pack(anchor="w", padx=8)
+        ttk.Radiobutton(mode_box, text="记录 B 路顺序（改怪物路线）", variable=self.paint_mode, value="route_b",
+                        command=self._update_status_summary).pack(anchor="w", padx=8)
         self._spinbox_row(mode_box, "A路线号", self.current_route_a, 1, 99, self._sync_route_indexes)
         self._spinbox_row(mode_box, "B路线号", self.current_route_b, 1, 99, self._sync_route_indexes)
         ttk.Button(mode_box, text="新增 A 路线", command=lambda: self._add_route("A")).pack(fill="x", padx=8, pady=(6, 2))
@@ -240,6 +246,10 @@ class MapGridEditor(tk.Tk):
         action_box.pack(fill="x", pady=6)
         ttk.Button(action_box, text="清空全部标注", command=self._clear_all).pack(fill="x", padx=8, pady=4)
         ttk.Button(action_box, text="校验地图", command=self._validate_and_show).pack(fill="x", padx=8, pady=4)
+
+        coordinate_box = ttk.LabelFrame(side, text="坐标")
+        coordinate_box.pack(fill="x", pady=6)
+        ttk.Label(coordinate_box, textvariable=self.cursor_var, wraplength=300).pack(fill="x", padx=8, pady=6)
 
         self.status_var = tk.StringVar(value="就绪")
         ttk.Label(side, textvariable=self.status_var, wraplength=300).pack(fill="x", pady=(8, 0))
@@ -467,13 +477,13 @@ class MapGridEditor(tk.Tk):
             mode = self.paint_mode.get()
             selected = self.selected_type.get()
             if mode == "route_a":
-                self.grid[row][col].tile_type = "PATH_A" if selected == "EMPTY" else selected
+                self.grid[row][col].tile_type = self._route_tile_type("A", selected)
                 route = self._current_route("A")
                 if (row, col) not in route:
                     route.append((row, col))
                 self._sync_route_indexes()
             elif mode == "route_b":
-                self.grid[row][col].tile_type = "PATH_B" if selected == "EMPTY" else selected
+                self.grid[row][col].tile_type = self._route_tile_type("B", selected)
                 route = self._current_route("B")
                 if (row, col) not in route:
                     route.append((row, col))
@@ -488,6 +498,15 @@ class MapGridEditor(tk.Tk):
         self._draw_cell(row, col)
         self._update_status_summary()
 
+    def _route_tile_type(self, route_name: str, selected: str) -> str:
+        allowed = {
+            "A": {"SPAWN_A", "CORE_A", "PATH_A", "PATH_SHARED"},
+            "B": {"SPAWN_B", "CORE_B", "PATH_B", "PATH_SHARED"},
+        }[route_name]
+        if selected in allowed:
+            return selected
+        return "PATH_A" if route_name == "A" else "PATH_B"
+
     def _event_to_cell(self, event: tk.Event) -> Optional[Tuple[int, int]]:
         cell_w = self._safe_int(self.cell_size_var.get(), 32)
         cell_h = self._safe_int(self.cell_size_y_var.get(), 32)
@@ -498,6 +517,19 @@ class MapGridEditor(tk.Tk):
         if row < 0 or col < 0 or row >= len(self.grid) or col >= len(self.grid[row]):
             return None
         return row, col
+
+    def _on_mouse_move(self, event: tk.Event) -> None:
+        cell = self._event_to_cell(event)
+        if cell is None:
+            self.cursor_var.set("鼠标坐标：不在网格内")
+            return
+        row, col = cell
+        self.cursor_var.set(
+            f"JSON: row={row}, col={col} | 视觉: 第 {row + 1} 行，第 {col + 1} 列"
+        )
+
+    def _on_mouse_leave(self, _event: tk.Event) -> None:
+        self.cursor_var.set("鼠标坐标：移到网格上查看")
 
     def _sync_route_indexes(self) -> None:
         for row in self.grid:
@@ -820,6 +852,32 @@ class MapGridEditor(tk.Tk):
                 for prev, current in zip(route, route[1:]):
                     if abs(prev[0] - current[0]) + abs(prev[1] - current[1]) != 1:
                         warnings.append(f"{route_name}{index} 存在不相邻路径点：{prev} -> {current}。")
+
+        route_cells_a = {cell for route in self.routes_a for cell in route}
+        route_cells_b = {cell for route in self.routes_b for cell in route}
+        route_tile_types = {
+            "A": {"PATH_A", "PATH_SHARED", "SPAWN_A", "CORE_A"},
+            "B": {"PATH_B", "PATH_SHARED", "SPAWN_B", "CORE_B"},
+        }
+        for row_index, row in enumerate(self.grid):
+            for col_index, cell in enumerate(row):
+                pos = (row_index, col_index)
+                if cell.tile_type == "PATH_A" and pos not in route_cells_a:
+                    warnings.append(f"PATH_A 地块 {pos} 不在 routes.A 中；怪物不会按这个格子走。")
+                if cell.tile_type == "PATH_B" and pos not in route_cells_b:
+                    warnings.append(f"PATH_B 地块 {pos} 不在 routes.B 中；怪物不会按这个格子走。")
+        for route_name, routes in [("A", self.routes_a), ("B", self.routes_b)]:
+            allowed = route_tile_types[route_name]
+            for route_index, route in enumerate(routes, start=1):
+                for pos in route:
+                    row, col = pos
+                    if 0 <= row < len(self.grid) and 0 <= col < len(self.grid[row]):
+                        tile_type = self.grid[row][col].tile_type
+                        if tile_type not in allowed:
+                            warnings.append(
+                                f"{route_name}{route_index} 路径点 {pos} 的地块是 {tile_type}，"
+                                f"建议改为路径/出生点/核心。"
+                            )
         return warnings
 
     @staticmethod
@@ -852,11 +910,20 @@ class MapGridEditor(tk.Tk):
         routes_b_count = len(self._non_empty_routes(self.routes_b))
         route_a_points = sum(len(route) for route in self.routes_a)
         route_b_points = sum(len(route) for route in self.routes_b)
+        mode_hint = self._paint_mode_hint()
         self.status_var.set(
-            f"{self.map_mode.get()} | 网格 {len(self.grid)}x{len(self.grid[0]) if self.grid else 0} | "
+            f"{mode_hint} | {self.map_mode.get()} | 网格 {len(self.grid)}x{len(self.grid[0]) if self.grid else 0} | "
             f"A路 {routes_a_count}条/{route_a_points}点 | B路 {routes_b_count}条/{route_b_points}点"
             + (f" | {summary}" if summary else "")
         )
+
+    def _paint_mode_hint(self) -> str:
+        mode = self.paint_mode.get()
+        if mode == "route_a":
+            return "记录 A 路：会修改 routes.A"
+        if mode == "route_b":
+            return "记录 B 路：会修改 routes.B"
+        return "普通标注：只修改 tiles"
 
     @staticmethod
     def _safe_int(value: object, fallback: int) -> int:
