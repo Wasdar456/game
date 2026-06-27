@@ -85,6 +85,7 @@ public:
     void setImageOffset(int x, int y);
     void setArtworkOverlayMode(bool enabled);
     void setShowGrid(bool show);
+    void setPvpDeploymentSide(bool enabled, bool isHost);
     void hideRadialMenu();
     void clearEffects();
 
@@ -158,6 +159,7 @@ private:
     int m_imageOffsetY;
     bool m_artworkOverlayMode;
     bool m_showGrid;
+    bool m_restrictPvpDeployment;
 
     void showRadialMenu(int unitId, int pixelX, int pixelY);
     int findUnitAt(int row, int col) const;

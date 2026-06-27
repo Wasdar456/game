@@ -49,6 +49,23 @@ void drawCover(QPainter &painter, const QPixmap &pixmap, const QRect &target)
     painter.drawPixmap(drawRect, pixmap);
 }
 
+qreal easeOutCubic(qreal value)
+{
+    value = qBound<qreal>(0.0, value, 1.0);
+    const qreal inverse = 1.0 - value;
+    return 1.0 - inverse * inverse * inverse;
+}
+
+qreal easeInOutCubic(qreal value)
+{
+    value = qBound<qreal>(0.0, value, 1.0);
+    if (value < 0.5) {
+        return 4.0 * value * value * value;
+    }
+    const qreal f = -2.0 * value + 2.0;
+    return 1.0 - f * f * f / 2.0;
+}
+
 } // namespace
 
 StartPage::StartPage(QWidget *parent)
@@ -69,17 +86,18 @@ StartPage::StartPage(QWidget *parent)
         m_ambientPhase += 0.025;
         if (m_introActive) {
             m_introElapsed += 0.05;
-            if (m_introElapsed >= 2.35) {
+            if (m_introElapsed >= 2.55) {
                 finishIntro();
             }
             update();
             return;
         }
         if (m_menuRevealProgress < 1.0) {
-            m_menuRevealProgress = qMin<qreal>(1.0, m_menuRevealProgress + 0.055);
+            m_menuRevealProgress = qMin<qreal>(1.0, m_menuRevealProgress + 0.042);
             if (m_menuLayer) {
                 m_menuLayer->show();
             }
+            updateArtworkLayout();
             updateFadeOverlay();
         }
         update();
@@ -96,28 +114,40 @@ void StartPage::paintEvent(QPaintEvent *event)
 
     if (m_introActive) {
         painter.fillRect(rect(), QColor(0, 0, 0));
-        const qreal fadeIn = qBound<qreal>(0.0, m_introElapsed / 0.75, 1.0);
-        const qreal fadeOut = qBound<qreal>(0.0, (2.35 - m_introElapsed) / 0.55, 1.0);
-        const qreal alpha = qMin(fadeIn, fadeOut);
-        const qreal lift = (1.0 - fadeIn) * 18.0;
+        const qreal fadeIn = easeOutCubic(m_introElapsed / 0.80);
+        const qreal fadeOut = qBound<qreal>(0.0, (2.55 - m_introElapsed) / 0.62, 1.0);
+        const qreal alpha = qMin(fadeIn, easeInOutCubic(fadeOut));
+        const qreal lift = (1.0 - fadeIn) * 22.0;
+        const qreal shine = qBound<qreal>(0.0, (m_introElapsed - 0.55) / 0.85, 1.0);
 
         painter.save();
         painter.setOpacity(alpha);
         QFont titleFont("Microsoft YaHei UI", qMax(28, height() / 15), QFont::Black);
         painter.setFont(titleFont);
-        painter.setPen(QColor(255, 238, 178));
         QRectF titleRect(0, height() * 0.40 - lift, width(), height() * 0.12);
-        painter.drawText(titleRect, Qt::AlignCenter, "Defense & Juice");
+        painter.setPen(QColor(44, 25, 13, qRound(alpha * 155)));
+        painter.drawText(titleRect.translated(0, 3), Qt::AlignCenter, "Crazy Fruity Fight");
+        painter.setPen(QColor(255, 238, 178));
+        painter.drawText(titleRect, Qt::AlignCenter, "Crazy Fruity Fight");
+
+        QLinearGradient slash(titleRect.left(), 0, titleRect.right(), 0);
+        slash.setColorAt(0.0, QColor(255, 255, 255, 0));
+        slash.setColorAt(qBound<qreal>(0.0, shine - 0.12, 1.0), QColor(255, 255, 255, 0));
+        slash.setColorAt(qBound<qreal>(0.0, shine, 1.0), QColor(255, 252, 204, qRound(alpha * 155)));
+        slash.setColorAt(qBound<qreal>(0.0, shine + 0.12, 1.0), QColor(255, 255, 255, 0));
+        painter.setPen(QPen(QBrush(slash), 3.0));
+        painter.drawLine(QPointF(titleRect.left() + width() * 0.24, titleRect.bottom() - 4),
+                         QPointF(titleRect.right() - width() * 0.24, titleRect.bottom() - 4));
 
         QFont subFont("Microsoft YaHei UI", qMax(12, height() / 42), QFont::DemiBold);
         painter.setFont(subFont);
         painter.setPen(QColor(162, 229, 196, 215));
         painter.drawText(QRectF(0, titleRect.bottom() + 8, width(), 38),
-                         Qt::AlignCenter, "Berrybyte Lab Defense Protocol");
+                         Qt::AlignCenter, "Tropical Tower Mayhem");
 
         QRadialGradient glow(QPointF(width() * 0.5, height() * 0.50), width() * 0.32);
-        glow.setColorAt(0.0, QColor(255, 210, 116, qRound(alpha * 42)));
-        glow.setColorAt(0.55, QColor(92, 206, 170, qRound(alpha * 16)));
+        glow.setColorAt(0.0, QColor(255, 210, 116, qRound(alpha * 58)));
+        glow.setColorAt(0.55, QColor(92, 206, 170, qRound(alpha * 22)));
         glow.setColorAt(1.0, QColor(0, 0, 0, 0));
         painter.fillRect(rect(), glow);
         painter.restore();
@@ -138,10 +168,19 @@ void StartPage::paintEvent(QPaintEvent *event)
 
     painter.fillRect(rect(), QColor(36, 52, 38));
     static QPixmap menu(":/images/artwork/main_menu.jpg");
+    const qreal reveal = easeOutCubic(m_menuRevealProgress);
+    QRectF menuDrawRect = m_canvasRect;
+    if (m_menuRevealProgress < 1.0) {
+        const qreal zoom = 1.035 - reveal * 0.035;
+        const QPointF center = m_canvasRect.center();
+        menuDrawRect.setSize(m_canvasRect.size() * zoom);
+        menuDrawRect.moveCenter(center + QPointF(0, (1.0 - reveal) * height() * 0.018));
+    }
+
     if (!m_menuCache.isNull()) {
-        painter.drawPixmap(m_canvasRect.topLeft(), m_menuCache);
+        painter.drawPixmap(menuDrawRect.toRect(), m_menuCache);
     } else if (!menu.isNull()) {
-        painter.drawPixmap(m_canvasRect, menu, QRectF(menu.rect()));
+        painter.drawPixmap(menuDrawRect, menu, QRectF(menu.rect()));
     }
 
     const qreal pulse = 0.5 + 0.5 * qSin(m_ambientPhase);
@@ -221,6 +260,19 @@ void StartPage::paintEvent(QPaintEvent *event)
     vignette.setColorAt(0.5, QColor(24, 35, 24, 0));
     vignette.setColorAt(1.0, QColor(22, 26, 18, 30));
     painter.fillRect(m_canvasRect, vignette);
+
+    if (m_menuRevealProgress < 1.0) {
+        const qreal titleAlpha = qBound<qreal>(0.0, (1.0 - m_menuRevealProgress) * 1.35, 1.0);
+        painter.save();
+        painter.setOpacity(titleAlpha);
+        QFont titleFont("Microsoft YaHei UI", qMax(24, height() / 18), QFont::Black);
+        painter.setFont(titleFont);
+        painter.setPen(QColor(255, 239, 190));
+        painter.drawText(QRectF(0, height() * 0.105 - reveal * height() * 0.025,
+                                width(), height() * 0.09),
+                         Qt::AlignCenter, "Crazy Fruity Fight");
+        painter.restore();
+    }
 
 }
 
@@ -404,11 +456,15 @@ void StartPage::updateArtworkLayout()
 
     for (int i = 0; i < m_buttons.size(); ++i) {
         const QRect source = kMenuHotspots[i].rect;
+        const qreal delay = i * 0.055;
+        const qreal buttonProgress = easeOutCubic((m_menuRevealProgress - delay) / 0.42);
+        const qreal slide = (1.0 - buttonProgress) * qMax<qreal>(18.0, 42.0 * scale);
         const QRectF target(topLeft.x() + source.x() * scale,
-                            topLeft.y() + source.y() * scale,
+                            topLeft.y() + source.y() * scale + slide,
                             source.width() * scale,
                             source.height() * scale);
         m_buttons[i]->setCanvasRect(target);
+        m_buttons[i]->setVisible(buttonProgress > 0.01 || m_menuRevealProgress >= 1.0);
         m_buttons[i]->raise();
     }
     updateFadeOverlay();

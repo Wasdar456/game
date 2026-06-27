@@ -62,6 +62,14 @@ inline PvpMapLayout makePvpMapLayout()
     return layout;
 }
 
+inline bool isPvpDeploymentCellForHost(bool isHost, core::MapPosition position)
+{
+    constexpr int SharedLeftCol = 13;
+    constexpr int SharedRightCol = 14;
+    return isHost ? position.col <= SharedRightCol
+                  : position.col >= SharedLeftCol;
+}
+
 inline void applyPvpMapLayout(core::Map& map, const PvpMapLayout& layout)
 {
     map.resize(layout.rows, layout.cols, core::TerrainType::FlatLand, 0);

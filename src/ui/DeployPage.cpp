@@ -128,6 +128,9 @@ DeployView::DeployView(QWidget *parent)
     , m_mapCols(game::core::constants::DefaultMapCols)
     , m_artworkOverlayMode(false)
     , m_showGrid(true)
+    , m_restrictPvpDeployment(false)
+    , m_localIsHost(true)
+    , m_animFrame(0)
     , m_btnUpgrade(nullptr)
     , m_btnMove(nullptr)
     , m_btnRecall(nullptr)
@@ -183,6 +186,7 @@ DeployView::DeployView(QWidget *parent)
     auto *effectTimer = new QTimer(this);
     effectTimer->setInterval(40);
     connect(effectTimer, &QTimer::timeout, this, [this]() {
+        ++m_animFrame;
         for (auto &effect : m_dustEffects) {
             effect.life -= 0.04;
         }
@@ -191,7 +195,7 @@ DeployView::DeployView(QWidget *parent)
                                                return effect.life <= 0.0;
                                            }),
                             m_dustEffects.end());
-        if (!m_dustEffects.isEmpty()) {
+        if (!m_dustEffects.isEmpty() || !m_snapshot.units.empty()) {
             update();
         }
     });
@@ -205,6 +209,13 @@ void DeployView::setMapSize(int rows, int cols)
     if (!m_artworkOverlayMode) {
         this->setFixedSize(cols * CELL_SIZE, rows * CELL_SIZE);
     }
+}
+
+void DeployView::setPvpDeploymentSide(bool enabled, bool isHost)
+{
+    m_restrictPvpDeployment = enabled;
+    m_localIsHost = isHost;
+    update();
 }
 
 QRectF cardSourceRect(game::core::CardKind kind)
@@ -414,6 +425,10 @@ void DeployView::drawDeployable(QPainter &painter)
         if (!grid.occupied &&
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
+            if (m_restrictPvpDeployment &&
+                !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {grid.row, grid.col})) {
+                continue;
+            }
             QRectF cell = cellRect(grid.row, grid.col);
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(0, 255, 0, 40));
@@ -484,14 +499,20 @@ void DeployView::drawUnits(QPainter &painter)
         if (sprite && !sprite->isNull()) {
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(30, 20, 12, 78));
-            painter.drawEllipse(QRectF(unitRect.left() + unitRect.width() * 0.08,
-                                       unitRect.bottom() - unitRect.height() * 0.18,
-                                       unitRect.width() * 0.84,
-                                       unitRect.height() * 0.24));
-            const QRectF spriteRect(unitRect.center().x() - unitRect.width() * 0.67,
-                                    unitRect.bottom() - unitRect.height() * 1.38,
-                                    unitRect.width() * 1.34,
-                                    unitRect.height() * 1.40);
+            const qreal phase = (m_animFrame + unit.id * 11) * 0.16;
+            const qreal bob = qSin(phase) * cellExtent() * 0.035;
+            const qreal scale = 1.0 + qSin(phase + 0.8) * 0.018;
+            const QRectF shadowRect(unitRect.left() + unitRect.width() * (0.08 + (1.0 - scale) * 0.2),
+                                    unitRect.bottom() - unitRect.height() * 0.18,
+                                    unitRect.width() * 0.84 * scale,
+                                    unitRect.height() * 0.24);
+            painter.drawEllipse(shadowRect);
+            const qreal spriteW = unitRect.width() * 1.34 * scale;
+            const qreal spriteH = unitRect.height() * 1.40 * scale;
+            const QRectF spriteRect(unitRect.center().x() - spriteW * 0.5,
+                                    unitRect.bottom() - unitRect.height() * 1.38 + bob,
+                                    spriteW,
+                                    spriteH);
             painter.save();
             if (isOpponent) painter.setOpacity(0.76);
             drawCachedArtwork(painter, spriteRect, *sprite);
@@ -600,6 +621,10 @@ void DeployView::mousePressEvent(QMouseEvent *event)
             !grid.occupied &&
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
+            if (m_restrictPvpDeployment &&
+                !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {row, col})) {
+                break;
+            }
             canDeploy = true;
             break;
         }
@@ -619,6 +644,10 @@ QVector<game::core::MapPosition> DeployView::getDeployableCells() const
         if (!grid.occupied &&
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
+            if (m_restrictPvpDeployment &&
+                !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {grid.row, grid.col})) {
+                continue;
+            }
             result.append(game::core::MapPosition(grid.row, grid.col));
         }
     }
@@ -792,6 +821,9 @@ void DeployPage::setNetworkContext(const NetworkContext& ctx)
     m_netCtx = ctx;
     m_isPvp = ctx.isPvp;
     m_isHost = ctx.isHost;
+    if (m_deployView) {
+        m_deployView->setPvpDeploymentSide(m_isPvp, m_isHost);
+    }
     layoutArtworkUi();
     update();
 }
@@ -1014,6 +1046,9 @@ void DeployPage::connectSignals()
     connect(m_deployView, &DeployView::signalDeployCard,
             this, [this](game::core::CardKind kind, game::core::MapPosition pos) {
         if (m_battleManager) {
+            if (m_isPvp && !game::ui::isPvpDeploymentCellForHost(m_isHost, pos)) {
+                return;
+            }
             auto result = m_battleManager->deployCard(kind, pos);
             if (result) {
                 m_deployedCount++;

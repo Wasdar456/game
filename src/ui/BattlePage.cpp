@@ -322,6 +322,7 @@ BattleView::BattleView(QWidget *parent)
     , m_imageOffsetY(0)
     , m_artworkOverlayMode(false)
     , m_showGrid(true)
+    , m_restrictPvpDeployment(false)
 {
     setMapSize(m_mapRows, m_mapCols);
 
@@ -399,6 +400,7 @@ BattleView::BattleView(QWidget *parent)
                                        }),
                         m_effects.end());
         if (!m_effects.isEmpty()
+            || !m_snapshot.units.empty()
             || m_mode == InteractionMode::RADIAL_MENU
             || m_mode == InteractionMode::MOVING
             || m_mode == InteractionMode::DEPLOYING) {
@@ -428,6 +430,13 @@ void BattleView::setMapSize(int rows, int cols)
     } else {
         this->setFixedSize(cols * CELL_SIZE, rows * CELL_SIZE);
     }
+}
+
+void BattleView::setPvpDeploymentSide(bool enabled, bool isHost)
+{
+    m_restrictPvpDeployment = enabled;
+    m_localIsHost = isHost;
+    update();
 }
 
 void BattleView::setArtworkOverlayMode(bool enabled)
@@ -987,14 +996,20 @@ void BattleView::drawUnits(QPainter &painter)
         if (sprite && !sprite->isNull()) {
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(30, 20, 12, 82));
-            painter.drawEllipse(QRectF(unitRect.left() + unitRect.width() * 0.08,
-                                       unitRect.bottom() - unitRect.height() * 0.18,
-                                       unitRect.width() * 0.84,
-                                       unitRect.height() * 0.24));
-            const QRectF spriteRect(unitRect.center().x() - unitRect.width() * 0.67,
-                                    unitRect.bottom() - unitRect.height() * 1.38,
-                                    unitRect.width() * 1.34,
-                                    unitRect.height() * 1.40);
+            const qreal phase = (m_animFrame + unit.id * 11) * 0.16;
+            const qreal bob = qSin(phase) * cellExtent() * 0.035;
+            const qreal scale = 1.0 + qSin(phase + 0.8) * 0.018;
+            const QRectF shadowRect(unitRect.left() + unitRect.width() * (0.08 + (1.0 - scale) * 0.2),
+                                    unitRect.bottom() - unitRect.height() * 0.18,
+                                    unitRect.width() * 0.84 * scale,
+                                    unitRect.height() * 0.24);
+            painter.drawEllipse(shadowRect);
+            const qreal spriteW = unitRect.width() * 1.34 * scale;
+            const qreal spriteH = unitRect.height() * 1.40 * scale;
+            const QRectF spriteRect(unitRect.center().x() - spriteW * 0.5,
+                                    unitRect.bottom() - unitRect.height() * 1.38 + bob,
+                                    spriteW,
+                                    spriteH);
             painter.save();
             if (isOpponent) painter.setOpacity(0.76);
             drawCachedArtwork(painter, spriteRect, *sprite);
@@ -1290,6 +1305,10 @@ void BattleView::mousePressEvent(QMouseEvent *event)
                 !grid.occupied &&
                 (grid.terrain == game::core::TerrainType::FlatLand ||
                  grid.terrain == game::core::TerrainType::HighGround)) {
+                if (m_restrictPvpDeployment &&
+                    !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {row, col})) {
+                    break;
+                }
                 canDeploy = true;
                 break;
             }
@@ -1412,6 +1431,10 @@ QVector<game::core::MapPosition> BattleView::getDeployableCells() const
         if (!grid.occupied &&
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
+            if (m_restrictPvpDeployment &&
+                !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {grid.row, grid.col})) {
+                continue;
+            }
             result.append(game::core::MapPosition(grid.row, grid.col));
         }
     }
@@ -2026,7 +2049,7 @@ void BattlePage::setNetworkContext(const NetworkContext& ctx)
         m_activePveMapId = ctx.pveMapId.isEmpty() ? QString("island_pve") : ctx.pveMapId;
     }
     if (m_battleView) {
-        m_battleView->m_localIsHost = !m_isPvp || m_isHost;
+        m_battleView->setPvpDeploymentSide(m_isPvp, !m_isPvp || m_isHost);
     }
     layoutArtworkUi();
     update();
@@ -2139,6 +2162,9 @@ void BattlePage::sendDeployAction(game::core::CardKind kind, game::core::MapPosi
     // 本地执行
     bool deployed = false;
     if (m_battleManager) {
+        if (m_isPvp && !game::ui::isPvpDeploymentCellForHost(m_isHost, pos)) {
+            return;
+        }
         deployed = static_cast<bool>(m_battleManager->deployCard(kind, pos));
     }
     if (deployed) {

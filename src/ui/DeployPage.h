@@ -51,6 +51,7 @@ public:
     void setMapSize(int rows, int cols);
     void setArtworkOverlayMode(bool enabled);
     void setShowGrid(bool show);
+    void setPvpDeploymentSide(bool enabled, bool isHost);
 
     // 交互状态
     enum class InteractionMode {
@@ -96,6 +97,9 @@ private:
     int m_mapCols;
     bool m_artworkOverlayMode;
     bool m_showGrid;
+    bool m_restrictPvpDeployment;
+    bool m_localIsHost;
+    int m_animFrame;
     QPushButton *m_btnUpgrade;
     QPushButton *m_btnMove;
     QPushButton *m_btnRecall;

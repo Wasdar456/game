@@ -128,11 +128,23 @@ public:
             const double root = roots[chordIndex];
             const double fade = std::min(1.0, chordStep / 2.2)
                                 * std::min(1.0, (16.0 - chordStep) / 2.5);
+            const double melodyStep = std::fmod(m_phase * 1.35, 8.0);
+            const int melodyIndex = int(melodyStep) % 8;
+            const double menuMelody[] = {523.25, 659.25, 783.99, 659.25,
+                                         587.33, 493.88, 587.33, 392.00};
+            const double battleMelody[] = {392.00, 523.25, 587.33, 698.46,
+                                           783.99, 698.46, 587.33, 523.25};
+            const double melodyFreq = battleMix ? battleMelody[melodyIndex]
+                                                : menuMelody[melodyIndex];
+            const double melodyGate = std::min(1.0, std::fmod(melodyStep, 1.0) / 0.12)
+                                      * std::min(1.0, (1.0 - std::fmod(melodyStep, 1.0)) / 0.25);
             const double music =
                 (std::sin(2.0 * Pi * root * m_phase)
                  + 0.55 * std::sin(2.0 * Pi * root * 1.25 * m_phase)
                  + 0.38 * std::sin(2.0 * Pi * root * 1.5 * m_phase))
-                * 0.035 * fade;
+                * 0.070 * fade
+                + std::sin(2.0 * Pi * melodyFreq * m_phase)
+                * (battleMix ? 0.030 : 0.024) * melodyGate;
 
             const double pulse = battleMix
                 ? std::sin(2.0 * Pi * 0.92 * m_phase) * 0.018
@@ -161,7 +173,7 @@ public:
                 ++voice.frame;
             }
 
-            const double ambient = (ocean + music + pulse) * bgmVolume * 0.34;
+            const double ambient = (ocean + music + pulse) * bgmVolume * 0.55;
             const double mixed = std::clamp(ambient + effects * sfxVolume * 0.48,
                                             -0.92, 0.92);
             for (int channel = 0; channel < channels; ++channel) {
@@ -184,6 +196,16 @@ public:
             }
         }
         return frames * bytesPerFrame;
+    }
+
+    bool isSequential() const override
+    {
+        return true;
+    }
+
+    qint64 bytesAvailable() const override
+    {
+        return m_format.bytesForDuration(500000) + QIODevice::bytesAvailable();
     }
 
     qint64 writeData(const char *, qint64) override
