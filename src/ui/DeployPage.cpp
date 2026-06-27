@@ -1195,7 +1195,7 @@ void DeployPage::setupCardButtonConnections()
 void DeployPage::setupMap()
 {
     auto& map = m_battleManager->map();
-    const auto layout = game::ui::makePvpMapLayout();
+    const auto layout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
     game::ui::applyPvpMapLayout(map, layout);
 
     m_battleManager->rebuildMapOccupancy();

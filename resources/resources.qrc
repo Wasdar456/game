@@ -16,6 +16,7 @@
         <file alias="images/artwork/pvp_setup.png">../assets/ui/artwork/pvp_setup.png</file>
         <file alias="images/artwork/deck_atlas.png">../assets/ui/artwork/deck_atlas.png</file>
         <file alias="images/artwork/battle_pvp.png">../assets/ui/artwork/battle_pvp.png</file>
+        <file alias="images/artwork/battle_pvp_office_map.png">../assets/ui/artwork/battle_pvp_office_map.png</file>
         <file alias="images/artwork/battle_pve.png">../assets/ui/artwork/battle_pve.png</file>
         <file alias="images/artwork/battle_pve_ui_overlay.png">../assets/ui/artwork/battle_pve_ui_overlay.png</file>
         <file alias="images/artwork/battle_pve_ui_overlay_v2.png">../assets/ui/artwork/battle_pve_ui_overlay_v2.png</file>

@@ -1507,6 +1507,7 @@ BattlePage::BattlePage(QWidget *parent)
     , m_displayOpponentCoreHealth(game::core::constants::InitialBaseHealth)
     , m_opponentLabel(nullptr)
     , m_pvpArtwork(":/images/artwork/battle_pvp.png")
+    , m_pvpOfficeMapArtwork(":/images/artwork/battle_pvp_office_map.png")
     , m_pveArtwork(":/images/artwork/battle_pve.png")
     , m_pveUiOverlay(":/images/artwork/battle_pve_ui_overlay_v2.png")
     , m_labMap01(":/images/maps/lab_map_01.png")
@@ -1863,8 +1864,14 @@ void BattlePage::paintEvent(QPaintEvent *event)
     };
 
     if (m_isPvp && !m_pvpArtwork.isNull()) {
-        painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
-                           m_pvpArtwork, QRectF(0, 96, 1672, 604));
+        if (m_netCtx.pvpMapId == "pvp_office_panic" && !m_pvpOfficeMapArtwork.isNull()) {
+            painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
+                               m_pvpOfficeMapArtwork,
+                               QRectF(0, 0, 1672, 604));
+        } else {
+            painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
+                               m_pvpArtwork, QRectF(0, 96, 1672, 604));
+        }
     } else if (m_activePveMapId == "island_pve" && !m_pveArtwork.isNull()) {
         painter.drawPixmap(canvas, m_pveArtwork);
     } else {
@@ -2144,7 +2151,7 @@ void BattlePage::setupPvpMap()
 {
     auto& map = m_battleManager->map();
     m_battleView->clearBackgroundImage();
-    const auto layout = game::ui::makePvpMapLayout();
+    const auto layout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
     game::ui::applyPvpMapLayout(map, layout);
 
     m_battleManager->rebuildMapOccupancy();
@@ -2468,8 +2475,9 @@ void BattlePage::startBattle()
         m_battleManager->setRandomSeed(m_netCtx.seed);
 
         // 初始化视野系统
+        const auto pvpLayout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
         auto& vision = m_battleManager->visionManager();
-        vision.initDefaultVision(game::core::MapPosition(4, 0), game::core::MapPosition(4, 17));
+        vision.initDefaultVision(pvpLayout.coreA, pvpLayout.coreB);
 
         // 连接网络信号
         if (m_isHost && m_netCtx.server) {
@@ -3046,7 +3054,7 @@ void BattlePage::finishBattle(const game::core::BattleSnapshot &snapshot, bool p
     result.escapedMonsters = snapshot.escapedMonsters;
     result.localCoreHealth = snapshot.baseHealth;
     result.opponentCoreHealth = snapshot.opponentBaseHealth;
-    result.mapId = m_netCtx.pveMapId;
+    result.mapId = m_isPvp ? m_netCtx.pvpMapId : m_netCtx.pveMapId;
     recordReplaySnapshot(snapshot, 0.0, true);
 
     if (!m_isPvp) {

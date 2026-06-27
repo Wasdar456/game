@@ -58,6 +58,7 @@ struct NetworkContext {
     bool isPvp = false;                           ///< 是否为 PVP 模式
     bool isHost = false;                          ///< 是否为 Host 端
     QString pveMapId = "lab_map_01";              ///< PVE selected map config id
+    QString pvpMapId = "pvp_sunny_beach";         ///< PVP selected map config id
     int pveDifficulty = 0;                        ///< PVE selected difficulty
     quint32 seed = 0;                             ///< 随机数种子（PVP 同步用）
     game::network::GameServer* server = nullptr;  ///< Host 端服务器指针

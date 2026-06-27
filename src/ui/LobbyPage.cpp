@@ -12,7 +12,7 @@
  * 涓?dev 鍒嗘敮 network 妯″潡鐨勫鎺ワ細
  *   - GameServer::startListening(port) 鈥斺€?Host 绔惎鍔ㄧ洃鍚?
  *   - GameClient 杩炴帴鍚庨€氳繃 LobbyManager 绠＄悊 JOIN/READY/GAME_START 娴佺▼
- *   - LobbyManager::gameStarted(seed) 淇″彿瑙﹀彂鍚庯紝杩涘叆閫夊崱椤甸潰
+ *   - LobbyManager::gameStarted(seed, mapId) 淇″彿瑙﹀彂鍚庯紝杩涘叆閫夊崱椤甸潰
  */
 
 #include "ui/LobbyPage.h"
@@ -82,6 +82,22 @@ QString readyStatusStyle(const QString& color)
         "QLabel { color:%1; background-color:rgb(242,222,176);"
         " border:1px solid rgba(94,66,37,0.55); border-radius:4px;"
         " padding:5px; font-size:14px; font-weight:800; }").arg(color);
+}
+
+QString pvpMapIdForIndex(int index)
+{
+    switch (index) {
+    case 2:
+        return "pvp_office_panic";
+    case 0:
+    default:
+        return "pvp_sunny_beach";
+    }
+}
+
+bool pvpMapEnabled(int index)
+{
+    return index == 0 || index == 2;
 }
 
 } // namespace
@@ -271,7 +287,14 @@ void LobbyPage::createPvpPanel()
     for (int i = 0; i < 3; ++i) {
         m_pvpMapHotspots.append(m_pvpHotspots[2 + i]);
         m_pvpHotspots[2 + i]->setClickHandler([this, i]() {
+            if (!pvpMapEnabled(i)) {
+                showStatus("Jungle Ruins 暂未开放，请选择 Sunny Beach 或 Office Panic");
+                return;
+            }
             m_selectedPvpMap = i;
+            if (m_lobbyManager && m_lobbyManager->role() == game::network::LobbyManager::Role::Host) {
+                m_lobbyManager->setSelectedMapId(pvpMapIdForIndex(m_selectedPvpMap));
+            }
             refreshSelectionVisuals();
         });
     }
@@ -458,14 +481,16 @@ void LobbyPage::connectSignals()
             // 鍒涘缓 LobbyManager锛圚ost 瑙掕壊锛?
             m_lobbyManager = new game::network::LobbyManager(
                 game::network::LobbyManager::Role::Host, "Host", this);
+            m_lobbyManager->setSelectedMapId(pvpMapIdForIndex(m_selectedPvpMap));
 
             // 杩炴帴 LobbyManager 鐨?gameStarted 淇″彿 鈫?杩涘叆閫夊崱椤?
             connect(m_lobbyManager, &game::network::LobbyManager::gameStarted,
-                    this, [this](quint32 seed) {
+                    this, [this](quint32 seed, const QString& mapId) {
                         m_statusLog->append(QString(">> 双方准备完成，种子: %1").arg(seed));
                         NetworkContext ctx;
                         ctx.isPvp = true;
                         ctx.isHost = true;
+                        ctx.pvpMapId = mapId.isEmpty() ? pvpMapIdForIndex(m_selectedPvpMap) : mapId;
                         ctx.seed = seed;
                         ctx.server = m_server;
                         ctx.client = nullptr;
@@ -548,11 +573,12 @@ void LobbyPage::connectSignals()
 
         // 杩炴帴 LobbyManager 鐨?gameStarted 淇″彿 鈫?杩涘叆閫夊崱椤?
         connect(m_lobbyManager, &game::network::LobbyManager::gameStarted,
-                this, [this](quint32 seed) {
+                this, [this](quint32 seed, const QString& mapId) {
                     m_statusLog->append(QString(">> 双方准备完成，种子: %1").arg(seed));
                     NetworkContext ctx;
                     ctx.isPvp = true;
                     ctx.isHost = false;
+                    ctx.pvpMapId = mapId.isEmpty() ? QString("pvp_sunny_beach") : mapId;
                     ctx.seed = seed;
                     ctx.server = nullptr;
                     ctx.client = m_client;

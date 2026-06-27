@@ -11,6 +11,7 @@ LobbyManager::LobbyManager(Role role, const QString& nickname, QObject* parent)
     , m_role(role)
     , m_state(LobbyState::Idle)
     , m_myNickname(nickname)
+    , m_selectedMapId("pvp_sunny_beach")
     , m_localReady(false)
     , m_peerReady(false)
 {}
@@ -65,6 +66,14 @@ void LobbyManager::setReady() {
     if (m_role == Role::Host) {
         checkBothReady();
     }
+}
+
+void LobbyManager::setSelectedMapId(const QString& mapId)
+{
+    if (m_state == LobbyState::InGame) {
+        return;
+    }
+    m_selectedMapId = mapId.isEmpty() ? QString("pvp_sunny_beach") : mapId;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -146,10 +155,14 @@ void LobbyManager::handleGameStart(const QByteArray& body) {
         memcpy(&seed, body.constData(), 4);
         seed = qFromBigEndian(seed);
     }
+    const QString mapId = body.size() > 4
+                              ? QString::fromUtf8(body.constData() + 4, body.size() - 4)
+                              : QString("pvp_sunny_beach");
+    m_selectedMapId = mapId.isEmpty() ? QString("pvp_sunny_beach") : mapId;
 
-    qInfo() << "[Lobby][Client] 收到 GAME_START，种子=" << seed;
+    qInfo() << "[Lobby][Client] 收到 GAME_START，种子=" << seed << "map=" << m_selectedMapId;
     setState(LobbyState::InGame);
-    emit gameStarted(seed);
+    emit gameStarted(seed, m_selectedMapId);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -170,11 +183,12 @@ void LobbyManager::checkBothReady() {
     // 种子以大端序写入 body
     QByteArray body(4, 0);
     qToBigEndian(seed, reinterpret_cast<uchar*>(body.data()));
+    body.append(m_selectedMapId.toUtf8());
 
     emit sendPacketRequested(MsgType::GAME_START, body);
 
     setState(LobbyState::InGame);
-    emit gameStarted(seed);
+    emit gameStarted(seed, m_selectedMapId);
 }
 
 // ─────────────────────────────────────────────────────────────

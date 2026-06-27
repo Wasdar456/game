@@ -4,6 +4,7 @@
 #include "core/map/Map.h"
 #include "core/map/MapPosition.h"
 
+#include <string>
 #include <vector>
 
 namespace game::ui {
@@ -11,6 +12,8 @@ namespace game::ui {
 struct PvpMapLayout {
     int rows = 10;
     int cols = 28;
+    std::string id = "pvp_sunny_beach";
+    std::string image = "battle_pvp.png";
     core::MapPosition spawnA;
     core::MapPosition spawnB;
     core::MapPosition coreA;
@@ -21,9 +24,11 @@ struct PvpMapLayout {
     std::vector<core::MapPosition> blocked;
 };
 
-inline PvpMapLayout makePvpMapLayout()
+inline PvpMapLayout makeSunnyBeachPvpMapLayout()
 {
     PvpMapLayout layout;
+    layout.id = "pvp_sunny_beach";
+    layout.image = "battle_pvp.png";
     layout.spawnA = {1, 13};
     layout.spawnB = {8, 14};
     layout.coreA = {6, 2};
@@ -60,6 +65,61 @@ inline PvpMapLayout makePvpMapLayout()
         {9, 23}, {9, 24}, {9, 25}, {9, 26}, {9, 27}
     };
     return layout;
+}
+
+inline PvpMapLayout makeOfficePanicPvpMapLayout()
+{
+    PvpMapLayout layout;
+    layout.id = "pvp_office_panic";
+    layout.image = "battle_pvp_office_map.png";
+    layout.spawnA = {1, 13};
+    layout.spawnB = {8, 14};
+    layout.coreA = {5, 1};
+    layout.coreB = {5, 26};
+
+    layout.pathToA = {
+        layout.spawnA,
+        {2, 13}, {3, 13}, {4, 13},
+        {4, 12}, {4, 11}, {4, 10}, {4, 9}, {4, 8},
+        {5, 8}, {5, 7}, {5, 6}, {5, 5}, {5, 4}, {5, 3}, {5, 2},
+        layout.coreA
+    };
+    layout.pathToB = {
+        layout.spawnB,
+        {7, 14}, {6, 14}, {5, 14},
+        {5, 15}, {5, 16}, {5, 17}, {5, 18}, {5, 19}, {5, 20},
+        {5, 21}, {5, 22}, {5, 23}, {5, 24}, {5, 25},
+        layout.coreB
+    };
+
+    layout.highGround = {
+        {2, 7}, {3, 7}, {6, 7}, {7, 7},
+        {2, 20}, {3, 20}, {6, 20}, {7, 20}
+    };
+    layout.blocked = {
+        {0, 0}, {0, 1}, {0, 2}, {0, 3}, {0, 4},
+        {0, 23}, {0, 24}, {0, 25}, {0, 26}, {0, 27},
+        {1, 0}, {1, 1}, {1, 2}, {1, 3}, {1, 24}, {1, 25}, {1, 26}, {1, 27},
+        {2, 1}, {2, 2}, {2, 3}, {2, 4}, {2, 10}, {2, 11}, {2, 16}, {2, 17},
+        {2, 23}, {2, 24}, {2, 25}, {2, 26},
+        {3, 2}, {3, 3}, {3, 24}, {3, 25},
+        {4, 5}, {4, 22},
+        {5, 10},
+        {6, 2}, {6, 3}, {6, 24}, {6, 25},
+        {7, 1}, {7, 2}, {7, 3}, {7, 4}, {7, 10}, {7, 11}, {7, 16}, {7, 17},
+        {7, 23}, {7, 24}, {7, 25}, {7, 26},
+        {8, 0}, {8, 1}, {8, 2}, {8, 3}, {8, 24}, {8, 25}, {8, 26}, {8, 27},
+        {9, 0}, {9, 1}, {9, 2}, {9, 3}, {9, 4},
+        {9, 23}, {9, 24}, {9, 25}, {9, 26}, {9, 27}
+    };
+    return layout;
+}
+
+inline PvpMapLayout makePvpMapLayout(const std::string& mapId = "pvp_sunny_beach")
+{
+    return mapId == "pvp_office_panic"
+               ? makeOfficePanicPvpMapLayout()
+               : makeSunnyBeachPvpMapLayout();
 }
 
 inline bool isPvpDeploymentCellForHost(bool isHost, core::MapPosition position)

@@ -310,6 +310,7 @@ private:
     bool m_coreWarningShown = false;
     QLabel *m_opponentLabel;            ///< 对手信息标签
     QPixmap m_pvpArtwork;
+    QPixmap m_pvpOfficeMapArtwork;
     QPixmap m_pveArtwork;
     QPixmap m_pveUiOverlay;
     QPixmap m_labMap01;
