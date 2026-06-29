@@ -4,6 +4,7 @@
  */
 
 #include "ui/DeployPage.h"
+#include "core/data/CardSpecs.h"
 #include "ui/MainWindow.h"
 #include "ui/AudioManager.h"
 #include "ui/PvpMapLayout.h"
@@ -24,21 +25,9 @@
 #include "network/session/GameClient.h"
 
 namespace {
-QString cardName(game::core::CardKind kind)
+QString displayCardName(game::core::CardKind kind)
 {
-    switch (kind) {
-    case game::core::CardKind::Attack: return "Kiwi Scout";
-    case game::core::CardKind::Sniper: return "Sniper Berry";
-    case game::core::CardKind::Aoe: return "Orange Bomber";
-    case game::core::CardKind::Specialist: return "Berry Tank";
-    case game::core::CardKind::Produce: return "Miner Pine";
-    case game::core::CardKind::Arsenal: return "Mango Engineer";
-    case game::core::CardKind::Heal: return "Peach Healer";
-    case game::core::CardKind::HeavyMedic: return "Coco Defender";
-    case game::core::CardKind::Attack2: return "Grape Blaster";
-    case game::core::CardKind::Heal2: return "Papaya Support";
-    }
-    return "Unknown";
+    return QString::fromUtf8(game::core::cardName(kind));
 }
 
 const QPixmap* unitArtwork(const game::core::UnitSnapshot& unit)
@@ -1047,7 +1036,7 @@ void DeployPage::refreshCardDisplay()
 
         const auto kind = m_deck[i];
         const int cost = game::core::CardSystem::deployCost(kind);
-        const QString name = cardName(kind);
+        const QString name = displayCardName(kind);
         m_cardButtons[i]->setToolTip(QString("%1 - Cost %2").arg(name).arg(cost));
         m_cardNameLabels[i]->setText(name);
         m_cardCostLabels[i]->setText(QString("Juice %1").arg(cost));

@@ -1,5 +1,6 @@
 #include "ui/DeckPage.h"
 
+#include "core/data/CardSpecs.h"
 #include "ui/ArtHotspot.h"
 #include "ui/AudioManager.h"
 #include "ui/CardCollection.h"
@@ -69,6 +70,40 @@ QString cardTypeText(game::core::CardKind kind)
         return "生产";
     }
     return "支援";
+}
+
+QColor themeColorForCardKind(game::core::CardKind kind)
+{
+    switch (kind) {
+    case game::core::CardKind::Produce: return QColor(210, 151, 47);
+    case game::core::CardKind::Sniper: return QColor(119, 76, 151);
+    case game::core::CardKind::Specialist: return QColor(89, 119, 54);
+    case game::core::CardKind::Heal: return QColor(220, 123, 118);
+    case game::core::CardKind::Attack: return QColor(119, 142, 43);
+    case game::core::CardKind::Aoe: return QColor(220, 111, 37);
+    case game::core::CardKind::HeavyMedic: return QColor(104, 78, 46);
+    case game::core::CardKind::Arsenal: return QColor(218, 146, 47);
+    case game::core::CardKind::Attack2: return QColor(113, 70, 139);
+    case game::core::CardKind::Heal2: return QColor(219, 132, 43);
+    }
+    return QColor(160, 128, 84);
+}
+
+QString skillTextForSpec(const game::core::CardSpec& spec)
+{
+    if (game::core::isProduceCardKind(spec.kind)) {
+        return QString("每次技能冷却完成产出 %1 资源").arg(spec.resourceYield);
+    }
+    if (game::core::isHealCardKind(spec.kind)) {
+        return QString("每次技能冷却完成治疗 %1 生命").arg(spec.healAmount);
+    }
+    if (spec.projectileKind == game::core::ProjectileKind::Aoe) {
+        return QString("发射范围弹体，命中后溅射半径 %1 格").arg(spec.splashRadius);
+    }
+    if (spec.projectileKind == game::core::ProjectileKind::Sniper) {
+        return "远距离单体狙击弹";
+    }
+    return "单体攻击单位";
 }
 
 } // namespace
@@ -157,26 +192,116 @@ void DeckPage::resizeEvent(QResizeEvent *event)
 void DeckPage::createCardPoolData()
 {
     m_allCards = {
-        {game::core::CardKind::Produce, "Miner Pine", 3, 520, 30, 1, 2, 2.4,
-         "优先采集资源，其次支援近处单位", "Lv2: 40  Lv3: 80", QColor(210, 151, 47)},
-        {game::core::CardKind::Sniper, "Sniper Berry", 4, 420, 180, 8, 1, 1.6,
-         "高血量敌人 > 普通敌人 > 资源单位", "Lv2: 40  Lv3: 80", QColor(119, 76, 151)},
-        {game::core::CardKind::Specialist, "Berry Tank", 5, 900, 75, 2, 1, 2.0,
-         "吸引最近敌人并保护后排", "Lv2: 55  Lv3: 110", QColor(89, 119, 54)},
-        {game::core::CardKind::Heal, "Peach Healer", 4, 470, 60, 4, 2, 1.8,
-         "最低血量友方 > 受伤友方", "Lv2: 45  Lv3: 90", QColor(220, 123, 118)},
-        {game::core::CardKind::Attack, "Kiwi Scout", 2, 440, 105, 3, 5, 1.0,
-         "最近敌人 > 远程敌人", "Lv2: 35  Lv3: 70", QColor(119, 142, 43)},
-        {game::core::CardKind::Aoe, "Orange Bomber", 4, 500, 125, 3, 1, 1.5,
-         "密集敌群 > 最近敌人", "Lv2: 50  Lv3: 100", QColor(220, 111, 37)},
-        {game::core::CardKind::HeavyMedic, "Coco Defender", 3, 780, 45, 2, 1, 2.2,
-         "受伤友方 > 自身周围单位", "Lv2: 50  Lv3: 100", QColor(104, 78, 46)},
-        {game::core::CardKind::Arsenal, "Mango Engineer", 3, 540, 0, 0, 0, 0.0,
-         "强化资源产出并支援防御设施", "Lv2: 45  Lv3: 90", QColor(218, 146, 47)},
-        {game::core::CardKind::Attack2, "Grape Blaster", 4, 520, 145, 4, 2, 1.3,
-         "远程敌人 > 普通敌人 > 资源单位", "Lv2: 50  Lv3: 100", QColor(113, 70, 139)},
-        {game::core::CardKind::Heal2, "Papaya Support", 3, 430, 55, 4, 3, 1.7,
-         "受伤友方 > 最低血量友方", "Lv2: 40  Lv3: 80", QColor(219, 132, 43)},
+        {game::core::CardKind::Produce,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Produce)),
+         game::core::cardSpec(game::core::CardKind::Produce).deployCost,
+         game::core::cardSpec(game::core::CardKind::Produce).maxHp,
+         game::core::cardSpec(game::core::CardKind::Produce).attack,
+         game::core::cardSpec(game::core::CardKind::Produce).attackRange,
+         game::core::cardSpec(game::core::CardKind::Produce).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Produce).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Produce)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Produce).priorityText),
+         themeColorForCardKind(game::core::CardKind::Produce)},
+        {game::core::CardKind::Sniper,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Sniper)),
+         game::core::cardSpec(game::core::CardKind::Sniper).deployCost,
+         game::core::cardSpec(game::core::CardKind::Sniper).maxHp,
+         game::core::cardSpec(game::core::CardKind::Sniper).attack,
+         game::core::cardSpec(game::core::CardKind::Sniper).attackRange,
+         game::core::cardSpec(game::core::CardKind::Sniper).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Sniper).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Sniper)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Sniper).priorityText),
+         themeColorForCardKind(game::core::CardKind::Sniper)},
+        {game::core::CardKind::Specialist,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Specialist)),
+         game::core::cardSpec(game::core::CardKind::Specialist).deployCost,
+         game::core::cardSpec(game::core::CardKind::Specialist).maxHp,
+         game::core::cardSpec(game::core::CardKind::Specialist).attack,
+         game::core::cardSpec(game::core::CardKind::Specialist).attackRange,
+         game::core::cardSpec(game::core::CardKind::Specialist).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Specialist).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Specialist)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Specialist).priorityText),
+         themeColorForCardKind(game::core::CardKind::Specialist)},
+        {game::core::CardKind::Heal,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Heal)),
+         game::core::cardSpec(game::core::CardKind::Heal).deployCost,
+         game::core::cardSpec(game::core::CardKind::Heal).maxHp,
+         game::core::cardSpec(game::core::CardKind::Heal).attack,
+         game::core::cardSpec(game::core::CardKind::Heal).attackRange,
+         game::core::cardSpec(game::core::CardKind::Heal).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Heal).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Heal)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Heal).priorityText),
+         themeColorForCardKind(game::core::CardKind::Heal)},
+        {game::core::CardKind::Attack,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Attack)),
+         game::core::cardSpec(game::core::CardKind::Attack).deployCost,
+         game::core::cardSpec(game::core::CardKind::Attack).maxHp,
+         game::core::cardSpec(game::core::CardKind::Attack).attack,
+         game::core::cardSpec(game::core::CardKind::Attack).attackRange,
+         game::core::cardSpec(game::core::CardKind::Attack).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Attack).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Attack)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Attack).priorityText),
+         themeColorForCardKind(game::core::CardKind::Attack)},
+        {game::core::CardKind::Aoe,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Aoe)),
+         game::core::cardSpec(game::core::CardKind::Aoe).deployCost,
+         game::core::cardSpec(game::core::CardKind::Aoe).maxHp,
+         game::core::cardSpec(game::core::CardKind::Aoe).attack,
+         game::core::cardSpec(game::core::CardKind::Aoe).attackRange,
+         game::core::cardSpec(game::core::CardKind::Aoe).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Aoe).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Aoe)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Aoe).priorityText),
+         themeColorForCardKind(game::core::CardKind::Aoe)},
+        {game::core::CardKind::HeavyMedic,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::HeavyMedic)),
+         game::core::cardSpec(game::core::CardKind::HeavyMedic).deployCost,
+         game::core::cardSpec(game::core::CardKind::HeavyMedic).maxHp,
+         game::core::cardSpec(game::core::CardKind::HeavyMedic).attack,
+         game::core::cardSpec(game::core::CardKind::HeavyMedic).attackRange,
+         game::core::cardSpec(game::core::CardKind::HeavyMedic).moveLimit,
+         game::core::cardSpec(game::core::CardKind::HeavyMedic).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::HeavyMedic)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::HeavyMedic).priorityText),
+         themeColorForCardKind(game::core::CardKind::HeavyMedic)},
+        {game::core::CardKind::Arsenal,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Arsenal)),
+         game::core::cardSpec(game::core::CardKind::Arsenal).deployCost,
+         game::core::cardSpec(game::core::CardKind::Arsenal).maxHp,
+         game::core::cardSpec(game::core::CardKind::Arsenal).attack,
+         game::core::cardSpec(game::core::CardKind::Arsenal).attackRange,
+         game::core::cardSpec(game::core::CardKind::Arsenal).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Arsenal).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Arsenal)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Arsenal).priorityText),
+         themeColorForCardKind(game::core::CardKind::Arsenal)},
+        {game::core::CardKind::Attack2,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Attack2)),
+         game::core::cardSpec(game::core::CardKind::Attack2).deployCost,
+         game::core::cardSpec(game::core::CardKind::Attack2).maxHp,
+         game::core::cardSpec(game::core::CardKind::Attack2).attack,
+         game::core::cardSpec(game::core::CardKind::Attack2).attackRange,
+         game::core::cardSpec(game::core::CardKind::Attack2).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Attack2).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Attack2)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Attack2).priorityText),
+         themeColorForCardKind(game::core::CardKind::Attack2)},
+        {game::core::CardKind::Heal2,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Heal2)),
+         game::core::cardSpec(game::core::CardKind::Heal2).deployCost,
+         game::core::cardSpec(game::core::CardKind::Heal2).maxHp,
+         game::core::cardSpec(game::core::CardKind::Heal2).attack,
+         game::core::cardSpec(game::core::CardKind::Heal2).attackRange,
+         game::core::cardSpec(game::core::CardKind::Heal2).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Heal2).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Heal2)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Heal2).priorityText),
+         themeColorForCardKind(game::core::CardKind::Heal2)},
     };
 }
 
@@ -478,51 +603,6 @@ void DeckPage::refreshDeckSlotsDisplay()
 
 void DeckPage::refreshDetailPanel(int cardIndex)
 {
-    {
-        if (cardIndex < 0 || cardIndex >= m_allCards.size()) return;
-        m_selectedCardIndex = cardIndex;
-        for (int i = 0; i < m_cardHotspots.size(); ++i) {
-            m_cardHotspots[i]->setSelected(i == cardIndex);
-        }
-
-        const auto &card = m_allCards[cardIndex];
-        const bool owned = CardCollection::isOwned(card.kind);
-        const int level = CardCollection::level(card.kind);
-        const int fragments = CardCollection::fragments(card.kind);
-        const int upgradeCost = CardCollection::upgradeCost(card.kind);
-        m_detailPanel->setText(QString(
-            "<div style='font-size:20px; font-weight:800; margin-bottom:10px;'>%1</div>"
-            "<div style='color:#76552d; font-weight:700; margin-bottom:9px;'>%2 | %3</div>"
-            "<hr style='border:0; border-top:1px solid #9b7545;'>"
-            "<table cellspacing='5'>"
-            "<tr><td><b>HP</b></td><td>%4</td></tr>"
-            "<tr><td><b>ATK</b></td><td>%5</td></tr>"
-            "<tr><td><b>Range</b></td><td>%6</td></tr>"
-            "<tr><td><b>Interval</b></td><td>%7 s</td></tr>"
-            "<tr><td><b>Move</b></td><td>%8 cells</td></tr>"
-            "<tr><td><b>Cost</b></td><td>%9 Juice</td></tr>"
-            "</table>"
-            "<hr style='border:0; border-top:1px solid #9b7545;'>"
-            "<div><b>Collection</b><br>Level %10 | Shards %11/%12</div>"
-            "<div style='margin-top:9px;'><b>Battle Growth</b><br>%13</div>"
-            "<div style='margin-top:9px;'><b>Target Priority</b><br>%14</div>")
-            .arg(card.name)
-            .arg(cardTypeText(card.kind))
-            .arg(owned ? "Owned" : "Locked")
-            .arg(card.maxHp)
-            .arg(card.attack)
-            .arg(card.attackRange)
-            .arg(card.attackInterval)
-            .arg(card.moveLimit)
-            .arg(card.deployCost)
-            .arg(level)
-            .arg(fragments)
-            .arg(upgradeCost > 0 ? upgradeCost : 0)
-            .arg(card.upgradeCostDesc)
-            .arg(card.priorityDesc));
-        refreshCollectionDisplay();
-        return;
-    }
     if (cardIndex < 0 || cardIndex >= m_allCards.size()) {
         return;
     }
@@ -533,31 +613,49 @@ void DeckPage::refreshDetailPanel(int cardIndex)
     }
 
     const auto &card = m_allCards[cardIndex];
+    const bool owned = CardCollection::isOwned(card.kind);
+    const int level = CardCollection::level(card.kind);
+    const int fragments = CardCollection::fragments(card.kind);
+    const int upgradeCost = CardCollection::upgradeCost(card.kind);
+    const int battleUpgradeLv2 = game::core::constants::UpgradeBaseCost;
+    const int battleUpgradeLv3 = game::core::constants::UpgradeBaseCost * 2;
+    const int recallPercent = game::core::constants::RecallRefundPercent;
+
     m_detailPanel->setText(QString(
         "<div style='font-size:20px; font-weight:800; margin-bottom:10px;'>%1</div>"
-        "<div style='color:#76552d; font-weight:700; margin-bottom:9px;'>%2</div>"
+        "<div style='color:#76552d; font-weight:700; margin-bottom:9px;'>%2 | %3</div>"
         "<hr style='border:0; border-top:1px solid #9b7545;'>"
         "<table cellspacing='5'>"
-        "<tr><td><b>HP</b></td><td>%3</td></tr>"
-        "<tr><td><b>攻击</b></td><td>%4</td></tr>"
-        "<tr><td><b>射程</b></td><td>%5</td></tr>"
-        "<tr><td><b>间隔</b></td><td>%6 秒</td></tr>"
-        "<tr><td><b>移动</b></td><td>%7 格</td></tr>"
-        "<tr><td><b>费用</b></td><td>%8</td></tr>"
+        "<tr><td><b>HP</b></td><td>%4</td></tr>"
+        "<tr><td><b>ATK</b></td><td>%5</td></tr>"
+        "<tr><td><b>Range</b></td><td>%6</td></tr>"
+        "<tr><td><b>Interval</b></td><td>%7 s</td></tr>"
+        "<tr><td><b>Move</b></td><td>%8 cells</td></tr>"
+        "<tr><td><b>Cost</b></td><td>%9 Juice</td></tr>"
         "</table>"
         "<hr style='border:0; border-top:1px solid #9b7545;'>"
-        "<div><b>升级</b><br>%9</div>"
-        "<div style='margin-top:9px;'><b>优先目标</b><br>%10</div>")
+        "<div><b>Collection</b><br>Level %10 | Shards %11 | Next Collection Upgrade %12</div>"
+        "<div style='margin-top:9px;'><b>Battle Upgrade</b><br>Lv1 → Lv2: %13 Juice | Lv2 → Lv3: %14 Juice | Recall refund: %15%% deploy cost</div>"
+        "<div style='margin-top:9px;'><b>Skill</b><br>%16</div>"
+        "<div style='margin-top:9px;'><b>Target Priority</b><br>%17</div>")
         .arg(card.name)
         .arg(cardTypeText(card.kind))
+        .arg(owned ? "Owned" : "Locked")
         .arg(card.maxHp)
         .arg(card.attack)
         .arg(card.attackRange)
         .arg(card.attackInterval)
         .arg(card.moveLimit)
         .arg(card.deployCost)
-        .arg(card.upgradeCostDesc)
+        .arg(level)
+        .arg(fragments)
+        .arg(upgradeCost > 0 ? QString("%1 shards").arg(upgradeCost) : QString("Max"))
+        .arg(battleUpgradeLv2)
+        .arg(battleUpgradeLv3)
+        .arg(recallPercent)
+        .arg(card.skillDesc)
         .arg(card.priorityDesc));
+    refreshCollectionDisplay();
 }
 
 void DeckPage::updateStartBattleButton()
@@ -860,8 +958,7 @@ void DeckPage::performDraw(int count)
 
 QString DeckPage::cardNameForKind(game::core::CardKind kind) const
 {
-    const int index = indexForKind(kind);
-    return index >= 0 ? m_allCards[index].name : QString("Unknown Card");
+    return QString::fromUtf8(game::core::cardName(kind));
 }
 
 int DeckPage::indexForKind(game::core::CardKind kind) const

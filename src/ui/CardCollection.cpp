@@ -1,4 +1,5 @@
 #include "ui/CardCollection.h"
+#include "core/data/CardSpecs.h"
 
 #include <QDateTime>
 #include <QRandomGenerator>
@@ -8,8 +9,6 @@ namespace {
 
 constexpr int kInitialTickets = 30;
 constexpr int kDuplicateFragments = 10;
-constexpr int kMaxCollectionLevel = 3;
-
 QString ownedKey(game::core::CardKind kind)
 {
     return QString("collection/owned/%1").arg(CardCollection::key(kind));
@@ -152,10 +151,10 @@ int CardCollection::level(game::core::CardKind kind)
 int CardCollection::upgradeCost(game::core::CardKind kind)
 {
     const int current = level(kind);
-    if (current <= 0 || current >= kMaxCollectionLevel) {
+    if (current <= 0 || current >= game::core::CollectionMaxLevel) {
         return 0;
     }
-    return current == 1 ? 30 : 60;
+    return game::core::collectionUpgradeCostForLevel(current);
 }
 
 bool CardCollection::canUpgrade(game::core::CardKind kind)
@@ -210,17 +209,5 @@ QVector<DrawResult> CardCollection::drawMany(int count)
 
 QString CardCollection::key(game::core::CardKind kind)
 {
-    switch (kind) {
-    case game::core::CardKind::Attack: return "attack";
-    case game::core::CardKind::Sniper: return "sniper";
-    case game::core::CardKind::Aoe: return "aoe";
-    case game::core::CardKind::Specialist: return "specialist";
-    case game::core::CardKind::Produce: return "produce";
-    case game::core::CardKind::Arsenal: return "arsenal";
-    case game::core::CardKind::Heal: return "heal";
-    case game::core::CardKind::HeavyMedic: return "heavy_medic";
-    case game::core::CardKind::Attack2: return "attack2";
-    case game::core::CardKind::Heal2: return "heal2";
-    }
-    return "unknown";
+    return QString::fromUtf8(game::core::cardKey(kind));
 }

@@ -24,8 +24,8 @@ struct CardDisplayInfo {
     int attackRange;
     int moveLimit;
     double attackInterval;
+    QString skillDesc;
     QString priorityDesc;
-    QString upgradeCostDesc;
     QColor themeColor;
 };
 

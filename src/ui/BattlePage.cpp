@@ -22,6 +22,8 @@
 #include "ui/BattlePage.h"
 #include "ui/PvpMapLayout.h"
 
+#include "core/data/CardSpecs.h"
+
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFont>
@@ -106,19 +108,7 @@ int terrainHeightFromMapTile(const std::string& type)
 
 QString cardDisplayName(game::core::CardKind kind)
 {
-    switch (kind) {
-    case game::core::CardKind::Attack: return "Kiwi Scout";
-    case game::core::CardKind::Sniper: return "Sniper Berry";
-    case game::core::CardKind::Aoe: return "Orange Bomber";
-    case game::core::CardKind::Specialist: return "Berry Tank";
-    case game::core::CardKind::Produce: return "Miner Pine";
-    case game::core::CardKind::Arsenal: return "Mango Engineer";
-    case game::core::CardKind::Heal: return "Peach Healer";
-    case game::core::CardKind::HeavyMedic: return "Coco Defender";
-    case game::core::CardKind::Attack2: return "Grape Blaster";
-    case game::core::CardKind::Heal2: return "Papaya Support";
-    }
-    return "Unknown";
+    return QString::fromUtf8(game::core::cardName(kind));
 }
 
 QString mapDisplayName(const QString& mapId)
