@@ -10,7 +10,9 @@
 #include <QFileInfo>
 #include <QRectF>
 #include <QString>
+#include <QtMath>
 
+#include <algorithm>
 #include <set>
 #include <string>
 #include <vector>
@@ -66,6 +68,9 @@ inline game::core::TerrainType terrainFromMapTileType(const std::string& type)
     if (type == "SPAWN_A" || type == "SPAWN_B") return game::core::TerrainType::SpawnPoint;
     if (type == "CORE_A") return game::core::TerrainType::CoreA;
     if (type == "CORE_B") return game::core::TerrainType::CoreB;
+    if (type == "EMPTY" || type == "RESOURCE" || type == "VISION_BLOCK") {
+        return game::core::TerrainType::FlatLand;
+    }
     if (type == "DEPLOY_A" || type == "DEPLOY_B" || type == "DEPLOY_NEUTRAL") {
         return game::core::TerrainType::FlatLand;
     }
