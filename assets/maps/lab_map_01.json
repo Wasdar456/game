@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "lab_map_01",
+  "displayName": "Office Panic",
   "mode": "PVE",
   "image": "lab_map_01.png",
   "grid": {

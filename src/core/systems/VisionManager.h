@@ -22,6 +22,7 @@ namespace game::core {
 class VisionManager {
 public:
     VisionManager();
+    void clear();
 
     /**
      * @brief 初始化默认视野（核心周围）
@@ -59,10 +60,17 @@ public:
      * @brief 获取B方可部署区域（基于视野）
      */
     std::vector<MapPosition> getDeployableCellsB(const Map& map) const;
+    const std::set<MapPosition>& visionCellsA() const { return visionA_; }
+    const std::set<MapPosition>& visionCellsB() const { return visionB_; }
+    void setVisionBlocks(std::vector<MapPosition> blocks);
 
 private:
     std::set<MapPosition> visionA_;  // A方视野
     std::set<MapPosition> visionB_;  // B方视野
+    std::set<MapPosition> visionBlocks_;
+    MapPosition coreAPos_;
+    MapPosition coreBPos_;
+    bool hasCoreVision_ = false;
 
     /**
      * @brief 添加单位周围的视野
@@ -71,6 +79,7 @@ private:
                          MapPosition center,
                          int range,
                          const Map& map);
+    void addCoreVision(std::set<MapPosition>& vision, MapPosition center);
 };
 
 } // namespace game::core

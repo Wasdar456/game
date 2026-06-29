@@ -56,8 +56,11 @@
 
 // ========== 网络模块 ==========
 #include "ui/LobbyPage.h"                   // NetworkContext 结构体
+#include "ui/MapSceneRuntime.h"
 #include "network/protocol/ProtocolDef.h"   // MsgType 枚举
 #include "ui/BattleResult.h"
+
+#include <set>
 
 class PauseOverlay;
 class TutorialOverlay;
@@ -87,6 +90,8 @@ public:
     void setShowGrid(bool show);
     void setPvpDeploymentSide(bool enabled, bool isHost);
     void setUnitVisualScale(double scale);
+    void setAllowedDeployCells(const std::vector<game::core::MapPosition>& cells);
+    void clearAllowedDeployCells();
     void hideRadialMenu();
     void clearEffects();
 
@@ -162,6 +167,8 @@ private:
     bool m_showGrid;
     bool m_restrictPvpDeployment;
     double m_unitVisualScale;
+    bool m_useAllowedDeployCells;
+    std::set<game::core::MapPosition> m_allowedDeployCells;
 
     void showRadialMenu(int unitId, int pixelX, int pixelY);
     int findUnitAt(int row, int col) const;
@@ -175,6 +182,7 @@ private:
     int rowAtPixel(int y) const;
     int colAtPixel(int x) const;
     void addEffect(EffectType type, int row, int col, qreal duration);
+    bool isDeploymentCellAllowed(game::core::MapPosition position) const;
 
     // ========== 增强绘制方法 ==========
     void drawTerrain(QPainter &painter);           ///< 绘制地形（渐变+纹理感）
@@ -320,6 +328,7 @@ private:
     QPixmap m_deckArtwork;
     QVector<game::core::CardKind> m_deck;
     QString m_activePveMapId;
+    game::ui::ResolvedMapScene m_activeMapScene;
 
     // ========== 初始化方法 ==========
     void initUI();
@@ -340,6 +349,12 @@ private:
     void updateTutorialTargets();
     void layoutArtworkUi();
     QRect artworkRect() const;
+    void loadActiveMapScene();
+    void applyMapSceneToBattleView();
+    void refreshLocalVisionAndDeployMask();
+    void updateBattleViewSnapshot(const game::core::BattleSnapshot& snapshot);
+    bool canLocalPvpDeployAt(game::core::MapPosition pos) const;
+    QString activeMapDisplayName() const;
 
     // ========== 地图初始化 ==========
     void setupPveMap();                 ///< 初始化 PVE 地图（从 startBattle 提取）

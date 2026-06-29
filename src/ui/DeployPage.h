@@ -31,8 +31,11 @@
 
 // ========== 网络模块 ==========
 #include "ui/LobbyPage.h"  // NetworkContext
+#include "ui/MapSceneRuntime.h"
 #include "network/protocol/ProtocolDef.h"
 #include "network/sync/DeploymentSync.h"
+
+#include <set>
 
 /**
  * @class DeployView
@@ -49,10 +52,16 @@ public:
 
     void updateFromSnapshot(const game::core::BattleSnapshot &snapshot);
     void setMapSize(int rows, int cols);
+    bool setBackgroundImage(const QString& path);
+    void clearBackgroundImage();
+    void setImageCrop(int x, int y, int w, int h);
+    void setImageOffset(int x, int y);
     void setArtworkOverlayMode(bool enabled);
     void setShowGrid(bool show);
     void setPvpDeploymentSide(bool enabled, bool isHost);
     void setUnitVisualScale(double scale);
+    void setAllowedDeployCells(const std::vector<game::core::MapPosition>& cells);
+    void clearAllowedDeployCells();
 
     // 交互状态
     enum class InteractionMode {
@@ -94,13 +103,22 @@ private:
 
     game::core::BattleSnapshot m_snapshot;
     QVector<DustEffect> m_dustEffects;
+    QPixmap m_backgroundImage;
     int m_mapRows;
     int m_mapCols;
+    int m_imageCropX;
+    int m_imageCropY;
+    int m_imageCropW;
+    int m_imageCropH;
+    int m_imageOffsetX;
+    int m_imageOffsetY;
     bool m_artworkOverlayMode;
     bool m_showGrid;
     bool m_restrictPvpDeployment;
     bool m_localIsHost;
     double m_unitVisualScale;
+    bool m_useAllowedDeployCells;
+    std::set<game::core::MapPosition> m_allowedDeployCells;
     int m_animFrame;
     QPushButton *m_btnUpgrade;
     QPushButton *m_btnMove;
@@ -116,6 +134,7 @@ private:
     QPointF cellCenter(int row, int col) const;
     int rowAtPixel(int y) const;
     int colAtPixel(int x) const;
+    bool isDeploymentCellAllowed(game::core::MapPosition position) const;
     void showRadialMenu(int unitId, int pixelX, int pixelY);
     void drawTerrain(QPainter &painter);
     void drawDeployable(QPainter &painter);
@@ -210,6 +229,7 @@ private:
     QPixmap m_pvpArtwork;
     QPixmap m_pvpOfficeMapArtwork;
     QPixmap m_deckArtwork;
+    game::ui::ResolvedMapScene m_activeMapScene;
 
     void initUI();
     void connectSignals();
@@ -222,6 +242,11 @@ private:
     void applyPendingOpponentOps();
     void layoutArtworkUi();
     QRect artworkRect() const;
+    void loadActiveMapScene();
+    void applyMapSceneToDeployView();
+    void refreshLocalVisionAndDeployMask();
+    void updateDeployViewSnapshot(const game::core::BattleSnapshot& snapshot);
+    bool canLocalPvpDeployAt(game::core::MapPosition pos) const;
 
     // 网络处理
     void onNetworkPacket(game::network::MsgType type, const QByteArray& body);
