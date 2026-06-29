@@ -85,6 +85,7 @@ signals:
 
     // 对方取消了准备
     void peerCancelled();
+    void mapSelectionChanged(const QString& mapId);
 
     // 状态变化
     void stateChanged(LobbyState newState);
@@ -100,6 +101,7 @@ private:
     void handlePlayerReady(const QByteArray& body);// 收到对方 READY
     void handlePlayerUnready();                    // 收到对方取消 READY
     void handleGameStart(const QByteArray& body);  // Client 收到 GAME_START
+    void handleMapSelection(const QByteArray& body);// Client 收到地图切换
 
     void checkBothReady();   // Host: 检查是否双方都 ready，是则广播 GAME_START
     void setState(LobbyState s);

@@ -18,6 +18,7 @@ enum class MsgType : uint8_t {
     PLAYER_UNREADY = 0x04,   // 玩家取消准备
     GAME_START     = 0x05,   // 双方都准备好，Host 广播开始
     SYNC_SEED      = 0x06,   // 随机数种子同步（GAME_START 携带）
+    MAP_SELECTION  = 0x07,   // Host 广播当前大厅地图选择
 
     // ─── 部署阶段 ───
     DEPLOY         = 0x10,   // 部署单位
@@ -65,6 +66,7 @@ inline const char* msgTypeName(MsgType type) {
         case MsgType::PLAYER_UNREADY: return "PLAYER_UNREADY";
         case MsgType::GAME_START:     return "GAME_START";
         case MsgType::SYNC_SEED:      return "SYNC_SEED";
+        case MsgType::MAP_SELECTION:  return "MAP_SELECTION";
         case MsgType::DEPLOY:         return "DEPLOY";
         case MsgType::RECALL_UNIT:    return "RECALL_UNIT";
         case MsgType::DEPLOYMENT_END: return "DEPLOYMENT_END";

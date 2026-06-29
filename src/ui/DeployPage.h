@@ -52,6 +52,7 @@ public:
     void setArtworkOverlayMode(bool enabled);
     void setShowGrid(bool show);
     void setPvpDeploymentSide(bool enabled, bool isHost);
+    void setUnitVisualScale(double scale);
 
     // 交互状态
     enum class InteractionMode {
@@ -99,6 +100,7 @@ private:
     bool m_showGrid;
     bool m_restrictPvpDeployment;
     bool m_localIsHost;
+    double m_unitVisualScale;
     int m_animFrame;
     QPushButton *m_btnUpgrade;
     QPushButton *m_btnMove;
@@ -206,6 +208,7 @@ private:
     bool m_opponentReady = false;    // 对方是否点击了开战
     QLabel *m_opponentLabel;
     QPixmap m_pvpArtwork;
+    QPixmap m_pvpOfficeMapArtwork;
     QPixmap m_deckArtwork;
 
     void initUI();

@@ -86,6 +86,7 @@ public:
     void setArtworkOverlayMode(bool enabled);
     void setShowGrid(bool show);
     void setPvpDeploymentSide(bool enabled, bool isHost);
+    void setUnitVisualScale(double scale);
     void hideRadialMenu();
     void clearEffects();
 
@@ -160,6 +161,7 @@ private:
     bool m_artworkOverlayMode;
     bool m_showGrid;
     bool m_restrictPvpDeployment;
+    double m_unitVisualScale;
 
     void showRadialMenu(int unitId, int pixelX, int pixelY);
     int findUnitAt(int row, int col) const;

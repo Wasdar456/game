@@ -95,6 +95,14 @@ QString pvpMapIdForIndex(int index)
     }
 }
 
+int pvpMapIndexForId(const QString& mapId)
+{
+    if (mapId == "pvp_office_panic") {
+        return 2;
+    }
+    return 0;
+}
+
 bool pvpMapEnabled(int index)
 {
     return index == 0 || index == 2;
@@ -154,12 +162,46 @@ void LobbyPage::paintEvent(QPaintEvent *event)
 
 void LobbyPage::setMode(Mode mode)
 {
+    if (m_currentMode == Mode::PVP && mode != Mode::PVP) {
+        resetPvpSession();
+    }
     m_currentMode = mode;
     m_pvePanel->setVisible(mode == Mode::PVE);
     m_pvpPanel->setVisible(mode == Mode::PVP);
     updateArtworkLayout();
     refreshSelectionVisuals();
     update();
+}
+
+void LobbyPage::resetPvpSession()
+{
+    if (m_lobbyManager) {
+        delete m_lobbyManager;
+        m_lobbyManager = nullptr;
+    }
+    if (m_client) {
+        m_client->disconnect();
+        delete m_client;
+        m_client = nullptr;
+    }
+    if (m_server) {
+        m_server->disconnect();
+        delete m_server;
+        m_server = nullptr;
+    }
+
+    if (m_btnReady) {
+        m_btnReady->setEnabled(false);
+        m_btnReady->setText("Ready");
+    }
+    if (m_readyStatusLabel) {
+        m_readyStatusLabel->setText("等待连接...");
+        m_readyStatusLabel->setStyleSheet(readyStatusStyle("#6b5138"));
+        m_readyStatusLabel->update();
+    }
+    if (m_statusLog) {
+        m_statusLog->setPlainText("请选择创建房间或输入 IP 加入房间。");
+    }
 }
 
 void LobbyPage::initUI()
@@ -291,14 +333,24 @@ void LobbyPage::createPvpPanel()
                 showStatus("Jungle Ruins 暂未开放，请选择 Sunny Beach 或 Office Panic");
                 return;
             }
+            if (m_lobbyManager
+                && m_lobbyManager->role() == game::network::LobbyManager::Role::Client) {
+                showStatus("当前地图由房主选择");
+                return;
+            }
             m_selectedPvpMap = i;
             if (m_lobbyManager && m_lobbyManager->role() == game::network::LobbyManager::Role::Host) {
                 m_lobbyManager->setSelectedMapId(pvpMapIdForIndex(m_selectedPvpMap));
+                m_statusLog->append(QString(">> 房主切换地图为 %1")
+                                        .arg(i == 2 ? "Office Panic" : "Sunny Beach"));
             }
             refreshSelectionVisuals();
         });
     }
-    m_pvpHotspots[5]->setClickHandler([this]() { emit signalBack(); });
+    m_pvpHotspots[5]->setClickHandler([this]() {
+        resetPvpSession();
+        emit signalBack();
+    });
     m_pvpHotspots[6]->setClickHandler([this]() {
         if (m_btnReady->isEnabled()) {
             m_btnReady->click();
@@ -416,14 +468,12 @@ QString LobbyPage::getLocalIPAddress() const
 // ========== initNetwork() 鈥斺€?鍒濆鍖?PVP 缃戠粶妯″潡 ==========
 void LobbyPage::initNetwork()
 {
-    // 濡傛灉宸茬粡鍒濆鍖栬繃锛岀洿鎺ヨ繑鍥?
-    if (m_server && m_lobbyManager) return;
-
-    // 鍒涘缓 Host 绔?GameServer
-    m_server = new game::network::GameServer(this);
-
-    // 鍒涘缓 Client 绔?GameClient
-    m_client = new game::network::GameClient(this);
+    if (!m_server) {
+        m_server = new game::network::GameServer(this);
+    }
+    if (!m_client) {
+        m_client = new game::network::GameClient(this);
+    }
 
     // 杩炴帴 GameServer 鐨勪俊鍙峰埌鐘舵€佹棩蹇?
     connect(m_server, &game::network::GameServer::clientConnected,
@@ -450,7 +500,10 @@ void LobbyPage::initNetwork()
 void LobbyPage::connectSignals()
 {
     // 杩斿洖鎸夐挳
-    connect(m_btnBack, &QPushButton::clicked, this, &LobbyPage::signalBack);
+    connect(m_btnBack, &QPushButton::clicked, this, [this]() {
+        resetPvpSession();
+        emit signalBack();
+    });
 
     // PVE 纭鎸夐挳 鈫?鍙戝嚭閰嶇疆瀹屾垚淇″彿
     connect(m_btnPveConfirm, &QPushButton::clicked, this, [this]() {
@@ -461,6 +514,9 @@ void LobbyPage::connectSignals()
 
     // PVP 鍒涘缓鎴块棿鎸夐挳 鈫?浣跨敤 GameServer 鍚姩鐩戝惉
     connect(m_btnCreateRoom, &QPushButton::clicked, this, [this]() {
+        if (m_lobbyManager || m_server || m_client) {
+            resetPvpSession();
+        }
         initNetwork();  // 鎸夐渶鍒濆鍖栫綉缁滄ā鍧?
 
         // 鍚姩 GameServer 鐩戝惉
@@ -495,6 +551,11 @@ void LobbyPage::connectSignals()
                         ctx.server = m_server;
                         ctx.client = nullptr;
                         emit signalPvpReady(ctx);
+                    });
+            connect(m_lobbyManager, &game::network::LobbyManager::mapSelectionChanged,
+                    this, [this](const QString& mapId) {
+                        m_selectedPvpMap = pvpMapIndexForId(mapId);
+                        refreshSelectionVisuals();
                     });
 
             // 杩炴帴 LobbyManager 鐨勫彂鍖呰姹傚埌 GameServer
@@ -535,6 +596,9 @@ void LobbyPage::connectSignals()
             return;
         }
 
+        if (m_lobbyManager || m_server || m_client) {
+            resetPvpSession();
+        }
         initNetwork();  // 鎸夐渶鍒濆鍖栫綉缁滄ā鍧?
 
         // 鍒涘缓 LobbyManager锛圕lient 瑙掕壊锛?
@@ -569,6 +633,14 @@ void LobbyPage::connectSignals()
                     m_readyStatusLabel->setText("对方已准备");
                     m_readyStatusLabel->setStyleSheet(readyStatusStyle("#287a43"));
                     m_readyStatusLabel->update();
+                });
+        connect(m_lobbyManager, &game::network::LobbyManager::mapSelectionChanged,
+                this, [this](const QString& mapId) {
+                    m_selectedPvpMap = pvpMapIndexForId(mapId);
+                    refreshSelectionVisuals();
+                    m_statusLog->append(QString(">> 房主已切换地图为 %1")
+                                            .arg(m_selectedPvpMap == 2 ? "Office Panic"
+                                                                      : "Sunny Beach"));
                 });
 
         // 杩炴帴 LobbyManager 鐨?gameStarted 淇″彿 鈫?杩涘叆閫夊崱椤?

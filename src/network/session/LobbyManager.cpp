@@ -43,6 +43,7 @@ void LobbyManager::onPacketReceived(MsgType type, const QByteArray& body) {
     case MsgType::PLAYER_READY:   handlePlayerReady(body);break;
     case MsgType::PLAYER_UNREADY: handlePlayerUnready();  break;
     case MsgType::GAME_START:     handleGameStart(body);  break;
+    case MsgType::MAP_SELECTION:  handleMapSelection(body); break;
     default: break;
     }
 }
@@ -73,7 +74,15 @@ void LobbyManager::setSelectedMapId(const QString& mapId)
     if (m_state == LobbyState::InGame) {
         return;
     }
-    m_selectedMapId = mapId.isEmpty() ? QString("pvp_sunny_beach") : mapId;
+    const QString normalized = mapId.isEmpty() ? QString("pvp_sunny_beach") : mapId;
+    if (m_selectedMapId == normalized) {
+        return;
+    }
+    m_selectedMapId = normalized;
+    if (m_role == Role::Host
+        && (m_state == LobbyState::Connected || m_state == LobbyState::LocalReady)) {
+        emit sendPacketRequested(MsgType::MAP_SELECTION, m_selectedMapId.toUtf8());
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -102,6 +111,7 @@ void LobbyManager::handleJoinRoom(const QByteArray& body) {
     // 回复 JOIN_ACK，携带房主昵称
     QByteArray ackBody = m_myNickname.toUtf8();
     emit sendPacketRequested(MsgType::JOIN_ACK, ackBody);
+    emit sendPacketRequested(MsgType::MAP_SELECTION, m_selectedMapId.toUtf8());
 
     setState(LobbyState::Connected);
     emit peerJoined(m_peerNickname);
@@ -163,6 +173,19 @@ void LobbyManager::handleGameStart(const QByteArray& body) {
     qInfo() << "[Lobby][Client] 收到 GAME_START，种子=" << seed << "map=" << m_selectedMapId;
     setState(LobbyState::InGame);
     emit gameStarted(seed, m_selectedMapId);
+}
+
+void LobbyManager::handleMapSelection(const QByteArray& body)
+{
+    if (m_role != Role::Client || m_state == LobbyState::InGame) return;
+
+    const QString mapId = QString::fromUtf8(body);
+    const QString normalized = mapId.isEmpty() ? QString("pvp_sunny_beach") : mapId;
+    if (m_selectedMapId == normalized) {
+        return;
+    }
+    m_selectedMapId = normalized;
+    emit mapSelectionChanged(m_selectedMapId);
 }
 
 // ─────────────────────────────────────────────────────────────

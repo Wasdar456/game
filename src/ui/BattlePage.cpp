@@ -323,6 +323,7 @@ BattleView::BattleView(QWidget *parent)
     , m_artworkOverlayMode(false)
     , m_showGrid(true)
     , m_restrictPvpDeployment(false)
+    , m_unitVisualScale(1.0)
 {
     setMapSize(m_mapRows, m_mapCols);
 
@@ -436,6 +437,12 @@ void BattleView::setPvpDeploymentSide(bool enabled, bool isHost)
 {
     m_restrictPvpDeployment = enabled;
     m_localIsHost = isHost;
+    update();
+}
+
+void BattleView::setUnitVisualScale(double scale)
+{
+    m_unitVisualScale = std::max(0.5, scale);
     update();
 }
 
@@ -997,8 +1004,8 @@ void BattleView::drawUnits(QPainter &painter)
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(30, 20, 12, 82));
             const qreal phase = (m_animFrame + unit.id * 11) * 0.16;
-            const qreal bob = qSin(phase) * cellExtent() * 0.035;
-            const qreal scale = 1.0 + qSin(phase + 0.8) * 0.018;
+            const qreal bob = qSin(phase) * cellExtent() * 0.035 * m_unitVisualScale;
+            const qreal scale = m_unitVisualScale * (1.0 + qSin(phase + 0.8) * 0.018);
             const QRectF shadowRect(unitRect.left() + unitRect.width() * (0.08 + (1.0 - scale) * 0.2),
                                     unitRect.bottom() - unitRect.height() * 0.18,
                                     unitRect.width() * 0.84 * scale,
@@ -1107,7 +1114,7 @@ void BattleView::drawMonsters(QPainter &painter)
     for (const auto &monster : m_snapshot.monsters) {
         QRectF mRect = cellRect(monster.row, monster.col);
         QRectF innerRect = mRect.adjusted(6, 6, -6, -6);
-        const qreal bob = qSin((m_animFrame + monster.id * 13) * 0.18) * 2.0;
+        const qreal bob = qSin((m_animFrame + monster.id * 13) * 0.18) * 2.0 * m_unitVisualScale;
 
         // 底部阴影
         painter.setPen(Qt::NoPen);
@@ -1122,10 +1129,13 @@ void BattleView::drawMonsters(QPainter &painter)
                                        innerRect.bottom() - innerRect.height() * 0.18,
                                        innerRect.width() * 0.78,
                                        innerRect.height() * 0.26));
-            QRectF spriteRect = innerRect.adjusted(-innerRect.width() * 0.35,
-                                                   -innerRect.height() * 0.62 + bob,
-                                                   innerRect.width() * 0.35,
-                                                   innerRect.height() * 0.08 + bob);
+            const qreal extraW = innerRect.width() * 0.35 * m_unitVisualScale;
+            const qreal extraTop = innerRect.height() * 0.62 * m_unitVisualScale;
+            const qreal extraBottom = innerRect.height() * 0.08 * m_unitVisualScale;
+            QRectF spriteRect = innerRect.adjusted(-extraW,
+                                                   -extraTop + bob,
+                                                   extraW,
+                                                   extraBottom + bob);
             painter.drawPixmap(spriteRect.toRect(), sprite, sprite.rect());
         } else {
             QLinearGradient monsterGrad(innerRect.topLeft(), innerRect.bottomRight());
@@ -1862,15 +1872,18 @@ void BattlePage::paintEvent(QPaintEvent *event)
                       designRect.width() * sx,
                       designRect.height() * sy);
     };
+    const auto pvpLayout = m_isPvp
+                               ? game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString())
+                               : game::ui::makePvpMapLayout();
 
     if (m_isPvp && !m_pvpArtwork.isNull()) {
         if (m_netCtx.pvpMapId == "pvp_office_panic" && !m_pvpOfficeMapArtwork.isNull()) {
             painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
                                m_pvpOfficeMapArtwork,
-                               QRectF(0, 0, 1672, 604));
+                               pvpLayout.backgroundSourceRect);
         } else {
             painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
-                               m_pvpArtwork, QRectF(0, 96, 1672, 604));
+                               m_pvpArtwork, pvpLayout.backgroundSourceRect);
         }
     } else if (m_activePveMapId == "island_pve" && !m_pveArtwork.isNull()) {
         painter.drawPixmap(canvas, m_pveArtwork);
@@ -1932,6 +1945,7 @@ void BattlePage::layoutArtworkUi()
     if (!m_battleView) return;
 
     const QRect canvas = artworkRect();
+    const auto pvpLayout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
     const qreal sx = canvas.width() / 1672.0;
     const qreal sy = canvas.height() / 941.0;
     auto mapped = [&](const QRectF &designRect) {
@@ -1978,7 +1992,7 @@ void BattlePage::layoutArtworkUi()
     }
 
     if (m_isPvp) {
-        m_battleView->setGeometry(mapped(QRectF(174, 126, 1324, 552)));
+        m_battleView->setGeometry(mapped(pvpLayout.battleViewRect));
         m_waveLabel->setGeometry(mapped(QRectF(135, 35, 126, 50)));
         m_phaseLabel->setGeometry(mapped(QRectF(355, 35, 166, 50)));
         m_coreHpLabel->setGeometry(mapped(QRectF(615, 29, 210, 50)));
@@ -2157,6 +2171,7 @@ void BattlePage::setupPvpMap()
     m_battleManager->rebuildMapOccupancy();
     m_battleManager->setPaths({layout.pathToA, layout.pathToB});
     m_battleView->setMapSize(map.rows(), map.cols());
+    m_battleView->setUnitVisualScale(layout.unitVisualScale);
     m_battleView->m_spawnPos = layout.spawnA;
     m_battleView->m_corePos = m_isHost ? layout.coreA : layout.coreB;
     layoutArtworkUi();

@@ -140,6 +140,7 @@ private:
     void updateArtworkLayout();
     void refreshSelectionVisuals();
     void showStatus(const QString &message);
+    void resetPvpSession();
 
     /**
      * @brief 初始化 PVP 网络模块

@@ -4,6 +4,8 @@
 #include "core/map/Map.h"
 #include "core/map/MapPosition.h"
 
+#include <QRectF>
+
 #include <string>
 #include <vector>
 
@@ -14,6 +16,10 @@ struct PvpMapLayout {
     int cols = 28;
     std::string id = "pvp_sunny_beach";
     std::string image = "battle_pvp.png";
+    QRectF backgroundSourceRect = QRectF(0, 96, 1672, 604);
+    QRectF battleViewRect = QRectF(174, 126, 1324, 552);
+    QRectF deployViewRect = QRectF(174, 126, 1324, 552);
+    double unitVisualScale = 1.0;
     core::MapPosition spawnA;
     core::MapPosition spawnB;
     core::MapPosition coreA;
@@ -29,6 +35,10 @@ inline PvpMapLayout makeSunnyBeachPvpMapLayout()
     PvpMapLayout layout;
     layout.id = "pvp_sunny_beach";
     layout.image = "battle_pvp.png";
+    layout.backgroundSourceRect = QRectF(0, 96, 1672, 604);
+    layout.battleViewRect = QRectF(174, 126, 1324, 552);
+    layout.deployViewRect = QRectF(174, 126, 1324, 552);
+    layout.unitVisualScale = 1.0;
     layout.spawnA = {1, 13};
     layout.spawnB = {8, 14};
     layout.coreA = {6, 2};
@@ -72,16 +82,20 @@ inline PvpMapLayout makeOfficePanicPvpMapLayout()
     PvpMapLayout layout;
     layout.id = "pvp_office_panic";
     layout.image = "battle_pvp_office_map.png";
-    layout.spawnA = {1, 13};
+    layout.backgroundSourceRect = QRectF(0, 120, 1672, 604);
+    layout.battleViewRect = QRectF(174, 126, 1324, 552);
+    layout.deployViewRect = QRectF(174, 126, 1324, 552);
+    layout.unitVisualScale = 1.12;
+    layout.spawnA = {1, 14};
     layout.spawnB = {8, 14};
     layout.coreA = {5, 1};
     layout.coreB = {5, 26};
 
     layout.pathToA = {
         layout.spawnA,
-        {2, 13}, {3, 13}, {4, 13},
-        {4, 12}, {4, 11}, {4, 10}, {4, 9}, {4, 8},
-        {5, 8}, {5, 7}, {5, 6}, {5, 5}, {5, 4}, {5, 3}, {5, 2},
+        {2, 14}, {3, 14}, {4, 14}, {5, 14},
+        {5, 13}, {5, 12}, {5, 11}, {5, 10}, {5, 9}, {5, 8},
+        {5, 7}, {5, 6}, {5, 5}, {5, 4}, {5, 3}, {5, 2},
         layout.coreA
     };
     layout.pathToB = {
@@ -103,8 +117,6 @@ inline PvpMapLayout makeOfficePanicPvpMapLayout()
         {2, 1}, {2, 2}, {2, 3}, {2, 4}, {2, 10}, {2, 11}, {2, 16}, {2, 17},
         {2, 23}, {2, 24}, {2, 25}, {2, 26},
         {3, 2}, {3, 3}, {3, 24}, {3, 25},
-        {4, 5}, {4, 22},
-        {5, 10},
         {6, 2}, {6, 3}, {6, 24}, {6, 25},
         {7, 1}, {7, 2}, {7, 3}, {7, 4}, {7, 10}, {7, 11}, {7, 16}, {7, 17},
         {7, 23}, {7, 24}, {7, 25}, {7, 26},

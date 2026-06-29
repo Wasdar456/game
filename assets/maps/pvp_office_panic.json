@@ -13,7 +13,7 @@
   },
   "imageCrop": {
     "x": 0,
-    "y": 0,
+    "y": 120,
     "width": 1672,
     "height": 604
   },
@@ -21,7 +21,7 @@
     "SPAWN_A": [
       {
         "row": 1,
-        "col": 13
+        "col": 14
       }
     ],
     "SPAWN_B": [
@@ -46,10 +46,10 @@
   "routes": {
     "A": [
       {
-        "id": "office_top_to_blue",
+        "id": "office_top_cross_to_blue",
         "spawn": {
           "row": 1,
-          "col": 13
+          "col": 14
         },
         "core": {
           "row": 5,
@@ -58,39 +58,43 @@
         "path": [
           {
             "row": 1,
-            "col": 13
+            "col": 14
           },
           {
             "row": 2,
-            "col": 13
+            "col": 14
           },
           {
             "row": 3,
-            "col": 13
+            "col": 14
           },
           {
             "row": 4,
+            "col": 14
+          },
+          {
+            "row": 5,
+            "col": 14
+          },
+          {
+            "row": 5,
             "col": 13
           },
           {
-            "row": 4,
+            "row": 5,
             "col": 12
           },
           {
-            "row": 4,
+            "row": 5,
             "col": 11
           },
           {
-            "row": 4,
+            "row": 5,
             "col": 10
           },
           {
-            "row": 4,
+            "row": 5,
             "col": 9
-          },
-          {
-            "row": 4,
-            "col": 8
           },
           {
             "row": 5,
@@ -129,7 +133,7 @@
     ],
     "B": [
       {
-        "id": "office_bottom_to_red",
+        "id": "office_bottom_cross_to_red",
         "spawn": {
           "row": 8,
           "col": 14
@@ -416,15 +420,15 @@
     {
       "row": 1,
       "col": 13,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 1,
+      "col": 14,
       "type": "SPAWN_A"
     },
     {
       "row": 1,
-      "col": 14,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 1,
       "col": 15,
       "type": "DEPLOY_NEUTRAL"
     },
@@ -556,12 +560,12 @@
     {
       "row": 2,
       "col": 13,
-      "type": "PATH_A"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 2,
       "col": 14,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
       "row": 2,
@@ -696,12 +700,12 @@
     {
       "row": 3,
       "col": 13,
-      "type": "PATH_A"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 3,
       "col": 14,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
       "row": 3,
@@ -796,7 +800,7 @@
     {
       "row": 4,
       "col": 5,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 4,
@@ -811,37 +815,37 @@
     {
       "row": 4,
       "col": 8,
-      "type": "PATH_A"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 4,
       "col": 9,
-      "type": "PATH_A"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 4,
       "col": 10,
-      "type": "PATH_A"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 4,
       "col": 11,
-      "type": "PATH_A"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 4,
       "col": 12,
-      "type": "PATH_A"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 4,
       "col": 13,
-      "type": "PATH_A"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 4,
       "col": 14,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
       "row": 4,
@@ -881,7 +885,7 @@
     {
       "row": 4,
       "col": 22,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 4,
@@ -956,27 +960,27 @@
     {
       "row": 5,
       "col": 9,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
       "row": 5,
       "col": 10,
-      "type": "BLOCKED"
+      "type": "PATH_A"
     },
     {
       "row": 5,
       "col": 11,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
       "row": 5,
       "col": 12,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
       "row": 5,
       "col": 13,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
       "row": 5,

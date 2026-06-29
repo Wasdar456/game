@@ -130,6 +130,7 @@ DeployView::DeployView(QWidget *parent)
     , m_showGrid(true)
     , m_restrictPvpDeployment(false)
     , m_localIsHost(true)
+    , m_unitVisualScale(1.0)
     , m_animFrame(0)
     , m_btnUpgrade(nullptr)
     , m_btnMove(nullptr)
@@ -215,6 +216,12 @@ void DeployView::setPvpDeploymentSide(bool enabled, bool isHost)
 {
     m_restrictPvpDeployment = enabled;
     m_localIsHost = isHost;
+    update();
+}
+
+void DeployView::setUnitVisualScale(double scale)
+{
+    m_unitVisualScale = std::max(0.5, scale);
     update();
 }
 
@@ -500,8 +507,8 @@ void DeployView::drawUnits(QPainter &painter)
             painter.setPen(Qt::NoPen);
             painter.setBrush(QColor(30, 20, 12, 78));
             const qreal phase = (m_animFrame + unit.id * 11) * 0.16;
-            const qreal bob = qSin(phase) * cellExtent() * 0.035;
-            const qreal scale = 1.0 + qSin(phase + 0.8) * 0.018;
+            const qreal bob = qSin(phase) * cellExtent() * 0.035 * m_unitVisualScale;
+            const qreal scale = m_unitVisualScale * (1.0 + qSin(phase + 0.8) * 0.018);
             const QRectF shadowRect(unitRect.left() + unitRect.width() * (0.08 + (1.0 - scale) * 0.2),
                                     unitRect.bottom() - unitRect.height() * 0.18,
                                     unitRect.width() * 0.84 * scale,
@@ -749,6 +756,7 @@ DeployPage::DeployPage(QWidget *parent)
     , m_opponentReady(false)
     , m_opponentLabel(nullptr)
     , m_pvpArtwork(":/images/artwork/battle_pvp.png")
+    , m_pvpOfficeMapArtwork(":/images/artwork/battle_pvp_office_map.png")
     , m_deckArtwork(":/images/artwork/deck_atlas.png")
 {
     initUI();
@@ -793,10 +801,16 @@ void DeployPage::paintEvent(QPaintEvent *event)
                       designRect.width() * sx,
                       designRect.height() * sy);
     };
+    const auto pvpLayout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
 
     if (!m_pvpArtwork.isNull()) {
-        painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
-                           m_pvpArtwork, QRectF(0, 96, 1672, 604));
+        if (m_netCtx.pvpMapId == "pvp_office_panic" && !m_pvpOfficeMapArtwork.isNull()) {
+            painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
+                               m_pvpOfficeMapArtwork, pvpLayout.backgroundSourceRect);
+        } else {
+            painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
+                               m_pvpArtwork, pvpLayout.backgroundSourceRect);
+        }
         painter.drawPixmap(mapped(QRectF(0, 0, 1672, 126)),
                            m_pvpArtwork, QRectF(0, 0, 1672, 126));
         painter.drawPixmap(mapped(QRectF(0, 690, 1672, 251)),
@@ -928,6 +942,7 @@ void DeployPage::layoutArtworkUi()
     if (!m_deployView) return;
 
     const QRect canvas = artworkRect();
+    const auto pvpLayout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
     const qreal sx = canvas.width() / 1672.0;
     const qreal sy = canvas.height() / 941.0;
     auto mapped = [&](const QRectF &designRect) {
@@ -973,7 +988,9 @@ void DeployPage::layoutArtworkUi()
         label->setStyleSheet(cardCostStyle);
     }
 
-    m_deployView->setGeometry(mapped(QRectF(174, 126, 1324, 552)));
+    const QRectF deployRect = m_isPvp ? pvpLayout.deployViewRect
+                                      : QRectF(174, 126, 1324, 552);
+    m_deployView->setGeometry(mapped(deployRect));
     m_titleLabel->setGeometry(mapped(QRectF(135, 35, 126, 50)));
     m_localCoreLabel->setGeometry(mapped(QRectF(615, 29, 210, 50)));
     m_enemyCoreLabel->setGeometry(mapped(QRectF(918, 29, 212, 50)));
@@ -1201,6 +1218,7 @@ void DeployPage::setupMap()
     m_battleManager->rebuildMapOccupancy();
     m_battleManager->setPaths({layout.pathToA, layout.pathToB});
     m_deployView->setMapSize(map.rows(), map.cols());
+    m_deployView->setUnitVisualScale(layout.unitVisualScale);
     m_deployView->m_spawnPos = layout.spawnA;
     m_deployView->m_corePos = m_isHost ? layout.coreA : layout.coreB;
 }
