@@ -498,15 +498,16 @@ void DeployView::drawUnits(QPainter &painter)
             const qreal phase = (m_animFrame + unit.id * 11) * 0.16;
             const qreal bob = qSin(phase) * cellExtent() * 0.035 * m_unitVisualScale;
             const qreal scale = m_unitVisualScale * (1.0 + qSin(phase + 0.8) * 0.018);
-            const QRectF shadowRect(unitRect.left() + unitRect.width() * (0.08 + (1.0 - scale) * 0.2),
-                                    unitRect.bottom() - unitRect.height() * 0.18,
-                                    unitRect.width() * 0.84 * scale,
-                                    unitRect.height() * 0.24);
+            const qreal extent = cellExtent();
+            const QRectF shadowRect(unitRect.center().x() - extent * 0.42 * scale,
+                                    unitRect.bottom() - extent * 0.18,
+                                    extent * 0.84 * scale,
+                                    extent * 0.24);
             painter.drawEllipse(shadowRect);
-            const qreal spriteW = unitRect.width() * 1.34 * scale;
-            const qreal spriteH = unitRect.height() * 1.40 * scale;
+            const qreal spriteW = extent * 1.34 * scale;
+            const qreal spriteH = extent * 1.40 * scale;
             const QRectF spriteRect(unitRect.center().x() - spriteW * 0.5,
-                                    unitRect.bottom() - unitRect.height() * 1.38 + bob,
+                                    unitRect.bottom() - extent * 1.38 + bob,
                                     spriteW,
                                     spriteH);
             painter.save();
@@ -943,10 +944,9 @@ void DeployPage::layoutArtworkUi()
 
     const int fontPx = qMax(11, qRound(19 * std::min(sx, sy)));
     const QString labelStyle = QString(
-        "QLabel { color: #3B2819; background: #F2DCA9;"
-        " border-radius: %1px;"
-        " font-size: %2px; font-weight: 700; padding: 1px 4px; }")
-        .arg(qMax(3, qRound(5 * sx)))
+        "QLabel { color: #3B2819; background: transparent;"
+        " border: none;"
+        " font-size: %1px; font-weight: 800; padding: 0px; }")
         .arg(fontPx);
     for (QLabel *label : {m_titleLabel, m_deployCountLabel, m_localCoreLabel,
                           m_enemyCoreLabel, m_opponentLabel}) {
