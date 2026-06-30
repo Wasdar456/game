@@ -693,15 +693,6 @@ void BattleView::drawTerrain(QPainter &painter)
     const bool hasImage = !m_backgroundImage.isNull();
 
     if (m_artworkOverlayMode) {
-        for (const auto &grid : m_snapshot.map.grids) {
-            if (grid.terrain != game::core::TerrainType::Path) {
-                continue;
-            }
-            const QRectF cell = cellRect(grid.row, grid.col).adjusted(2, 2, -2, -2);
-            painter.setPen(QPen(QColor(104, 70, 34, 55), 1));
-            painter.setBrush(QColor(255, 232, 166, 34));
-            painter.drawRoundedRect(cell, 4, 4);
-        }
         return;
     }
 
