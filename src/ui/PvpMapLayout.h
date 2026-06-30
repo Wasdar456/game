@@ -39,23 +39,23 @@ inline PvpMapLayout makeSunnyBeachPvpMapLayout()
     layout.battleViewRect = QRectF(174, 126, 1324, 552);
     layout.deployViewRect = QRectF(174, 126, 1324, 552);
     layout.unitVisualScale = 1.0;
-    layout.spawnA = {1, 13};
-    layout.spawnB = {8, 14};
+    layout.spawnA = {0, 13};
+    layout.spawnB = {9, 14};
     layout.coreA = {6, 2};
     layout.coreB = {6, 25};
 
     layout.pathToA = {
         layout.spawnA,
-        {2, 13}, {3, 13}, {4, 13}, {5, 13},
-        {5, 12}, {5, 11}, {6, 11}, {6, 10}, {6, 9},
-        {6, 8}, {6, 7}, {6, 6}, {6, 5}, {6, 4}, {6, 3},
+        {1, 13}, {2, 13}, {3, 13}, {4, 13}, {5, 13},
+        {5, 12}, {5, 11}, {5, 10}, {5, 9}, {5, 8},
+        {5, 7}, {5, 6}, {5, 5}, {5, 4}, {5, 3},
         layout.coreA
     };
     layout.pathToB = {
         layout.spawnB,
-        {7, 14}, {6, 14}, {5, 14},
-        {5, 15}, {5, 16}, {6, 16}, {6, 17}, {6, 18},
-        {6, 19}, {6, 20}, {6, 21}, {6, 22}, {6, 23}, {6, 24},
+        {8, 14}, {7, 14}, {6, 14}, {5, 14},
+        {5, 15}, {5, 16}, {5, 17}, {5, 18}, {5, 19},
+        {5, 20}, {5, 21}, {5, 22}, {5, 23}, {6, 23}, {6, 24},
         layout.coreB
     };
 
@@ -88,21 +88,21 @@ inline PvpMapLayout makeOfficePanicPvpMapLayout()
     layout.unitVisualScale = 1.12;
     layout.spawnA = {1, 14};
     layout.spawnB = {8, 14};
-    layout.coreA = {5, 1};
-    layout.coreB = {5, 26};
+    layout.coreA = {6, 3};
+    layout.coreB = {6, 24};
 
     layout.pathToA = {
         layout.spawnA,
         {2, 14}, {3, 14}, {4, 14}, {5, 14},
         {5, 13}, {5, 12}, {5, 11}, {5, 10}, {5, 9}, {5, 8},
-        {5, 7}, {5, 6}, {5, 5}, {5, 4}, {5, 3}, {5, 2},
+        {5, 7}, {5, 6}, {5, 5}, {6, 5}, {6, 4},
         layout.coreA
     };
     layout.pathToB = {
         layout.spawnB,
         {7, 14}, {6, 14}, {5, 14},
         {5, 15}, {5, 16}, {5, 17}, {5, 18}, {5, 19}, {5, 20},
-        {5, 21}, {5, 22}, {5, 23}, {5, 24}, {5, 25},
+        {5, 21}, {5, 22}, {6, 22}, {6, 23},
         layout.coreB
     };
 

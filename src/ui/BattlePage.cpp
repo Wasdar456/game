@@ -693,6 +693,15 @@ void BattleView::drawTerrain(QPainter &painter)
     const bool hasImage = !m_backgroundImage.isNull();
 
     if (m_artworkOverlayMode) {
+        for (const auto &grid : m_snapshot.map.grids) {
+            if (grid.terrain != game::core::TerrainType::Path) {
+                continue;
+            }
+            const QRectF cell = cellRect(grid.row, grid.col).adjusted(2, 2, -2, -2);
+            painter.setPen(QPen(QColor(104, 70, 34, 55), 1));
+            painter.setBrush(QColor(255, 232, 166, 34));
+            painter.drawRoundedRect(cell, 4, 4);
+        }
         return;
     }
 
@@ -1952,6 +1961,12 @@ void BattlePage::layoutArtworkUi()
         " border: none;"
         " font-size: %1px; font-weight: 800; padding: 0px; }")
         .arg(labelPx);
+    const QString pveValueStyle = QString(
+        "QLabel { color: #2E1D12; background: rgba(246,226,176,245);"
+        " border: none; border-radius: %1px;"
+        " font-size: %2px; font-weight: 850; padding: 0px 4px; }")
+        .arg(qMax(3, qRound(4 * sx)))
+        .arg(qMax(11, qRound(19 * std::min(sx, sy))));
     for (QLabel *label : {m_waveLabel, m_phaseLabel, m_coreHpLabel,
                           m_opponentLabel, m_resourceLabel}) {
         label->setStyleSheet(labelStyle);
@@ -1991,6 +2006,9 @@ void BattlePage::layoutArtworkUi()
         m_phaseLabel->show();
         m_opponentLabel->show();
     } else {
+        m_waveLabel->setStyleSheet(pveValueStyle);
+        m_coreHpLabel->setStyleSheet(pveValueStyle);
+        m_resourceLabel->setStyleSheet(pveValueStyle);
         if (m_activePveMapId == "island_pve") {
             m_battleView->setGeometry(mapped(QRectF(238, 164, 1328, 520)));
         } else {
