@@ -42,18 +42,29 @@ enum class Team : std::uint8_t {
 
 // 地图格类型。
 // Path 供怪物行走，HighGround/FlatLand 可部署，NoDeploy 表示障碍或边界。
+// SpawnPoint 为怪物出生点，CoreA/CoreB 为双方核心。
 enum class TerrainType : std::uint8_t {
     Path = 0,
     HighGround,
     FlatLand,
-    NoDeploy
+    NoDeploy,
+    SpawnPoint,    // 怪物出生点
+    CoreA,         // A方核心（左下角）
+    CoreB          // B方核心（右下角）
 };
 
 // 卡牌分类。UI/网络只需要传这个轻量枚举，core 内部再创建具体单位类。
 enum class CardKind : std::uint8_t {
     Attack = 0,
+    Sniper,
+    Aoe,
+    Specialist,
     Produce,
-    Heal
+    Arsenal,
+    Heal,
+    HeavyMedic,
+    Attack2,
+    Heal2
 };
 
 // 怪物分类。顺序与网络模块 ProtocolDef.h 中的 MonsterKind 设计一致。
@@ -92,11 +103,40 @@ inline bool isMonsterType(ObjectType type) {
 // 将卡牌种类转换成具体对象类型，供实体构造和快照使用。
 inline ObjectType toObjectType(CardKind kind) {
     switch (kind) {
-        case CardKind::Attack: return ObjectType::CardAttack;
-        case CardKind::Produce: return ObjectType::CardProduce;
-        case CardKind::Heal: return ObjectType::CardHeal;
+        case CardKind::Attack:
+        case CardKind::Sniper:
+        case CardKind::Aoe:
+        case CardKind::Specialist:
+        case CardKind::Attack2:
+            return ObjectType::CardAttack;
+        case CardKind::Produce:
+        case CardKind::Arsenal:
+            return ObjectType::CardProduce;
+        case CardKind::Heal:
+        case CardKind::HeavyMedic:
+        case CardKind::Heal2:
+            return ObjectType::CardHeal;
     }
     return ObjectType::None;
+}
+
+inline bool isAttackCardKind(CardKind kind) {
+    return kind == CardKind::Attack ||
+           kind == CardKind::Sniper ||
+           kind == CardKind::Aoe ||
+           kind == CardKind::Specialist ||
+           kind == CardKind::Attack2;
+}
+
+inline bool isProduceCardKind(CardKind kind) {
+    return kind == CardKind::Produce ||
+           kind == CardKind::Arsenal;
+}
+
+inline bool isHealCardKind(CardKind kind) {
+    return kind == CardKind::Heal ||
+           kind == CardKind::HeavyMedic ||
+           kind == CardKind::Heal2;
 }
 
 // 将怪物种类转换成具体对象类型，供 Monster 基类构造使用。

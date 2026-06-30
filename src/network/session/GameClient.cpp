@@ -227,4 +227,3 @@ void GameClient::reset() {
 
 } // namespace network
 } // namespace game
-#include "GameClient.moc"

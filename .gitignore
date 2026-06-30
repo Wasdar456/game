@@ -1,9 +1,13 @@
 # Build output
 build/
+build-codex/
 
 # IDE config
 .qtcreator/
 .vscode/
+.workbuddy/
+.local_archive/
+backups/
 
 # Compiled objects
 *.obj
@@ -33,3 +37,5 @@ Desktop.ini
 # Temp files
 *.log
 *.tmp
+*.bak
+*.mainbak

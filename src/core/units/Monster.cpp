@@ -18,11 +18,16 @@ Monster::Monster(int id, MapPosition position, MonsterKind kind, int maxHp, int 
       pathIndex_(0),
       exactRow_(position.row),
       exactCol_(position.col),
-      escaped_(false) {}
+      escaped_(false),
+      escapePending_(false) {}
 
 void Monster::update(double deltaSeconds) {
     // 死亡或已经逃逸的怪物不再移动。
     if (isDead() || escaped_) return;
+    if (escapePending_) {
+        escaped_ = true;
+        return;
+    }
     if (path_.empty() || pathIndex_ >= path_.size()) {
         // 没有路径或路径走完时标记逃逸，扣血由 BattleManager 统一处理。
         escaped_ = true;
@@ -42,7 +47,7 @@ void Monster::update(double deltaSeconds) {
         exactCol_ = target.col;
         setPosition(target);
         ++pathIndex_;
-        if (pathIndex_ >= path_.size()) escaped_ = true;
+        if (pathIndex_ >= path_.size()) escapePending_ = true;
     } else {
         // 否则沿方向向量前进 step 距离，再同步到整数网格坐标。
         exactRow_ += (dr / distance) * step;
@@ -62,6 +67,7 @@ void Monster::setPath(std::vector<MapPosition> path) {
     path_ = std::move(path);
     pathIndex_ = 0;
     escaped_ = false;
+    escapePending_ = false;
     exactRow_ = position_.row;
     exactCol_ = position_.col;
     if (!path_.empty() && path_.front() == position_) {

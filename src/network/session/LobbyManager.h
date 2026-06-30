@@ -17,8 +17,8 @@ namespace network {
 //   2. Host 收到 JOIN_ROOM 后回复 JOIN_ACK（携带房主昵称）
 //   3. 任意一方调用 setReady() → 发 PLAYER_READY
 //   4. Host 收到 Client 的 PLAYER_READY，且自己也 ready
-//      → 生成随机数种子，广播 GAME_START（携带种子）
-//   5. 双方触发 gameStarted(seed) 信号，进入游戏主循环
+//      → 生成随机数种子，广播 GAME_START（携带种子和地图 id）
+//   5. 双方触发 gameStarted(seed, mapId) 信号，进入游戏主循环
 //
 // 使用方法：
 //   - Host: LobbyManager lobby(LobbyManager::Role::Host, "我的昵称");
@@ -53,6 +53,7 @@ public:
     QString    peerNickname() const { return m_peerNickname; }
     bool       isReady()      const { return m_localReady; }
     bool       peerIsReady()  const { return m_peerReady; }
+    QString    selectedMapId() const { return m_selectedMapId; }
 
     // ─── 外部调用接口 ───
 
@@ -65,6 +66,7 @@ public:
 
     // 玩家点击"准备"按钮
     void setReady();
+    void setSelectedMapId(const QString& mapId);
 
     // 玩家取消准备
     void cancelReady();
@@ -83,14 +85,15 @@ signals:
 
     // 对方取消了准备
     void peerCancelled();
+    void mapSelectionChanged(const QString& mapId);
 
     // 状态变化
     void stateChanged(LobbyState newState);
 
     // ─── 最终结果 ───
 
-    // 游戏正式开始（双方都触发，携带随机数种子）
-    void gameStarted(quint32 seed);
+    // 游戏正式开始（双方都触发，携带随机数种子和地图 id）
+    void gameStarted(quint32 seed, const QString& mapId);
 
 private:
     void handleJoinRoom(const QByteArray& body);   // Host 收到 JOIN_ROOM
@@ -98,6 +101,7 @@ private:
     void handlePlayerReady(const QByteArray& body);// 收到对方 READY
     void handlePlayerUnready();                    // 收到对方取消 READY
     void handleGameStart(const QByteArray& body);  // Client 收到 GAME_START
+    void handleMapSelection(const QByteArray& body);// Client 收到地图切换
 
     void checkBothReady();   // Host: 检查是否双方都 ready，是则广播 GAME_START
     void setState(LobbyState s);
@@ -106,6 +110,7 @@ private:
     LobbyState  m_state;
     QString     m_myNickname;
     QString     m_peerNickname;
+    QString     m_selectedMapId;
     bool        m_localReady;
     bool        m_peerReady;
 };

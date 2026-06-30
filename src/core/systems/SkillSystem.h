@@ -3,6 +3,7 @@
 
 #include "core/units/Card.h"
 #include "core/units/Monster.h"
+#include "core/combat/Projectile.h"
 #include <memory>
 #include <vector>
 
@@ -14,12 +15,23 @@ namespace game::core {
 // SkillSystem 每帧推进卡牌冷却，并在冷却完成时调用具体卡牌的 autoSkill。
 class SkillSystem {
 public:
-    // cards 会作为友方列表，monsters 会作为敌方列表传入卡牌技能。
+    // 单机模式：cards 会作为友方列表，monsters 会作为敌方列表传入卡牌技能。
     void update(double deltaSeconds,
                 std::vector<std::shared_ptr<Card>>& cards,
                 std::vector<std::shared_ptr<Monster>>& monsters,
                 Map& map,
-                ResourceManager& resources);
+                ResourceManager& resources,
+                std::vector<Projectile>& projectiles);
+
+    // PVP 模式：双方卡牌互相攻击，同时攻击怪物
+    void updatePvp(double deltaSeconds,
+                   std::vector<std::shared_ptr<Card>>& cardsA,
+                   std::vector<std::shared_ptr<Card>>& cardsB,
+                   std::vector<std::shared_ptr<Monster>>& monsters,
+                   Map& map,
+                   ResourceManager& resourcesA,
+                   ResourceManager& resourcesB,
+                   std::vector<Projectile>& projectiles);
 };
 
 } // namespace game::core

@@ -28,6 +28,7 @@ public:
 
     // 清空所有卡牌并释放地图占用，切换关卡或重开时使用。
     void clear(Map& map);
+    void removeDead(Map& map);
 
     std::shared_ptr<Card> findCard(int unitId) const;
 
@@ -37,10 +38,10 @@ public:
     const std::vector<std::shared_ptr<Card>>& cards() const { return cards_; }
     std::vector<std::shared_ptr<Card>>& cards() { return cards_; }
 
-private:
     // 不同卡牌类型的部署费用集中在这里，便于以后改成配置表。
     static int deployCost(CardKind kind);
 
+private:
     // 下一个可分配单位 id。
     int nextUnitId_;
     // 当前场上所有卡牌。

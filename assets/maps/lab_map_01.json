@@ -1,0 +1,966 @@
+{
+  "schemaVersion": 1,
+  "name": "lab_map_01",
+  "mode": "PVE",
+  "image": "lab_map_01.png",
+  "grid": {
+    "rows": 17,
+    "cols": 28,
+    "cellSize": 19,
+    "cellSizeX": 19,
+    "cellSizeY": 19
+  },
+  "legend": {
+    "EMPTY": "空地/普通地块",
+    "BLOCKED": "障碍/不可走不可部署",
+    "PATH_A": "A 路怪物路径",
+    "PATH_B": "B 路怪物路径",
+    "PATH_SHARED": "公共怪物路径",
+    "SPAWN_A": "A 路出生点",
+    "SPAWN_B": "B 路出生点",
+    "CORE_A": "A 方核心",
+    "CORE_B": "B 方核心",
+    "DEPLOY_A": "A 方初始部署区",
+    "DEPLOY_B": "B 方初始部署区",
+    "DEPLOY_NEUTRAL": "双方/中立可部署区",
+    "VISION_BLOCK": "视野阻挡",
+    "HIGH_GROUND": "高台/特殊地形",
+    "RESOURCE": "资源点/特殊点位"
+  },
+  "routes": {
+    "A": [
+      {
+        "id": "A1",
+        "spawn": {
+          "row": 3,
+          "col": 16
+        },
+        "core": {
+          "row": 7,
+          "col": 24
+        },
+        "path": [
+          {
+            "row": 3,
+            "col": 16
+          },
+          {
+            "row": 4,
+            "col": 16
+          },
+          {
+            "row": 5,
+            "col": 16
+          },
+          {
+            "row": 6,
+            "col": 16
+          },
+          {
+            "row": 6,
+            "col": 17
+          },
+          {
+            "row": 7,
+            "col": 17
+          },
+          {
+            "row": 7,
+            "col": 18
+          },
+          {
+            "row": 7,
+            "col": 19
+          },
+          {
+            "row": 7,
+            "col": 20
+          },
+          {
+            "row": 7,
+            "col": 21
+          },
+          {
+            "row": 7,
+            "col": 22
+          },
+          {
+            "row": 7,
+            "col": 23
+          },
+          {
+            "row": 7,
+            "col": 24
+          }
+        ]
+      },
+      {
+        "id": "A2",
+        "spawn": {
+          "row": 4,
+          "col": 2
+        },
+        "core": {
+          "row": 7,
+          "col": 24
+        },
+        "path": [
+          {
+            "row": 4,
+            "col": 2
+          },
+          {
+            "row": 5,
+            "col": 2
+          },
+          {
+            "row": 6,
+            "col": 2
+          },
+          {
+            "row": 6,
+            "col": 3
+          },
+          {
+            "row": 6,
+            "col": 4
+          },
+          {
+            "row": 6,
+            "col": 5
+          },
+          {
+            "row": 6,
+            "col": 6
+          },
+          {
+            "row": 6,
+            "col": 7
+          },
+          {
+            "row": 7,
+            "col": 7
+          },
+          {
+            "row": 8,
+            "col": 7
+          },
+          {
+            "row": 9,
+            "col": 7
+          },
+          {
+            "row": 9,
+            "col": 8
+          },
+          {
+            "row": 9,
+            "col": 9
+          },
+          {
+            "row": 9,
+            "col": 10
+          },
+          {
+            "row": 9,
+            "col": 11
+          },
+          {
+            "row": 9,
+            "col": 12
+          },
+          {
+            "row": 9,
+            "col": 13
+          },
+          {
+            "row": 9,
+            "col": 14
+          },
+          {
+            "row": 9,
+            "col": 15
+          },
+          {
+            "row": 9,
+            "col": 16
+          },
+          {
+            "row": 8,
+            "col": 16
+          },
+          {
+            "row": 7,
+            "col": 16
+          },
+          {
+            "row": 7,
+            "col": 17
+          },
+          {
+            "row": 7,
+            "col": 18
+          },
+          {
+            "row": 7,
+            "col": 19
+          },
+          {
+            "row": 7,
+            "col": 20
+          },
+          {
+            "row": 7,
+            "col": 21
+          },
+          {
+            "row": 7,
+            "col": 22
+          },
+          {
+            "row": 7,
+            "col": 23
+          },
+          {
+            "row": 7,
+            "col": 24
+          }
+        ]
+      }
+    ],
+    "B": []
+  },
+  "points": {
+    "SPAWN_A": [
+      {
+        "row": 3,
+        "col": 16
+      },
+      {
+        "row": 4,
+        "col": 2
+      }
+    ],
+    "SPAWN_B": [],
+    "CORE_A": [
+      {
+        "row": 7,
+        "col": 24
+      }
+    ],
+    "CORE_B": [],
+    "RESOURCE": []
+  },
+  "tiles": [
+    {
+      "row": 3,
+      "col": 16,
+      "type": "SPAWN_A",
+      "routeIndexA": 0,
+      "routeLabelA": "A1:0"
+    },
+    {
+      "row": 4,
+      "col": 2,
+      "type": "SPAWN_A",
+      "routeIndexA": 0,
+      "routeLabelA": "A2:0"
+    },
+    {
+      "row": 4,
+      "col": 4,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 4,
+      "col": 5,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 4,
+      "col": 6,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 4,
+      "col": 7,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 4,
+      "col": 16,
+      "type": "PATH_A",
+      "routeIndexA": 1,
+      "routeLabelA": "A1:1"
+    },
+    {
+      "row": 5,
+      "col": 2,
+      "type": "PATH_A",
+      "routeIndexA": 1,
+      "routeLabelA": "A2:1"
+    },
+    {
+      "row": 5,
+      "col": 4,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 5,
+      "col": 5,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 5,
+      "col": 6,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 5,
+      "col": 7,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 5,
+      "col": 15,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 5,
+      "col": 16,
+      "type": "PATH_A",
+      "routeIndexA": 2,
+      "routeLabelA": "A1:2"
+    },
+    {
+      "row": 5,
+      "col": 17,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 5,
+      "col": 18,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 2,
+      "type": "PATH_A",
+      "routeIndexA": 2,
+      "routeLabelA": "A2:2"
+    },
+    {
+      "row": 6,
+      "col": 3,
+      "type": "PATH_A",
+      "routeIndexA": 3,
+      "routeLabelA": "A2:3"
+    },
+    {
+      "row": 6,
+      "col": 4,
+      "type": "PATH_A",
+      "routeIndexA": 4,
+      "routeLabelA": "A2:4"
+    },
+    {
+      "row": 6,
+      "col": 5,
+      "type": "PATH_A",
+      "routeIndexA": 5,
+      "routeLabelA": "A2:5"
+    },
+    {
+      "row": 6,
+      "col": 6,
+      "type": "PATH_A",
+      "routeIndexA": 6,
+      "routeLabelA": "A2:6"
+    },
+    {
+      "row": 6,
+      "col": 7,
+      "type": "PATH_A",
+      "routeIndexA": 7,
+      "routeLabelA": "A2:7"
+    },
+    {
+      "row": 6,
+      "col": 8,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 9,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 10,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 14,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 15,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 16,
+      "type": "PATH_A",
+      "routeIndexA": 3,
+      "routeLabelA": "A1:3"
+    },
+    {
+      "row": 6,
+      "col": 17,
+      "type": "PATH_A",
+      "routeIndexA": 4,
+      "routeLabelA": "A1:4"
+    },
+    {
+      "row": 6,
+      "col": 18,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 19,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 20,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 21,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 6,
+      "col": 22,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 7,
+      "col": 2,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 7,
+      "col": 3,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 7,
+      "col": 4,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 7,
+      "col": 5,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 7,
+      "col": 6,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 7,
+      "col": 7,
+      "type": "PATH_A",
+      "routeIndexA": 8,
+      "routeLabelA": "A2:8"
+    },
+    {
+      "row": 7,
+      "col": 8,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 7,
+      "col": 9,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 7,
+      "col": 10,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 7,
+      "col": 14,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 7,
+      "col": 15,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 7,
+      "col": 16,
+      "type": "PATH_A",
+      "routeIndexA": 21,
+      "routeLabelA": "A2:21"
+    },
+    {
+      "row": 7,
+      "col": 17,
+      "type": "PATH_A",
+      "routeIndexA": 22,
+      "routeLabelA": "A2:22"
+    },
+    {
+      "row": 7,
+      "col": 18,
+      "type": "PATH_A",
+      "routeIndexA": 23,
+      "routeLabelA": "A2:23"
+    },
+    {
+      "row": 7,
+      "col": 19,
+      "type": "PATH_A",
+      "routeIndexA": 24,
+      "routeLabelA": "A2:24"
+    },
+    {
+      "row": 7,
+      "col": 20,
+      "type": "PATH_A",
+      "routeIndexA": 25,
+      "routeLabelA": "A2:25"
+    },
+    {
+      "row": 7,
+      "col": 21,
+      "type": "PATH_A",
+      "routeIndexA": 26,
+      "routeLabelA": "A2:26"
+    },
+    {
+      "row": 7,
+      "col": 22,
+      "type": "PATH_A",
+      "routeIndexA": 27,
+      "routeLabelA": "A2:27"
+    },
+    {
+      "row": 7,
+      "col": 23,
+      "type": "PATH_A",
+      "routeIndexA": 28,
+      "routeLabelA": "A2:28"
+    },
+    {
+      "row": 7,
+      "col": 24,
+      "type": "CORE_A",
+      "routeIndexA": 29,
+      "routeLabelA": "A2:29"
+    },
+    {
+      "row": 8,
+      "col": 1,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 8,
+      "col": 6,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 8,
+      "col": 7,
+      "type": "PATH_A",
+      "routeIndexA": 9,
+      "routeLabelA": "A2:9"
+    },
+    {
+      "row": 8,
+      "col": 8,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 8,
+      "col": 9,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 8,
+      "col": 10,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 8,
+      "col": 14,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 8,
+      "col": 15,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 8,
+      "col": 16,
+      "type": "PATH_A",
+      "routeIndexA": 20,
+      "routeLabelA": "A2:20"
+    },
+    {
+      "row": 8,
+      "col": 17,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 8,
+      "col": 18,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 8,
+      "col": 19,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 8,
+      "col": 20,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 8,
+      "col": 21,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 8,
+      "col": 22,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 9,
+      "col": 1,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 9,
+      "col": 6,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 9,
+      "col": 7,
+      "type": "PATH_A",
+      "routeIndexA": 10,
+      "routeLabelA": "A2:10"
+    },
+    {
+      "row": 9,
+      "col": 8,
+      "type": "PATH_A",
+      "routeIndexA": 11,
+      "routeLabelA": "A2:11"
+    },
+    {
+      "row": 9,
+      "col": 9,
+      "type": "PATH_A",
+      "routeIndexA": 12,
+      "routeLabelA": "A2:12"
+    },
+    {
+      "row": 9,
+      "col": 10,
+      "type": "PATH_A",
+      "routeIndexA": 13,
+      "routeLabelA": "A2:13"
+    },
+    {
+      "row": 9,
+      "col": 11,
+      "type": "PATH_A",
+      "routeIndexA": 14,
+      "routeLabelA": "A2:14"
+    },
+    {
+      "row": 9,
+      "col": 12,
+      "type": "PATH_A",
+      "routeIndexA": 15,
+      "routeLabelA": "A2:15"
+    },
+    {
+      "row": 9,
+      "col": 13,
+      "type": "PATH_A",
+      "routeIndexA": 16,
+      "routeLabelA": "A2:16"
+    },
+    {
+      "row": 9,
+      "col": 14,
+      "type": "PATH_A",
+      "routeIndexA": 17,
+      "routeLabelA": "A2:17"
+    },
+    {
+      "row": 9,
+      "col": 15,
+      "type": "PATH_A",
+      "routeIndexA": 18,
+      "routeLabelA": "A2:18"
+    },
+    {
+      "row": 9,
+      "col": 16,
+      "type": "PATH_A",
+      "routeIndexA": 19,
+      "routeLabelA": "A2:19"
+    },
+    {
+      "row": 9,
+      "col": 17,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 9,
+      "col": 18,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 9,
+      "col": 19,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 9,
+      "col": 21,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 9,
+      "col": 22,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 1,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 2,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 3,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 4,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 5,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 6,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 7,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 8,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 9,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 10,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 11,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 12,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 13,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 14,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 15,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 16,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 17,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 18,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 19,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 21,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 22,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 23,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 24,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 25,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 26,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 10,
+      "col": 27,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 2,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 3,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 4,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 5,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 6,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 7,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 8,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 11,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 12,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 16,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 17,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 18,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 19,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 20,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 21,
+      "type": "DEPLOY_A"
+    },
+    {
+      "row": 11,
+      "col": 22,
+      "type": "DEPLOY_A"
+    }
+  ]
+}

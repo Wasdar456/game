@@ -9,7 +9,17 @@ namespace game::core {
 // 冷却完成后自动寻找范围内受伤友方，优先治疗血量百分比最低者。
 class HealUnit : public Card {
 public:
-    explicit HealUnit(int id, MapPosition position);
+    explicit HealUnit(int id, MapPosition position,
+                      CardKind kind = CardKind::Heal);
+    HealUnit(int id,
+             MapPosition position,
+             int maxHp,
+             int attackRange,
+             int moveLimit,
+             double skillCooldownSeconds,
+             int deployCost,
+             CardKind kind,
+             int healAmount);
 
     int healAmount() const { return healAmount_; }
 
@@ -17,7 +27,9 @@ public:
     void autoSkill(std::vector<std::shared_ptr<Entity>>& allies,
                    std::vector<std::shared_ptr<Entity>>& enemies,
                    Map& map,
-                   ResourceManager& resources) override;
+                   ResourceManager& resources,
+                   std::vector<Projectile>* projectiles = nullptr,
+                   ProjectileOwner projectileOwner = ProjectileOwner::PlayerA) override;
 
 private:
     // 基础治疗量。

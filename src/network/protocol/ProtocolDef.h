@@ -18,6 +18,7 @@ enum class MsgType : uint8_t {
     PLAYER_UNREADY = 0x04,   // 玩家取消准备
     GAME_START     = 0x05,   // 双方都准备好，Host 广播开始
     SYNC_SEED      = 0x06,   // 随机数种子同步（GAME_START 携带）
+    MAP_SELECTION  = 0x07,   // Host 广播当前大厅地图选择
 
     // ─── 部署阶段 ───
     DEPLOY         = 0x10,   // 部署单位
@@ -30,11 +31,13 @@ enum class MsgType : uint8_t {
     WAVE_START     = 0x22,   // 波次开始
     WAVE_COMPLETE  = 0x23,   // 波次完成
     CLASH_RESULT   = 0x24,   // 拼点结果
+    WAVE_CLEAR     = 0x25,   // 本端波次怪物已清空，等待双方统一回部署
 
     // ─── 状态同步 ───
     UNIT_HP_SYNC   = 0x30,   // 单位血量同步
     CORE_HP_SYNC   = 0x31,   // 核心血量同步
     RESOURCE_SYNC  = 0x32,   // 资源数量同步
+    BATTLE_STATE   = 0x33,   // Host 权威战斗快照
 
     // ─── 特殊事件 ───
     MONSTER_KILLED = 0x40,   // 怪物击杀
@@ -63,6 +66,7 @@ inline const char* msgTypeName(MsgType type) {
         case MsgType::PLAYER_UNREADY: return "PLAYER_UNREADY";
         case MsgType::GAME_START:     return "GAME_START";
         case MsgType::SYNC_SEED:      return "SYNC_SEED";
+        case MsgType::MAP_SELECTION:  return "MAP_SELECTION";
         case MsgType::DEPLOY:         return "DEPLOY";
         case MsgType::RECALL_UNIT:    return "RECALL_UNIT";
         case MsgType::DEPLOYMENT_END: return "DEPLOYMENT_END";
@@ -71,9 +75,11 @@ inline const char* msgTypeName(MsgType type) {
         case MsgType::WAVE_START:     return "WAVE_START";
         case MsgType::WAVE_COMPLETE:  return "WAVE_COMPLETE";
         case MsgType::CLASH_RESULT:   return "CLASH_RESULT";
+        case MsgType::WAVE_CLEAR:     return "WAVE_CLEAR";
         case MsgType::UNIT_HP_SYNC:   return "UNIT_HP_SYNC";
         case MsgType::CORE_HP_SYNC:   return "CORE_HP_SYNC";
         case MsgType::RESOURCE_SYNC:  return "RESOURCE_SYNC";
+        case MsgType::BATTLE_STATE:   return "BATTLE_STATE";
         case MsgType::MONSTER_KILLED: return "MONSTER_KILLED";
         case MsgType::UNIT_DESTROYED: return "UNIT_DESTROYED";
         case MsgType::GAME_OVER:      return "GAME_OVER";
@@ -130,8 +136,15 @@ enum class MonsterKind : quint8 {
 //   2 = CARD_HEAL      治疗型单位
 enum class CardKind : quint8 {
     ATTACK  = 0,
-    PRODUCE = 1,
-    HEAL    = 2
+    SNIPER  = 1,
+    AOE     = 2,
+    SPECIALIST = 3,
+    PRODUCE = 4,
+    ARSENAL = 5,
+    HEAL    = 6,
+    HEAVY_MEDIC = 7,
+    ATTACK2 = 8,
+    HEAL2 = 9
 };
 
 // ─── WAVE_START 消息 payload（4 字节）───

@@ -11,6 +11,7 @@ LobbyManager::LobbyManager(Role role, const QString& nickname, QObject* parent)
     , m_role(role)
     , m_state(LobbyState::Idle)
     , m_myNickname(nickname)
+    , m_selectedMapId("pvp_sunny_beach")
     , m_localReady(false)
     , m_peerReady(false)
 {}
@@ -42,6 +43,7 @@ void LobbyManager::onPacketReceived(MsgType type, const QByteArray& body) {
     case MsgType::PLAYER_READY:   handlePlayerReady(body);break;
     case MsgType::PLAYER_UNREADY: handlePlayerUnready();  break;
     case MsgType::GAME_START:     handleGameStart(body);  break;
+    case MsgType::MAP_SELECTION:  handleMapSelection(body); break;
     default: break;
     }
 }
@@ -64,6 +66,22 @@ void LobbyManager::setReady() {
     // Host 收到自己 ready 后检查
     if (m_role == Role::Host) {
         checkBothReady();
+    }
+}
+
+void LobbyManager::setSelectedMapId(const QString& mapId)
+{
+    if (m_state == LobbyState::InGame) {
+        return;
+    }
+    const QString normalized = mapId.isEmpty() ? QString("pvp_sunny_beach") : mapId;
+    if (m_selectedMapId == normalized) {
+        return;
+    }
+    m_selectedMapId = normalized;
+    if (m_role == Role::Host
+        && (m_state == LobbyState::Connected || m_state == LobbyState::LocalReady)) {
+        emit sendPacketRequested(MsgType::MAP_SELECTION, m_selectedMapId.toUtf8());
     }
 }
 
@@ -93,6 +111,7 @@ void LobbyManager::handleJoinRoom(const QByteArray& body) {
     // 回复 JOIN_ACK，携带房主昵称
     QByteArray ackBody = m_myNickname.toUtf8();
     emit sendPacketRequested(MsgType::JOIN_ACK, ackBody);
+    emit sendPacketRequested(MsgType::MAP_SELECTION, m_selectedMapId.toUtf8());
 
     setState(LobbyState::Connected);
     emit peerJoined(m_peerNickname);
@@ -146,10 +165,27 @@ void LobbyManager::handleGameStart(const QByteArray& body) {
         memcpy(&seed, body.constData(), 4);
         seed = qFromBigEndian(seed);
     }
+    const QString mapId = body.size() > 4
+                              ? QString::fromUtf8(body.constData() + 4, body.size() - 4)
+                              : QString("pvp_sunny_beach");
+    m_selectedMapId = mapId.isEmpty() ? QString("pvp_sunny_beach") : mapId;
 
-    qInfo() << "[Lobby][Client] 收到 GAME_START，种子=" << seed;
+    qInfo() << "[Lobby][Client] 收到 GAME_START，种子=" << seed << "map=" << m_selectedMapId;
     setState(LobbyState::InGame);
-    emit gameStarted(seed);
+    emit gameStarted(seed, m_selectedMapId);
+}
+
+void LobbyManager::handleMapSelection(const QByteArray& body)
+{
+    if (m_role != Role::Client || m_state == LobbyState::InGame) return;
+
+    const QString mapId = QString::fromUtf8(body);
+    const QString normalized = mapId.isEmpty() ? QString("pvp_sunny_beach") : mapId;
+    if (m_selectedMapId == normalized) {
+        return;
+    }
+    m_selectedMapId = normalized;
+    emit mapSelectionChanged(m_selectedMapId);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -170,11 +206,12 @@ void LobbyManager::checkBothReady() {
     // 种子以大端序写入 body
     QByteArray body(4, 0);
     qToBigEndian(seed, reinterpret_cast<uchar*>(body.data()));
+    body.append(m_selectedMapId.toUtf8());
 
     emit sendPacketRequested(MsgType::GAME_START, body);
 
     setState(LobbyState::InGame);
-    emit gameStarted(seed);
+    emit gameStarted(seed, m_selectedMapId);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -188,4 +225,3 @@ void LobbyManager::setState(LobbyState s) {
 
 } // namespace network
 } // namespace game
-#include "LobbyManager.moc"

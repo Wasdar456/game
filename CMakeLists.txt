@@ -48,7 +48,9 @@ file(GLOB_RECURSE SOURCES
 # ─────────────────────────────────────────────
 add_executable(DffenseAndAttack
     ${SOURCES}
-    # resources/resources.qrc   ← 等 resources.qrc 建好后取消注释
+    src/ui/TutorialOverlay.cpp
+    src/ui/TutorialOverlay.h
+    resources/resources.qrc
 )
 
 # ─────────────────────────────────────────────

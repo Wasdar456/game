@@ -1,44 +1,18 @@
-/**
- * @file StartPage.h
- * @brief 起始页面头文件 —— 游戏的主菜单入口
- */
-
 #ifndef STARTPAGE_H
 #define STARTPAGE_H
 
-#include <QWidget>
-#include <QPushButton>
-#include <QLabel>
+#include <QRectF>
+#include <QPixmap>
 #include <QTimer>
 #include <QVector>
+#include <QWidget>
 
-#include "ui/TechButton.h"
-
-class ParticleWidget : public QWidget
-{
-    Q_OBJECT
-
-public:
-    explicit ParticleWidget(QWidget *parent = nullptr);
-
-protected:
-    void paintEvent(QPaintEvent *event) override;
-
-private:
-    struct Particle {
-        qreal x, y;
-        qreal vx, vy;
-        qreal size;
-        qreal opacity;
-        QColor color;
-    };
-
-    QVector<Particle> m_particles;
-    QTimer *m_timer;
-    int m_frame;
-
-    void initParticles();
-};
+class ArtHotspot;
+class QLabel;
+class QKeyEvent;
+class QMouseEvent;
+class QResizeEvent;
+class QShowEvent;
 
 class StartPage : public QWidget
 {
@@ -56,22 +30,32 @@ signals:
     void signalExitClicked();
 
 protected:
+    void paintEvent(QPaintEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
     void showEvent(QShowEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
 
 private:
-    ParticleWidget *m_particles;
-    QLabel      *m_titleLabel;
-    QLabel      *m_subtitleLabel;
-    TechButton  *m_btnPve;
-    TechButton  *m_btnPvp;
-    TechButton  *m_btnAtlas;
-    TechButton  *m_btnSettings;
-    TechButton  *m_btnExit;
+    bool m_introActive;
+    bool m_splashActive;
+    QWidget *m_menuLayer;
+    QWidget *m_fadeOverlay;
+    QLabel *m_pressHint;
+    QRectF m_canvasRect;
+    QPixmap m_menuCache;
+    QSize m_menuCacheSize;
+    QVector<ArtHotspot*> m_buttons;
+    QTimer m_ambientTimer;
+    qreal m_ambientPhase;
+    qreal m_introElapsed;
+    qreal m_menuRevealProgress;
 
     void initUI();
-    TechButton* createMenuButton(const QString &text, const QString &icon,
-                                  const QColor &accent = QColor(0, 212, 255));
+    void finishIntro();
+    void revealMenu();
+    void updateArtworkLayout();
+    void updateFadeOverlay();
 };
 
 #endif // STARTPAGE_H

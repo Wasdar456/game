@@ -36,6 +36,9 @@ std::string toString(TerrainType type) {
         case TerrainType::HighGround: return "HighGround";
         case TerrainType::FlatLand: return "FlatLand";
         case TerrainType::NoDeploy: return "NoDeploy";
+        case TerrainType::SpawnPoint: return "SpawnPoint";
+        case TerrainType::CoreA: return "CoreA";
+        case TerrainType::CoreB: return "CoreB";
     }
     return "Unknown";
 }

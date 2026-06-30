@@ -57,6 +57,8 @@ protected:
     double exactCol_;
     // 标记是否已经走到终点，BattleManager 会据此扣基地血并移除。
     bool escaped_;
+    // 到达最后一个路径点后延迟一帧结算，让 UI 能显示怪物确实抵达核心。
+    bool escapePending_;
 };
 
 } // namespace game::core

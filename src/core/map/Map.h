@@ -23,6 +23,9 @@ public:
     int cols() const { return cols_; }
     bool inBounds(MapPosition position) const;
 
+    // 重建地图尺寸，并将所有格子初始化为指定地形。
+    void resize(int rows, int cols, TerrainType terrain = TerrainType::FlatLand, int height = 0);
+
     MapGrid* gridAt(MapPosition position);
     const MapGrid* gridAt(MapPosition position) const;
 

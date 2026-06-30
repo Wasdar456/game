@@ -9,7 +9,16 @@ namespace game::core {
 // 冷却完成后自动向 ResourceManager 增加资源。
 class ProduceUnit : public Card {
 public:
-    explicit ProduceUnit(int id, MapPosition position);
+    explicit ProduceUnit(int id, MapPosition position,
+                         CardKind kind = CardKind::Produce);
+    ProduceUnit(int id,
+                MapPosition position,
+                int maxHp,
+                int moveLimit,
+                double skillCooldownSeconds,
+                int deployCost,
+                CardKind kind,
+                int resourceYield);
 
     int resourceYield() const { return resourceYield_; }
 
@@ -17,7 +26,9 @@ public:
     void autoSkill(std::vector<std::shared_ptr<Entity>>& allies,
                    std::vector<std::shared_ptr<Entity>>& enemies,
                    Map& map,
-                   ResourceManager& resources) override;
+                   ResourceManager& resources,
+                   std::vector<Projectile>* projectiles = nullptr,
+                   ProjectileOwner projectileOwner = ProjectileOwner::PlayerA) override;
 
 private:
     // 基础资源产出。

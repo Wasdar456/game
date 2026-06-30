@@ -17,7 +17,10 @@ void MapGrid::clearOccupant() {
 bool MapGrid::isWalkable() const {
     return terrainType_ == TerrainType::Path ||
            terrainType_ == TerrainType::FlatLand ||
-           terrainType_ == TerrainType::HighGround;
+           terrainType_ == TerrainType::HighGround ||
+           terrainType_ == TerrainType::SpawnPoint ||
+           terrainType_ == TerrainType::CoreA ||
+           terrainType_ == TerrainType::CoreB;
 }
 
 bool MapGrid::isDeployable() const {

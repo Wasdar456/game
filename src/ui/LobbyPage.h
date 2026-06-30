@@ -36,6 +36,12 @@
 #include <QButtonGroup>
 #include <QStackedWidget>
 #include <QTextEdit>
+#include <QRectF>
+#include <QVector>
+
+class ArtHotspot;
+class QResizeEvent;
+class QShowEvent;
 
 // ========== 网络模块前向声明 ==========
 // dev 分支 network/ 模块中定义的类
@@ -44,6 +50,20 @@ namespace game::network {
     class GameClient;      ///< Client 端：连接到 Host
     class LobbyManager;    ///< 大厅状态机：管理 JOIN/READY/START 流程
 }
+
+/**
+ * @brief 网络上下文 —— 从 LobbyPage 传递到 BattlePage 的联机信息
+ */
+struct NetworkContext {
+    bool isPvp = false;                           ///< 是否为 PVP 模式
+    bool isHost = false;                          ///< 是否为 Host 端
+    QString pveMapId = "lab_map_01";              ///< PVE selected map config id
+    QString pvpMapId = "pvp_sunny_beach";         ///< PVP selected map config id
+    int pveDifficulty = 0;                        ///< PVE selected difficulty
+    quint32 seed = 0;                             ///< 随机数种子（PVP 同步用）
+    game::network::GameServer* server = nullptr;  ///< Host 端服务器指针
+    game::network::GameClient* client = nullptr;  ///< Client 端客户端指针
+};
 
 class LobbyPage : public QWidget
 {
@@ -64,8 +84,14 @@ public:
     void setMode(Mode mode);
 
 signals:
-    void signalConfigDone();  ///< 配置完成，进入选卡页面
+    void signalConfigDone(const QString& mapId, int difficulty);  ///< 配置完成，进入选卡页面（PVE）
+    void signalPvpReady(const NetworkContext& ctx);  ///< PVP 配置完成，携带网络上下文
     void signalBack();        ///< 返回上一页
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void showEvent(QShowEvent *event) override;
 
 private:
     Mode m_currentMode;       ///< 当前显示的模式
@@ -85,6 +111,8 @@ private:
     QPushButton *m_btnCreateRoom;     ///< 创建房间按钮
     QLineEdit   *m_ipInput;          ///< IP 地址输入框
     QPushButton *m_btnJoinRoom;       ///< 加入房间按钮
+    QPushButton *m_btnReady;          ///< 准备按钮
+    QLabel      *m_readyStatusLabel;  ///< 准备状态显示
     QTextEdit   *m_statusLog;        ///< 连接状态日志
 
     // ========== PVP 网络模块实例 ==========
@@ -96,16 +124,35 @@ private:
     // ========== 内部堆叠窗口 ==========
     QStackedWidget *m_panelStack;     ///< 用于切换 PVE/PVP 面板
 
+    QRectF m_canvasRect;
+    QVector<ArtHotspot*> m_pveHotspots;
+    QVector<ArtHotspot*> m_pvpHotspots;
+    QVector<ArtHotspot*> m_pveMapHotspots;
+    QVector<ArtHotspot*> m_pveDifficultyHotspots;
+    QVector<ArtHotspot*> m_pvpMapHotspots;
+    int m_selectedDifficulty;
+    int m_selectedPvpMap;
+
     void initUI();
     void createPvePanel();
     void createPvpPanel();
     void connectSignals();
+    void updateArtworkLayout();
+    void refreshSelectionVisuals();
+    void showStatus(const QString &message);
+    void resetPvpSession();
 
     /**
      * @brief 初始化 PVP 网络模块
      * 在 PVP 模式下按需调用，创建 GameServer/GameClient/LobbyManager
      */
     void initNetwork();
+
+    /**
+     * @brief 获取本机局域网 IP 地址
+     * 用于 PVP 创建房间时显示给对方
+     */
+    QString getLocalIPAddress() const;
 };
 
 #endif // LOBBYPAGE_H

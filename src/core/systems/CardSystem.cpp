@@ -1,12 +1,46 @@
 #include "core/systems/CardSystem.h"
 #include "core/base/Constants.h"
+#include "core/data/CardSpecs.h"
 #include "core/systems/ResourceManager.h"
 #include "core/units/AttackUnit.h"
 #include "core/units/HealUnit.h"
 #include "core/units/ProduceUnit.h"
+#include <QSettings>
 #include <algorithm>
 
 namespace game::core {
+
+namespace {
+
+QString collectionKey(CardKind kind)
+{
+    return QString::fromUtf8(cardKey(kind));
+}
+
+int collectionLevel(CardKind kind)
+{
+    QSettings settings;
+    return qBound(1, settings.value(QString("collection/level/%1").arg(collectionKey(kind)), 1).toInt(), 3);
+}
+
+void applyCollectionBonus(const std::shared_ptr<Card>& card, CardKind kind)
+{
+    if (!card) return;
+    const int bonusSteps = qMax(0, collectionLevel(kind) - 1);
+    if (bonusSteps <= 0) return;
+
+    const int hpBonus = qRound(card->maxHp() * 0.03 * bonusSteps);
+    if (hpBonus > 0) {
+        card->setMaxHp(card->maxHp() + hpBonus);
+        card->heal(hpBonus);
+    }
+    if (card->attack() > 0) {
+        const int attackBonus = qMax(1, qRound(card->attack() * 0.03 * bonusSteps));
+        card->setAttack(card->attack() + attackBonus);
+    }
+}
+
+} // namespace
 
 CardSystem::CardSystem(int firstUnitId)
     : nextUnitId_(firstUnitId) {}
@@ -15,7 +49,8 @@ std::shared_ptr<Card> CardSystem::deploy(CardKind kind, MapPosition position,
                                          Map& map, ResourceManager& resources) {
     // 先检查地图，再扣资源，最后创建实体，避免失败时留下半完成状态。
     if (!map.canDeployAt(position)) return nullptr;
-    int cost = deployCost(kind);
+    const CardSpec& spec = cardSpec(kind);
+    int cost = spec.deployCost;
     if (!resources.consumeResource(cost)) return nullptr;
 
     // 根据 CardKind 创建具体卡牌。
@@ -23,18 +58,34 @@ std::shared_ptr<Card> CardSystem::deploy(CardKind kind, MapPosition position,
     int id = nextUnitId_++;
     switch (kind) {
         case CardKind::Attack:
-            card = std::make_shared<AttackUnit>(id, position);
+        case CardKind::Sniper:
+        case CardKind::Aoe:
+        case CardKind::Specialist:
+        case CardKind::Attack2:
+            card = std::make_shared<AttackUnit>(id, position, spec.maxHp, spec.attack,
+                                                spec.attackRange, spec.moveLimit,
+                                                spec.skillCooldownSeconds, spec.deployCost,
+                                                spec.kind, spec.projectileKind,
+                                                spec.splashRadius);
             break;
         case CardKind::Produce:
-            card = std::make_shared<ProduceUnit>(id, position);
+        case CardKind::Arsenal:
+            card = std::make_shared<ProduceUnit>(id, position, spec.maxHp, spec.moveLimit,
+                                                 spec.skillCooldownSeconds, spec.deployCost,
+                                                 spec.kind, spec.resourceYield);
             break;
         case CardKind::Heal:
-            card = std::make_shared<HealUnit>(id, position);
+        case CardKind::HeavyMedic:
+        case CardKind::Heal2:
+            card = std::make_shared<HealUnit>(id, position, spec.maxHp, spec.attackRange,
+                                              spec.moveLimit, spec.skillCooldownSeconds,
+                                              spec.deployCost, spec.kind, spec.healAmount);
             break;
     }
 
     // 部署成功后同时更新卡牌列表和地图占用。
     if (!card) return nullptr;
+    applyCollectionBonus(card, kind);
     cards_.push_back(card);
     map.setOccupied(position, true, card->id());
     return card;
@@ -70,6 +121,16 @@ void CardSystem::clear(Map& map) {
     cards_.clear();
 }
 
+void CardSystem::removeDead(Map& map) {
+    cards_.erase(std::remove_if(cards_.begin(), cards_.end(),
+        [&map](const std::shared_ptr<Card>& card) {
+            if (!card || !card->isDead()) return false;
+            map.clearOccupant(card->position());
+            return true;
+        }),
+        cards_.end());
+}
+
 std::shared_ptr<Card> CardSystem::findCard(int unitId) const {
     auto it = std::find_if(cards_.begin(), cards_.end(),
                            [unitId](const auto& card) { return card->id() == unitId; });
@@ -85,13 +146,7 @@ std::vector<std::shared_ptr<Entity>> CardSystem::asEntities() const {
 }
 
 int CardSystem::deployCost(CardKind kind) {
-    // 当前费用写在常量中，后续可以替换成 data_manager 配置。
-    switch (kind) {
-        case CardKind::Attack: return constants::DeployCostAttack;
-        case CardKind::Produce: return constants::DeployCostProduce;
-        case CardKind::Heal: return constants::DeployCostHeal;
-    }
-    return 0;
+    return cardSpec(kind).deployCost;
 }
 
 } // namespace game::core

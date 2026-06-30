@@ -89,4 +89,3 @@ ClashResult ClashSync::parseClashResult(const QByteArray& body) {
 
 } // namespace network
 } // namespace game
-#include "ClashSync.moc"

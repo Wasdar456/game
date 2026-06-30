@@ -41,8 +41,15 @@ namespace game::core {
 class StartPage;
 class LobbyPage;
 class DeckPage;
+class DeployPage;
 class BattlePage;
+class BattleReportPage;
 class SettingsPage;
+class ResultPage;
+class LeafTransitionOverlay;
+
+// NetworkContext 定义在 LobbyPage.h 中
+#include "ui/LobbyPage.h"
 
 /**
  * @class MainWindow
@@ -70,6 +77,9 @@ public:
      */
     game::core::BattleManager* battleManager() const { return m_battleManager; }
 
+protected:
+    void changeEvent(QEvent *event) override;
+
 private:
     // ========== 核心层实例 ==========
     game::core::BattleManager *m_battleManager;  ///< 战斗管理器（游戏核心）
@@ -81,11 +91,19 @@ private:
     StartPage    *m_startPage;
     LobbyPage    *m_lobbyPage;
     DeckPage     *m_deckPage;
+    DeployPage   *m_deployPage;  ///< 迷雾部署页面（PVP）
     BattlePage   *m_battlePage;
+    BattleReportPage *m_battleReportPage;
     SettingsPage *m_settingsPage;
+    ResultPage   *m_resultPage;
+    LeafTransitionOverlay *m_transitionOverlay;
 
     // ========== 页面导航辅助 ==========
     QWidget *m_previousPage;  ///< 记录切换到 DeckPage 前的来源页面
+
+    // ========== 网络上下文（PVP 模式） ==========
+    NetworkContext m_networkContext;  ///< 从 LobbyPage 传递到 BattlePage 的联机信息
+    bool m_battleRevealPlayed;
 
     // ========== 私有方法 ==========
     void initUI();           ///< 初始化 UI 组件和布局

@@ -1,556 +1,1071 @@
-/**
- * @file DeckPage.cpp
- * @brief 战前选卡与图鉴页面实现文件
- *
- * 核心逻辑：
- *   1. 加载所有卡牌数据到卡池（基于 CardKind 枚举和 Card 类属性）
- *   2. 点击卡池卡牌 → 添加到第一个空槽位 + 显示详细属性
- *   3. 点击已填入的卡槽 → 移除卡牌
- *   4. 5个槽位全部填满时"开始战斗"按钮变为可点击
- *   5. 确认出战时，收集 CardKind 列表传递给 BattlePage
- *
- * 与 dev 分支 core 模块的对接：
- *   - 卡牌种类由 CardKind 枚举定义：Attack, Produce, Heal
- *   - 对应的实体类：AttackUnit, ProduceUnit, HealUnit
- *   - 部署时 BattleManager::deployCard(CardKind, MapPosition) 创建对应实体
- *   - 所以选卡页面只需要传递 CardKind 列表即可
- */
-
 #include "ui/DeckPage.h"
 
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QGridLayout>
-#include <QFont>
-#include <QFrame>
+#include "core/data/CardSpecs.h"
+#include "ui/ArtHotspot.h"
+#include "ui/AudioManager.h"
+#include "ui/CardCollection.h"
 
-// ========== 引入核心层头文件 ==========
-// 用于获取卡牌的详细属性
-#include "core/units/AttackUnit.h"   // 攻击型卡牌
-#include "core/units/ProduceUnit.h"  // 生产型卡牌
-#include "core/units/HealUnit.h"     // 治疗型卡牌
-#include "core/map/MapPosition.h"    // 网格坐标（构造 Card 时需要）
-#include "core/base/Constants.h"     // 游戏常量（MaxCardLevel 等）
+#include <QEasingCurve>
+#include <QGraphicsOpacityEffect>
+#include <QIcon>
+#include <QLabel>
+#include <QFontMetrics>
+#include <QParallelAnimationGroup>
+#include <QPainter>
+#include <QPaintEvent>
+#include <QPropertyAnimation>
+#include <QPushButton>
+#include <QResizeEvent>
+#include <QShowEvent>
+#include <QStringList>
+#include <QTimer>
+#include <QToolTip>
 
-// ========== 构造函数 ==========
+namespace {
+
+constexpr int kDesignWidth = 1672;
+constexpr int kDesignHeight = 941;
+
+const QVector<QRect> kCardRects = {
+    {268, 207, 163, 210},
+    {437, 207, 167, 210},
+    {616, 207, 159, 210},
+    {795, 207, 160, 210},
+    {968, 207, 164, 210},
+    {268, 423, 163, 201},
+    {437, 423, 167, 201},
+    {616, 423, 159, 201},
+    {795, 423, 160, 201},
+    {968, 423, 164, 201},
+};
+
+const QVector<QRect> kSlotRects = {
+    {360, 704, 165, 171},
+    {525, 704, 165, 171},
+    {690, 704, 165, 171},
+    {855, 704, 165, 171},
+    {1020, 704, 165, 171},
+};
+
+const QRect kBackRect(42, 845, 196, 85);
+const QRect kStartRect(1360, 844, 260, 86);
+const QRect kDetailRect(1196, 257, 320, 426);
+
+QRectF scaledRect(const QRect &source, const QRectF &canvas)
+{
+    const qreal sx = canvas.width() / kDesignWidth;
+    const qreal sy = canvas.height() / kDesignHeight;
+    return QRectF(canvas.left() + source.x() * sx,
+                  canvas.top() + source.y() * sy,
+                  source.width() * sx,
+                  source.height() * sy);
+}
+
+QString cardTypeText(game::core::CardKind kind)
+{
+    if (game::core::isAttackCardKind(kind)) {
+        return "攻击";
+    }
+    if (game::core::isProduceCardKind(kind)) {
+        return "生产";
+    }
+    return "支援";
+}
+
+QColor themeColorForCardKind(game::core::CardKind kind)
+{
+    switch (kind) {
+    case game::core::CardKind::Produce: return QColor(210, 151, 47);
+    case game::core::CardKind::Sniper: return QColor(119, 76, 151);
+    case game::core::CardKind::Specialist: return QColor(89, 119, 54);
+    case game::core::CardKind::Heal: return QColor(220, 123, 118);
+    case game::core::CardKind::Attack: return QColor(119, 142, 43);
+    case game::core::CardKind::Aoe: return QColor(220, 111, 37);
+    case game::core::CardKind::HeavyMedic: return QColor(104, 78, 46);
+    case game::core::CardKind::Arsenal: return QColor(218, 146, 47);
+    case game::core::CardKind::Attack2: return QColor(113, 70, 139);
+    case game::core::CardKind::Heal2: return QColor(219, 132, 43);
+    }
+    return QColor(160, 128, 84);
+}
+
+QString skillTextForSpec(const game::core::CardSpec& spec)
+{
+    if (game::core::isProduceCardKind(spec.kind)) {
+        return QString("每次技能冷却完成产出 %1 资源").arg(spec.resourceYield);
+    }
+    if (game::core::isHealCardKind(spec.kind)) {
+        return QString("每次技能冷却完成治疗 %1 生命").arg(spec.healAmount);
+    }
+    if (spec.projectileKind == game::core::ProjectileKind::Aoe) {
+        return QString("发射范围弹体，命中后溅射半径 %1 格").arg(spec.splashRadius);
+    }
+    if (spec.projectileKind == game::core::ProjectileKind::Sniper) {
+        return "远距离单体狙击弹";
+    }
+    return "单体攻击单位";
+}
+
+} // namespace
+
 DeckPage::DeckPage(QWidget *parent)
     : QWidget(parent)
     , m_btnBack(nullptr)
     , m_titleLabel(nullptr)
     , m_detailPanel(nullptr)
     , m_btnStartBattle(nullptr)
-    , m_selectedCardIndex(-1)
+    , m_ticketLabel(nullptr)
+    , m_btnDrawPanel(nullptr)
+    , m_drawOverlay(nullptr)
+    , m_drawTitleLabel(nullptr)
+    , m_drawBodyLabel(nullptr)
+    , m_drawResultLabel(nullptr)
+    , m_drawCardsPanel(nullptr)
+    , m_btnDrawOne(nullptr)
+    , m_btnDrawTen(nullptr)
+    , m_btnCloseDraw(nullptr)
+    , m_btnUpgradeCard(nullptr)
+    , m_selectedCardIndex(0)
     , m_cardPoolScroll(nullptr)
+    , m_backHotspot(nullptr)
+    , m_startHotspot(nullptr)
+    , m_lastDrawResultCount(0)
+    , m_drawOverlayVisible(false)
 {
-    // 初始化5个卡槽为空（-1 表示空槽位）
-    m_selectedSlots.fill(-1, MAX_DECK_SLOTS);
-
-    // 创建卡牌展示数据
+    CardCollection::initializeDefaults();
     createCardPoolData();
 
+    m_selectedSlots = {0, 4, -1, -1, -1};
     initUI();
     connectSignals();
+    refreshDetailPanel(m_selectedCardIndex);
+    refreshDeckSlotsDisplay();
+    updateStartBattleButton();
 }
 
-// ========== createCardPoolData() —— 创建卡牌展示数据 ==========
-// 根据 dev 分支 core 模块的 Card 派生类属性来填充
+void DeckPage::paintEvent(QPaintEvent *event)
+{
+    Q_UNUSED(event);
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.fillRect(rect(), QColor(38, 52, 34));
+
+    static QPixmap artwork(":/images/artwork/deck_atlas.png");
+    if (!artwork.isNull()) {
+        painter.drawPixmap(m_canvasRect, artwork, QRectF(artwork.rect()));
+    }
+
+    QLinearGradient shade(m_canvasRect.topLeft(), m_canvasRect.bottomRight());
+    shade.setColorAt(0.0, QColor(30, 45, 27, 14));
+    shade.setColorAt(0.56, QColor(30, 45, 27, 0));
+    shade.setColorAt(1.0, QColor(23, 29, 19, 26));
+    painter.fillRect(m_canvasRect, shade);
+}
+
+void DeckPage::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    setGraphicsEffect(nullptr);
+    updateArtworkLayout();
+    for (ArtHotspot *hotspot : m_cardHotspots) {
+        hotspot->refreshVisual();
+    }
+    if (m_backHotspot) {
+        m_backHotspot->refreshVisual();
+    }
+    if (m_startHotspot) {
+        m_startHotspot->refreshVisual();
+    }
+    refreshDeckSlotsDisplay();
+    updateStartBattleButton();
+    refreshCollectionDisplay();
+    update();
+}
+
+void DeckPage::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateArtworkLayout();
+}
+
 void DeckPage::createCardPoolData()
 {
-    // 创建临时的 Card 派生类实例来获取真实属性
-    // 这里用 id=0, position=(0,0) 构造临时对象，仅用于读取属性
-    game::core::MapPosition dummyPos(0, 0);
-
-    // ===== 攻击型卡牌 =====
-    {
-        game::core::AttackUnit tempCard(0, dummyPos);
-        m_allCards.append({
-            game::core::CardKind::Attack,
-            "突击手",                         // 名称
-            tempCard.deployCost(),             // 从 Card::deployCost() 获取
-            tempCard.maxHp(),                  // 从 Entity::maxHp() 获取
-            tempCard.attack(),                 // 从 Entity::attack() 获取
-            tempCard.attackRange(),            // 从 Card::attackRange() 获取
-            tempCard.moveLimit(),              // 从 Card::moveLimit() 获取
-            1.0,                               // 攻击间隔（简化）
-            "[普通怪] > [资源单位] > [敌方核心]",  // 索敌优先级描述
-            QString("Lv2: %1  Lv3: %2")       // 升级消耗描述
-                .arg(tempCard.upgradeCost())
-                .arg(tempCard.upgradeCost() * 2),
-            QColor(255, 82, 82)               // 红色主题
-        });
-    }
-
-    {
-        game::core::AttackUnit tempCard2(1, dummyPos);  // 简化：复用 AttackUnit
-        m_allCards.append({
-            game::core::CardKind::Attack,
-            "狙击手",
-            50,                                // 狙击手部署消耗更高
-            400,                               // 血量较低
-            200,                               // 攻击力更高
-            5,                                 // 射程更远
-            1,                                 // 瞬移距离短
-            2.0,
-            "[高血量怪] > [普通怪] > [资源单位]",
-            "Lv2: 60  Lv3: 120",
-            QColor(255, 82, 82)
-        });
-    }
-
-    {
-        // AOE 炮塔（攻击型变种）
-        m_allCards.append({
-            game::core::CardKind::Attack,
-            "AOE炮塔",
-            60,
-            500,
-            80,
-            3,
-            1,
-            1.5,
-            "[最近怪] > [普通怪] > [资源单位]",
-            "Lv2: 50  Lv3: 100",
-            QColor(255, 82, 82)
-        });
-    }
-
-    {
-        // 特种兵（攻击型变种）
-        m_allCards.append({
-            game::core::CardKind::Attack,
-            "特种兵",
-            55,
-            450,
-            180,
-            4,
-            3,
-            1.2,
-            "[远程怪] > [高血量怪] > [普通怪]",
-            "Lv2: 55  Lv3: 110",
-            QColor(255, 82, 82)
-        });
-    }
-
-    // ===== 生产型卡牌 =====
-    {
-        game::core::ProduceUnit tempCard(0, dummyPos);
-        m_allCards.append({
-            game::core::CardKind::Produce,
-            "采矿工",
-            tempCard.deployCost(),
-            tempCard.maxHp(),
-            tempCard.attack(),
-            tempCard.attackRange(),
-            tempCard.moveLimit(),
-            3.0,
-            "[资源单位] > [怪物] > [敌方核心]",
-            QString("Lv2: %1  Lv3: %2")
-                .arg(tempCard.upgradeCost())
-                .arg(tempCard.upgradeCost() * 2),
-            QColor(0, 230, 118)              // 绿色主题
-        });
-    }
-
-    {
-        // 兵工厂（生产型变种）
-        m_allCards.append({
-            game::core::CardKind::Produce,
-            "兵工厂",
-            80,
-            500,
-            0,
-            0,
-            0,
-            0.0,
-            "无攻击能力 - 专注资源产出",
-            "Lv2: 70  Lv3: 140",
-            QColor(0, 230, 118)
-        });
-    }
-
-    // ===== 治疗型卡牌 =====
-    {
-        game::core::HealUnit tempCard(0, dummyPos);
-        m_allCards.append({
-            game::core::CardKind::Heal,
-            "医生",
-            tempCard.deployCost(),
-            tempCard.maxHp(),
-            tempCard.attack(),
-            tempCard.attackRange(),
-            tempCard.moveLimit(),
-            1.8,
-            "[受伤友方] > [最低血量友方]",
-            QString("Lv2: %1  Lv3: %2")
-                .arg(tempCard.upgradeCost())
-                .arg(tempCard.upgradeCost() * 2),
-            QColor(68, 138, 255)             // 蓝色主题
-        });
-    }
-
-    {
-        // 重装医生（治疗型变种）
-        m_allCards.append({
-            game::core::CardKind::Heal,
-            "重装医生",
-            60,
-            600,
-            20,
-            2,
-            1,
-            2.5,
-            "[受伤友方] > [最低血量友方]",
-            "Lv2: 55  Lv3: 110",
-            QColor(68, 138, 255)
-        });
-    }
+    m_allCards = {
+        {game::core::CardKind::Produce,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Produce)),
+         game::core::cardSpec(game::core::CardKind::Produce).deployCost,
+         game::core::cardSpec(game::core::CardKind::Produce).maxHp,
+         game::core::cardSpec(game::core::CardKind::Produce).attack,
+         game::core::cardSpec(game::core::CardKind::Produce).attackRange,
+         game::core::cardSpec(game::core::CardKind::Produce).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Produce).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Produce)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Produce).priorityText),
+         themeColorForCardKind(game::core::CardKind::Produce)},
+        {game::core::CardKind::Sniper,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Sniper)),
+         game::core::cardSpec(game::core::CardKind::Sniper).deployCost,
+         game::core::cardSpec(game::core::CardKind::Sniper).maxHp,
+         game::core::cardSpec(game::core::CardKind::Sniper).attack,
+         game::core::cardSpec(game::core::CardKind::Sniper).attackRange,
+         game::core::cardSpec(game::core::CardKind::Sniper).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Sniper).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Sniper)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Sniper).priorityText),
+         themeColorForCardKind(game::core::CardKind::Sniper)},
+        {game::core::CardKind::Specialist,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Specialist)),
+         game::core::cardSpec(game::core::CardKind::Specialist).deployCost,
+         game::core::cardSpec(game::core::CardKind::Specialist).maxHp,
+         game::core::cardSpec(game::core::CardKind::Specialist).attack,
+         game::core::cardSpec(game::core::CardKind::Specialist).attackRange,
+         game::core::cardSpec(game::core::CardKind::Specialist).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Specialist).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Specialist)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Specialist).priorityText),
+         themeColorForCardKind(game::core::CardKind::Specialist)},
+        {game::core::CardKind::Heal,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Heal)),
+         game::core::cardSpec(game::core::CardKind::Heal).deployCost,
+         game::core::cardSpec(game::core::CardKind::Heal).maxHp,
+         game::core::cardSpec(game::core::CardKind::Heal).attack,
+         game::core::cardSpec(game::core::CardKind::Heal).attackRange,
+         game::core::cardSpec(game::core::CardKind::Heal).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Heal).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Heal)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Heal).priorityText),
+         themeColorForCardKind(game::core::CardKind::Heal)},
+        {game::core::CardKind::Attack,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Attack)),
+         game::core::cardSpec(game::core::CardKind::Attack).deployCost,
+         game::core::cardSpec(game::core::CardKind::Attack).maxHp,
+         game::core::cardSpec(game::core::CardKind::Attack).attack,
+         game::core::cardSpec(game::core::CardKind::Attack).attackRange,
+         game::core::cardSpec(game::core::CardKind::Attack).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Attack).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Attack)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Attack).priorityText),
+         themeColorForCardKind(game::core::CardKind::Attack)},
+        {game::core::CardKind::Aoe,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Aoe)),
+         game::core::cardSpec(game::core::CardKind::Aoe).deployCost,
+         game::core::cardSpec(game::core::CardKind::Aoe).maxHp,
+         game::core::cardSpec(game::core::CardKind::Aoe).attack,
+         game::core::cardSpec(game::core::CardKind::Aoe).attackRange,
+         game::core::cardSpec(game::core::CardKind::Aoe).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Aoe).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Aoe)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Aoe).priorityText),
+         themeColorForCardKind(game::core::CardKind::Aoe)},
+        {game::core::CardKind::HeavyMedic,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::HeavyMedic)),
+         game::core::cardSpec(game::core::CardKind::HeavyMedic).deployCost,
+         game::core::cardSpec(game::core::CardKind::HeavyMedic).maxHp,
+         game::core::cardSpec(game::core::CardKind::HeavyMedic).attack,
+         game::core::cardSpec(game::core::CardKind::HeavyMedic).attackRange,
+         game::core::cardSpec(game::core::CardKind::HeavyMedic).moveLimit,
+         game::core::cardSpec(game::core::CardKind::HeavyMedic).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::HeavyMedic)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::HeavyMedic).priorityText),
+         themeColorForCardKind(game::core::CardKind::HeavyMedic)},
+        {game::core::CardKind::Arsenal,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Arsenal)),
+         game::core::cardSpec(game::core::CardKind::Arsenal).deployCost,
+         game::core::cardSpec(game::core::CardKind::Arsenal).maxHp,
+         game::core::cardSpec(game::core::CardKind::Arsenal).attack,
+         game::core::cardSpec(game::core::CardKind::Arsenal).attackRange,
+         game::core::cardSpec(game::core::CardKind::Arsenal).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Arsenal).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Arsenal)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Arsenal).priorityText),
+         themeColorForCardKind(game::core::CardKind::Arsenal)},
+        {game::core::CardKind::Attack2,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Attack2)),
+         game::core::cardSpec(game::core::CardKind::Attack2).deployCost,
+         game::core::cardSpec(game::core::CardKind::Attack2).maxHp,
+         game::core::cardSpec(game::core::CardKind::Attack2).attack,
+         game::core::cardSpec(game::core::CardKind::Attack2).attackRange,
+         game::core::cardSpec(game::core::CardKind::Attack2).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Attack2).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Attack2)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Attack2).priorityText),
+         themeColorForCardKind(game::core::CardKind::Attack2)},
+        {game::core::CardKind::Heal2,
+         QString::fromUtf8(game::core::cardName(game::core::CardKind::Heal2)),
+         game::core::cardSpec(game::core::CardKind::Heal2).deployCost,
+         game::core::cardSpec(game::core::CardKind::Heal2).maxHp,
+         game::core::cardSpec(game::core::CardKind::Heal2).attack,
+         game::core::cardSpec(game::core::CardKind::Heal2).attackRange,
+         game::core::cardSpec(game::core::CardKind::Heal2).moveLimit,
+         game::core::cardSpec(game::core::CardKind::Heal2).skillCooldownSeconds,
+         skillTextForSpec(game::core::cardSpec(game::core::CardKind::Heal2)),
+         QString::fromUtf8(game::core::cardSpec(game::core::CardKind::Heal2).priorityText),
+         themeColorForCardKind(game::core::CardKind::Heal2)},
+    };
 }
 
-// ========== initUI() —— 初始化界面 ==========
 void DeckPage::initUI()
 {
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(40, 25, 40, 25);
-    mainLayout->setSpacing(15);
+    setAutoFillBackground(false);
 
-    // ----- 顶部导航栏 -----
-    QHBoxLayout *topBar = new QHBoxLayout();
+    m_btnBack = new QPushButton(this);
+    m_btnBack->hide();
+    m_btnStartBattle = new QPushButton(this);
+    m_btnStartBattle->hide();
 
-    m_btnBack = new QPushButton("← 返回", this);
-    m_btnBack->setFixedSize(100, 40);
-    m_btnBack->setStyleSheet(
-        "QPushButton { background-color: rgba(20,40,70,0.70); color: #8AB4F8;"
-        "  border: 2px solid rgba(0,212,255,0.50); border-radius: 8px; font-size: 14px; }"
-        "QPushButton:hover { color: #00E5FF; border: 2px solid #00D4FF; }"
-    );
-    m_btnBack->setCursor(Qt::PointingHandCursor);
-
-    m_titleLabel = new QLabel("📖 战前编队 & 图鉴", this);
-    m_titleLabel->setStyleSheet("color: #FFFFFF; font-size: 22px; font-weight: bold;");
-
-    topBar->addWidget(m_btnBack);
-    topBar->addStretch();
-    topBar->addWidget(m_titleLabel);
-    topBar->addStretch();
-    mainLayout->addLayout(topBar);
-
-    // ===== 上半部分：卡池 + 详细属性面板 =====
-    QHBoxLayout *upperLayout = new QHBoxLayout();
-
-    // ----- 左侧：卡池 -----
-    QVBoxLayout *cardPoolLayout = new QVBoxLayout();
-    QLabel *poolLabel = new QLabel("🗂️ 全图鉴卡池（点击选择出战卡牌）", this);
-    poolLabel->setStyleSheet("color: #E3F2FD; font-size: 15px; font-weight: bold;");
-    cardPoolLayout->addWidget(poolLabel);
-
-    m_cardPoolScroll = new QScrollArea(this);
-    m_cardPoolScroll->setWidgetResizable(true);
-    m_cardPoolScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_cardPoolScroll->setStyleSheet(
-        "QScrollArea { background-color: transparent; border: 2px solid rgba(0,212,255,0.35); border-radius: 8px; }"
-        "QScrollBar:vertical { width: 8px; background: transparent; }"
-        "QScrollBar::handle:vertical { background: rgba(0,212,255,0.5); border-radius: 4px; min-height: 30px; }"
-    );
-
-    // 卡池内容容器（网格布局，每行4张）
-    QWidget *cardPoolContainer = new QWidget(this);
-    QGridLayout *cardGrid = new QGridLayout(cardPoolContainer);
-    cardGrid->setSpacing(12);
-    cardGrid->setContentsMargins(10, 10, 10, 10);
-
-    int col = 0, row = 0;
-    const int COLS = 4;
-    for (int i = 0; i < m_allCards.size(); ++i) {
-        const auto &card = m_allCards[i];
-        QPushButton *cardBtn = new QPushButton(this);
-        cardBtn->setFixedSize(140, 100);
-        cardBtn->setText(QString("%1\n%2\n💰 %3")
-                             .arg(card.name)
-                             .arg(card.kind == game::core::CardKind::Attack ? "攻击型" :
-                                  card.kind == game::core::CardKind::Produce ? "生产型" : "治疗型")
-                             .arg(card.deployCost));
-
-        // 根据卡牌类型设置主题色 - 不透明实色背景，始终清晰可见
-        QString colorHex = card.themeColor.name();
-        // 计算深色实底背景（取主题色的暗色版本）
-        int r = card.themeColor.red(), g = card.themeColor.green(), b = card.themeColor.blue();
-        QString darkBg = QString("rgb(%1,%2,%3)").arg(r*3/10+15).arg(g*3/10+15).arg(b*3/10+15);
-        QString midBg = QString("rgb(%1,%2,%3)").arg(r*4/10+20).arg(g*4/10+20).arg(b*4/10+20);
-        QString hoverBg = QString("rgb(%1,%2,%3)").arg(r*5/10+25).arg(g*5/10+25).arg(b*5/10+25);
-        QString hoverBg2 = QString("rgb(%1,%2,%3)").arg(r*3/10+30).arg(g*3/10+30).arg(b*3/10+30);
-        cardBtn->setStyleSheet(
-            QString(
-                "QPushButton {"
-                "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                "    stop:0 %1, stop:1 %2);"
-                "  color: #FFFFFF;"
-                "  border: 2px solid %3; border-radius: 10px;"
-                "  font-size: 13px; font-weight: bold; text-align: center;"
-                "}"
-                "QPushButton:hover {"
-                "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                "    stop:0 %4, stop:1 %5);"
-                "  border: 2px solid %6;"
-                "  color: #FFFFFF;"
-                "}"
-            )
-            .arg(midBg)          // 顶部
-            .arg(darkBg)         // 底部
-            .arg(colorHex)       // 边框 - 实色
-            .arg(hoverBg)        // hover 顶部
-            .arg(hoverBg2)       // hover 底部
-            .arg(colorHex)       // hover 边框
-        );
-        cardBtn->setCursor(Qt::PointingHandCursor);
-
-        // 点击卡牌 → 添加到卡槽 + 显示详情
-        connect(cardBtn, &QPushButton::clicked, this, [this, i]() {
-            refreshDetailPanel(i);
-            // 添加到第一个空槽位
-            for (int s = 0; s < MAX_DECK_SLOTS; ++s) {
-                if (m_selectedSlots[s] == -1) {
-                    m_selectedSlots[s] = i;  // 存储卡牌索引
-                    refreshDeckSlotsDisplay();
-                    updateStartBattleButton();
-                    break;
-                }
-            }
-        });
-
-        cardGrid->addWidget(cardBtn, row, col);
-        col++;
-        if (col >= COLS) { col = 0; row++; }
-    }
-
-    m_cardPoolScroll->setWidget(cardPoolContainer);
-    cardPoolLayout->addWidget(m_cardPoolScroll);
-    upperLayout->addLayout(cardPoolLayout, 2);
-
-    // ----- 右侧：详细属性面板 -----
     m_detailPanel = new QLabel(this);
-    m_detailPanel->setMinimumWidth(300);
     m_detailPanel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_detailPanel->setWordWrap(true);
-    m_detailPanel->setText("👈 点击左侧卡牌查看详细属性");
     m_detailPanel->setStyleSheet(
         "QLabel {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-        "    stop:0 rgba(15,30,55,0.92), stop:1 rgba(10,22,40,0.88));"
-        "  color: #E3F2FD;"
-        "  border: 2px solid rgba(0,212,255,0.40); border-radius: 12px;"
-        "  padding: 15px; font-size: 14px;"
+        " background-color: rgb(239, 219, 173);"
+        " color: #3a2819;"
+        " border: 2px solid rgba(92, 64, 36, 0.72);"
+        " border-radius: 5px;"
+        " padding: 14px;"
+        " font-family: 'Microsoft YaHei UI', 'PingFang SC', sans-serif;"
+        " font-size: 13px;"
         "}"
     );
-    upperLayout->addWidget(m_detailPanel, 1);
-    mainLayout->addLayout(upperLayout, 3);
 
-    // ===== 下半部分：出战卡槽 =====
-    QVBoxLayout *deckLayout = new QVBoxLayout();
-    QLabel *slotLabel = new QLabel("🎯 出战卡槽（点击已选卡牌可移除）", this);
-    slotLabel->setStyleSheet("color: #E3F2FD; font-size: 15px; font-weight: bold;");
-    deckLayout->addWidget(slotLabel);
+    const QString artwork = ":/images/artwork/deck_atlas.png";
+    for (int i = 0; i < m_allCards.size(); ++i) {
+        auto *hotspot = new ArtHotspot(artwork, kCardRects[i], this);
+        hotspot->setGlowColor(QColor(255, 220, 128));
+        hotspot->setToolTip(m_allCards[i].name);
+        hotspot->setClickHandler([this, i]() {
+            refreshDetailPanel(i);
+            if (!CardCollection::isOwned(m_allCards[i].kind)) {
+                QToolTip::showText(mapToGlobal(scaledRect(kCardRects[i], m_canvasRect).center().toPoint()),
+                                   "Locked. Open Supply Draw to unlock this card.", this);
+                return;
+            }
+            for (int slot = 0; slot < MAX_DECK_SLOTS; ++slot) {
+                if (m_selectedSlots[slot] == -1) {
+                    m_selectedSlots[slot] = i;
+                    animateCardToSlot(i, slot);
+                    updateStartBattleButton();
+                    return;
+                }
+            }
+            QToolTip::showText(mapToGlobal(m_canvasRect.center().toPoint()),
+                               "出战卡组已满，先点击下方卡牌移除一个槽位", this);
+        });
+        m_cardHotspots.append(hotspot);
 
-    QHBoxLayout *slotRow = new QHBoxLayout();
-    slotRow->setSpacing(15);
+        auto *lockLabel = new QLabel("LOCK", this);
+        lockLabel->setAlignment(Qt::AlignCenter);
+        lockLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+        lockLabel->setStyleSheet(
+            "QLabel { color:#fff1c4; background:rgba(35,25,18,0.64);"
+            " border:2px solid rgba(255,218,115,0.72); border-radius:5px;"
+            " font-size:22px; font-weight:900; }");
+        m_cardLockLabels.append(lockLabel);
+    }
+
     for (int i = 0; i < MAX_DECK_SLOTS; ++i) {
-        QPushButton *slotBtn = new QPushButton(this);
-        slotBtn->setFixedSize(150, 100);
-        slotBtn->setText(QString("槽位 %1\n(空)").arg(i + 1));
-        slotBtn->setStyleSheet(
+        auto *slotButton = new QPushButton(this);
+        slotButton->setCursor(Qt::PointingHandCursor);
+        slotButton->setStyleSheet(
             "QPushButton {"
-            "  background-color: rgba(15,30,55,0.60); color: #7AB8DD;"
-            "  border: 2px dashed rgba(0,212,255,0.45); border-radius: 10px; font-size: 14px;"
+            " background-color: rgba(239, 219, 173, 0.97);"
+            " color: #584025;"
+            " border: 2px solid rgba(100, 70, 38, 0.76);"
+            " border-radius: 4px;"
+            " font-family: 'Microsoft YaHei UI', 'PingFang SC', sans-serif;"
+            " font-size: 13px;"
+            " font-weight: 700;"
             "}"
+            "QPushButton:hover { border: 3px solid #efbf58; }"
+            "QPushButton:pressed { background-color: rgba(222, 194, 138, 0.98); }"
         );
-        // 点击卡槽 → 移除卡牌
-        connect(slotBtn, &QPushButton::clicked, this, [this, i]() {
+        connect(slotButton, &QPushButton::clicked, this, [this, i]() {
             if (m_selectedSlots[i] != -1) {
                 m_selectedSlots[i] = -1;
                 refreshDeckSlotsDisplay();
                 updateStartBattleButton();
             }
         });
-        m_slotButtons.append(slotBtn);
-        slotRow->addWidget(slotBtn);
+        m_slotButtons.append(slotButton);
     }
-    deckLayout->addLayout(slotRow);
 
-    // 开始战斗按钮
-    m_btnStartBattle = new QPushButton("⚔ 开始战斗", this);
-    m_btnStartBattle->setFixedSize(250, 55);
-    m_btnStartBattle->setStyleSheet(
-        "QPushButton {"
-        "  background-color: #1A2742; color: #7AACCC;"
-        "  border: 2px solid rgba(0,212,255,0.30); border-radius: 14px;"
-        "  font-size: 18px; font-weight: bold;"
-        "}"
-        "QPushButton:enabled {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-        "    stop:0 rgba(0,212,255,0.25), stop:1 rgba(0,180,255,0.12));"
-        "  color: #00E5FF;"
-        "  border: 2px solid rgba(0,212,255,0.70);"
-        "}"
-        "QPushButton:enabled:hover {"
-        "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-        "    stop:0 rgba(0,212,255,0.40), stop:1 rgba(0,180,255,0.22));"
-        "}"
-    );
-    m_btnStartBattle->setEnabled(false);  // 初始不可用
-    m_btnStartBattle->setCursor(Qt::PointingHandCursor);
+    m_backHotspot = new ArtHotspot(artwork, kBackRect, this);
+    m_backHotspot->setGlowColor(QColor(255, 220, 128));
+    m_backHotspot->setClickHandler([this]() { m_btnBack->click(); });
 
-    QHBoxLayout *battleBtnLayout = new QHBoxLayout();
-    battleBtnLayout->addStretch();
-    battleBtnLayout->addWidget(m_btnStartBattle);
-    battleBtnLayout->addStretch();
-    deckLayout->addLayout(battleBtnLayout);
-    mainLayout->addLayout(deckLayout, 1);
+    m_startHotspot = new ArtHotspot(artwork, kStartRect, this);
+    m_startHotspot->setGlowColor(QColor(255, 220, 128));
+    m_startHotspot->setClickHandler([this]() {
+        if (m_btnStartBattle->isEnabled()) {
+            m_btnStartBattle->click();
+        } else {
+            QToolTip::showText(mapToGlobal(m_canvasRect.center().toPoint()),
+                               m_btnStartBattle->toolTip(), this);
+        }
+    });
 
-    // 页面背景
-    this->setStyleSheet(
-        "DeckPage {"
-        "  background: qlineargradient("
-        "    x1:0, y1:0, x2:1, y2:1,"
-        "    stop:0 #0B1622, stop:0.5 #0F1B2D, stop:1 #162544"
-        "  );"
-        "}"
-    );
+    m_ticketLabel = new QLabel(this);
+    m_ticketLabel->setAlignment(Qt::AlignCenter);
+    m_ticketLabel->setStyleSheet(
+        "QLabel { color:#352314; background:rgba(244,224,174,0.96);"
+        " border:2px solid rgba(92,64,36,0.8); border-radius:8px;"
+        " font-size:15px; font-weight:900; padding:4px 8px; }");
+
+    m_btnDrawPanel = new QPushButton("Draw", this);
+    m_btnDrawPanel->setCursor(Qt::PointingHandCursor);
+    m_btnDrawPanel->setStyleSheet(
+        "QPushButton { color:#352314; background:rgba(246,218,147,0.97);"
+        " border:2px solid #704821; border-radius:9px; font-size:15px; font-weight:900; }"
+        "QPushButton:hover { background:#ffe4a0; border-color:#d4a047; }"
+        "QPushButton:pressed { background:#c99653; }");
+    connect(m_btnDrawPanel, &QPushButton::clicked, this, &DeckPage::openDrawPanel);
+
+    m_drawOverlay = new QWidget(this);
+    m_drawOverlay->hide();
+    m_drawOverlay->setStyleSheet(
+        "QWidget { background:rgba(37,51,35,0.88); border-radius:12px; }"
+        "QLabel { color:#fff3ce; background:transparent; font-size:16px; font-weight:800; }"
+        "QPushButton { color:#352314; background:#efd497; border:2px solid #704821;"
+        " border-radius:9px; font-size:15px; font-weight:900; padding:6px; }"
+        "QPushButton:hover { background:#ffe4a0; border-color:#d4a047; }"
+        "QPushButton:pressed { background:#c99653; }");
+    m_drawTitleLabel = new QLabel(m_drawOverlay);
+    m_drawTitleLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    m_drawTitleLabel->setStyleSheet(
+        "QLabel { color:#fff3ce; background:transparent; border:none;"
+        " font-size:26px; font-weight:900; }");
+    m_drawBodyLabel = new QLabel(m_drawOverlay);
+    m_drawBodyLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    m_drawBodyLabel->setWordWrap(true);
+    m_drawBodyLabel->setStyleSheet(
+        "QLabel { color:#ffe7b0; background:transparent; border:none;"
+        " font-size:15px; font-weight:800; line-height:1.25; }");
+    m_drawResultLabel = new QLabel(m_drawOverlay);
+    m_drawResultLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    m_drawResultLabel->setWordWrap(true);
+    m_drawResultLabel->setStyleSheet(
+        "QLabel { color:#fff1c8; background:transparent; border:none;"
+        " font-size:15px; font-weight:800; }");
+    m_drawCardsPanel = new QWidget(m_drawOverlay);
+    m_drawCardsPanel->setStyleSheet("QWidget { background: transparent; border: none; }");
+    m_btnDrawOne = new QPushButton("x1", m_drawOverlay);
+    m_btnDrawTen = new QPushButton("x10", m_drawOverlay);
+    m_btnCloseDraw = new QPushButton("Close", m_drawOverlay);
+    connect(m_btnDrawOne, &QPushButton::clicked, this, [this]() { performDraw(1); });
+    connect(m_btnDrawTen, &QPushButton::clicked, this, [this]() { performDraw(10); });
+    connect(m_btnCloseDraw, &QPushButton::clicked, this, [this]() { setDrawOverlayVisible(false); });
+
+    m_btnUpgradeCard = new QPushButton("Lv Up", this);
+    m_btnUpgradeCard->setCursor(Qt::PointingHandCursor);
+    m_btnUpgradeCard->setStyleSheet(m_btnDrawPanel->styleSheet());
+    connect(m_btnUpgradeCard, &QPushButton::clicked, this, [this]() {
+        if (m_selectedCardIndex < 0 || m_selectedCardIndex >= m_allCards.size()) return;
+        if (CardCollection::upgrade(m_allCards[m_selectedCardIndex].kind)) {
+            refreshDetailPanel(m_selectedCardIndex);
+            refreshCollectionDisplay();
+        }
+    });
+
+    updateArtworkLayout();
 }
 
-// ========== refreshDeckSlotsDisplay() —— 刷新卡槽显示 ==========
+void DeckPage::updateArtworkLayout()
+{
+    const qreal scale = qMin(width() / qreal(kDesignWidth),
+                             height() / qreal(kDesignHeight));
+    const QSizeF canvasSize(kDesignWidth * scale, kDesignHeight * scale);
+    const QPointF topLeft((width() - canvasSize.width()) / 2.0,
+                          (height() - canvasSize.height()) / 2.0);
+    m_canvasRect = QRectF(topLeft, canvasSize);
+
+    for (int i = 0; i < m_cardHotspots.size(); ++i) {
+        m_cardHotspots[i]->setCanvasRect(scaledRect(kCardRects[i], m_canvasRect));
+    }
+    for (int i = 0; i < m_slotButtons.size(); ++i) {
+        m_slotButtons[i]->setGeometry(scaledRect(kSlotRects[i], m_canvasRect).toRect());
+        m_slotButtons[i]->setIconSize(
+            m_slotButtons[i]->size() - QSize(qMax(6, m_slotButtons[i]->width() / 18),
+                                             qMax(6, m_slotButtons[i]->height() / 18)));
+        m_slotButtons[i]->raise();
+    }
+
+    m_detailPanel->setGeometry(scaledRect(kDetailRect, m_canvasRect).toRect());
+    m_detailPanel->raise();
+    m_ticketLabel->setGeometry(scaledRect(QRect(1214, 688, 280, 42), m_canvasRect).toRect());
+    m_btnDrawPanel->setGeometry(scaledRect(QRect(1214, 738, 132, 52), m_canvasRect).toRect());
+    m_btnUpgradeCard->setGeometry(scaledRect(QRect(1362, 738, 132, 52), m_canvasRect).toRect());
+    m_backHotspot->setCanvasRect(scaledRect(kBackRect, m_canvasRect));
+    m_startHotspot->setCanvasRect(scaledRect(kStartRect, m_canvasRect));
+
+    for (int i = 0; i < m_cardLockLabels.size(); ++i) {
+        QRect lockRect = scaledRect(kCardRects[i], m_canvasRect).toRect().adjusted(8, 8, -8, -8);
+        m_cardLockLabels[i]->setGeometry(lockRect);
+    }
+    QRect overlayRect = scaledRect(QRect(468, 170, 760, 590), m_canvasRect).toRect();
+    m_drawOverlay->setGeometry(overlayRect);
+    refreshDrawOverlayLayout();
+
+    m_ticketLabel->raise();
+    m_btnDrawPanel->raise();
+    m_btnUpgradeCard->raise();
+    m_backHotspot->raise();
+    m_startHotspot->raise();
+    updateLockLabelVisibilityForOverlay();
+    if (m_drawOverlayVisible) m_drawOverlay->raise();
+    update();
+}
+
+void DeckPage::animateCardToSlot(int cardIndex, int slotIndex)
+{
+    if (cardIndex < 0 || cardIndex >= kCardRects.size()
+        || slotIndex < 0 || slotIndex >= m_slotButtons.size()) {
+        refreshDeckSlotsDisplay();
+        return;
+    }
+
+    static QPixmap artwork(":/images/artwork/deck_atlas.png");
+    const QPixmap cardArt = artwork.copy(kCardRects[cardIndex]);
+    auto *flyingCard = new QLabel(this);
+    flyingCard->setAttribute(Qt::WA_TransparentForMouseEvents);
+    flyingCard->setPixmap(cardArt);
+    flyingCard->setScaledContents(true);
+    flyingCard->setStyleSheet(
+        "background:rgba(255,240,190,0.18);"
+        "border:3px solid #f2c65e; border-radius:5px;");
+
+    const QRect start = scaledRect(kCardRects[cardIndex], m_canvasRect).toRect();
+    const QRect end = m_slotButtons[slotIndex]->geometry().adjusted(6, 6, -6, -6);
+    flyingCard->setGeometry(start);
+    flyingCard->show();
+    flyingCard->raise();
+
+    auto *opacity = new QGraphicsOpacityEffect(flyingCard);
+    flyingCard->setGraphicsEffect(opacity);
+    auto *group = new QParallelAnimationGroup(flyingCard);
+    auto *move = new QPropertyAnimation(flyingCard, "geometry", group);
+    move->setDuration(420);
+    move->setStartValue(start);
+    move->setEndValue(end);
+    move->setEasingCurve(QEasingCurve::InOutBack);
+    auto *fade = new QPropertyAnimation(opacity, "opacity", group);
+    fade->setDuration(420);
+    fade->setStartValue(0.94);
+    fade->setKeyValueAt(0.72, 1.0);
+    fade->setEndValue(0.35);
+
+    AudioManager::instance().playCardSelect();
+    connect(group, &QParallelAnimationGroup::finished, this,
+            [this, flyingCard]() {
+                refreshDeckSlotsDisplay();
+                flyingCard->deleteLater();
+            });
+    group->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
 void DeckPage::refreshDeckSlotsDisplay()
 {
-    for (int i = 0; i < MAX_DECK_SLOTS; ++i) {
-        QPushButton *btn = m_slotButtons[i];
-        int cardIdx = m_selectedSlots[i];
-
-        if (cardIdx == -1) {
-            // 空槽位
-            btn->setText(QString("槽位 %1\n(空)").arg(i + 1));
-            btn->setStyleSheet(
-                "QPushButton {"
-                "  background-color: rgba(15,30,55,0.60); color: #7AB8DD;"
-                "  border: 2px dashed rgba(0,212,255,0.45); border-radius: 10px; font-size: 14px;"
-                "}"
-            );
-        } else {
-            // 已填入卡牌
-            const auto &card = m_allCards[cardIdx];
-            QString typeStr = card.kind == game::core::CardKind::Attack ? "攻击型" :
-                              card.kind == game::core::CardKind::Produce ? "生产型" : "治疗型";
-            btn->setText(QString("%1\n%2").arg(card.name).arg(typeStr));
-            QString colorHex = card.themeColor.name();
-            int r = card.themeColor.red(), g = card.themeColor.green(), b = card.themeColor.blue();
-            QString slotDarkBg = QString("rgb(%1,%2,%3)").arg(r*3/10+15).arg(g*3/10+15).arg(b*3/10+15);
-            QString slotMidBg = QString("rgb(%1,%2,%3)").arg(r*4/10+20).arg(g*4/10+20).arg(b*4/10+20);
-            QString slotHoverBg = QString("rgb(%1,%2,%3)").arg(r*5/10+25).arg(g*5/10+25).arg(b*5/10+25);
-            QString slotHoverBg2 = QString("rgb(%1,%2,%3)").arg(r*3/10+30).arg(g*3/10+30).arg(b*3/10+30);
-            btn->setStyleSheet(
-                QString(
-                    "QPushButton {"
-                    "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                    "    stop:0 %1, stop:1 %2);"
-                    "  color: #FFFFFF;"
-                    "  border: 2px solid %3; border-radius: 10px;"
-                    "  font-size: 14px; font-weight: bold;"
-                    "}"
-                    "QPushButton:hover {"
-                    "  background: qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                    "    stop:0 %4, stop:1 %5);"
-                    "  border: 2px solid #FF5252;"
-                    "  color: #FFFFFF;"
-                    "}"
-                )
-                .arg(slotMidBg)
-                .arg(slotDarkBg)
-                .arg(colorHex)
-                .arg(slotHoverBg)
-                .arg(slotHoverBg2)
-            );
+    {
+        static QPixmap artwork(":/images/artwork/deck_atlas.png");
+        for (int i = 0; i < MAX_DECK_SLOTS; ++i) {
+            QPushButton *button = m_slotButtons[i];
+            const int cardIndex = m_selectedSlots[i];
+            if (cardIndex < 0 || cardIndex >= m_allCards.size()
+                || !CardCollection::isOwned(m_allCards[cardIndex].kind)) {
+                m_selectedSlots[i] = -1;
+                button->setIcon(QIcon());
+                button->setText(QString("Empty %1").arg(i + 1));
+                continue;
+            }
+            const QPixmap cardArt = artwork.copy(kCardRects[cardIndex]);
+            button->setText(QString());
+            button->setIcon(QIcon(cardArt));
+            button->setToolTip(QString("%1 - click to remove").arg(m_allCards[cardIndex].name));
         }
+        return;
+    }
+    static QPixmap artwork(":/images/artwork/deck_atlas.png");
+    for (int i = 0; i < MAX_DECK_SLOTS; ++i) {
+        QPushButton *button = m_slotButtons[i];
+        const int cardIndex = m_selectedSlots[i];
+        if (cardIndex < 0 || cardIndex >= m_allCards.size()) {
+            button->setIcon(QIcon());
+            button->setText(QString("空槽位 %1").arg(i + 1));
+            continue;
+        }
+
+        const QPixmap cardArt = artwork.copy(kCardRects[cardIndex]);
+        button->setText(QString());
+        button->setIcon(QIcon(cardArt));
+        button->setToolTip(QString("%1 - 点击移除").arg(m_allCards[cardIndex].name));
     }
 }
 
-// ========== refreshDetailPanel() —— 刷新详细属性面板 ==========
 void DeckPage::refreshDetailPanel(int cardIndex)
 {
-    m_selectedCardIndex = cardIndex;
-    if (cardIndex < 0 || cardIndex >= m_allCards.size()) return;
-
-    const auto &card = m_allCards[cardIndex];
-    QString typeStr = card.kind == game::core::CardKind::Attack ? "攻击型" :
-                      card.kind == game::core::CardKind::Produce ? "生产型" : "治疗型";
-
-    // 使用 HTML 格式化显示
-    QString html = QString(
-        "<h3 style='color:%1;'>📋 %2</h3>"
-        "<p style='color:#E3F2FD;'><b>类型：</b>%3</p>"
-        "<hr style='border-color:rgba(0,212,255,0.2);'>"
-        "<p style='color:#E3F2FD;'><b>❤️ HP：</b>%4</p>"
-        "<p style='color:#E3F2FD;'><b>⚔️ 攻击力：</b>%5</p>"
-        "<p style='color:#E3F2FD;'><b>🎯 射程：</b>%6 格</p>"
-        "<p style='color:#E3F2FD;'><b>⏱️ 攻击间隔：</b>%7s</p>"
-        "<p style='color:#E3F2FD;'><b>🏃 瞬移上限：</b>%8 格</p>"
-        "<p style='color:#E3F2FD;'><b>💰 部署消耗：</b>%9</p>"
-        "<hr style='border-color:rgba(0,212,255,0.2);'>"
-        "<p style='color:#E3F2FD;'><b>🔍 索敌优先级：</b></p>"
-        "<p style='margin-left:10px; color:#8AB4F8;'>%10</p>"
-        "<hr style='border-color:rgba(0,212,255,0.2);'>"
-        "<p style='color:#E3F2FD;'><b>⬆️ 升级消耗：</b></p>"
-        "<p style='margin-left:10px; color:#8AB4F8;'>%11</p>"
-    )
-    .arg(card.themeColor.name())
-    .arg(card.name)
-    .arg(typeStr)
-    .arg(card.maxHp)
-    .arg(card.attack)
-    .arg(card.attackRange)
-    .arg(card.attackInterval)
-    .arg(card.moveLimit)
-    .arg(card.deployCost)
-    .arg(card.priorityDesc)
-    .arg(card.upgradeCostDesc);
-
-    m_detailPanel->setText(html);
-}
-
-// ========== updateStartBattleButton() —— 更新开始战斗按钮 ==========
-void DeckPage::updateStartBattleButton()
-{
-    bool allFilled = true;
-    int filledCount = 0;
-    for (int i = 0; i < MAX_DECK_SLOTS; ++i) {
-        if (m_selectedSlots[i] != -1) filledCount++;
-        else allFilled = false;
+    if (cardIndex < 0 || cardIndex >= m_allCards.size()) {
+        return;
     }
 
-    m_btnStartBattle->setEnabled(allFilled);
-    m_btnStartBattle->setToolTip(
-        allFilled ? "卡组已满，点击开始战斗！" :
-                    QString("还需要选择 %1 张卡牌").arg(MAX_DECK_SLOTS - filledCount));
+    m_selectedCardIndex = cardIndex;
+    for (int i = 0; i < m_cardHotspots.size(); ++i) {
+        m_cardHotspots[i]->setSelected(i == cardIndex);
+    }
+
+    const auto &card = m_allCards[cardIndex];
+    const bool owned = CardCollection::isOwned(card.kind);
+    const int level = CardCollection::level(card.kind);
+    const int fragments = CardCollection::fragments(card.kind);
+    const int upgradeCost = CardCollection::upgradeCost(card.kind);
+    const int battleUpgradeLv2 = game::core::constants::UpgradeBaseCost;
+    const int battleUpgradeLv3 = game::core::constants::UpgradeBaseCost * 2;
+    const int recallPercent = game::core::constants::RecallRefundPercent;
+
+    m_detailPanel->setText(QString(
+        "<div style='font-size:20px; font-weight:800; margin-bottom:10px;'>%1</div>"
+        "<div style='color:#76552d; font-weight:700; margin-bottom:9px;'>%2 | %3</div>"
+        "<hr style='border:0; border-top:1px solid #9b7545;'>"
+        "<table cellspacing='5'>"
+        "<tr><td><b>HP</b></td><td>%4</td></tr>"
+        "<tr><td><b>ATK</b></td><td>%5</td></tr>"
+        "<tr><td><b>Range</b></td><td>%6</td></tr>"
+        "<tr><td><b>Interval</b></td><td>%7 s</td></tr>"
+        "<tr><td><b>Move</b></td><td>%8 cells</td></tr>"
+        "<tr><td><b>Cost</b></td><td>%9 Juice</td></tr>"
+        "</table>"
+        "<hr style='border:0; border-top:1px solid #9b7545;'>"
+        "<div><b>Collection</b><br>Level %10 | Shards %11 | Next Collection Upgrade %12</div>"
+        "<div style='margin-top:9px;'><b>Battle Upgrade</b><br>Lv1 → Lv2: %13 Juice | Lv2 → Lv3: %14 Juice | Recall refund: %15%% deploy cost</div>"
+        "<div style='margin-top:9px;'><b>Skill</b><br>%16</div>"
+        "<div style='margin-top:9px;'><b>Target Priority</b><br>%17</div>")
+        .arg(card.name)
+        .arg(cardTypeText(card.kind))
+        .arg(owned ? "Owned" : "Locked")
+        .arg(card.maxHp)
+        .arg(card.attack)
+        .arg(card.attackRange)
+        .arg(card.attackInterval)
+        .arg(card.moveLimit)
+        .arg(card.deployCost)
+        .arg(level)
+        .arg(fragments)
+        .arg(upgradeCost > 0 ? QString("%1 shards").arg(upgradeCost) : QString("Max"))
+        .arg(battleUpgradeLv2)
+        .arg(battleUpgradeLv3)
+        .arg(recallPercent)
+        .arg(card.skillDesc)
+        .arg(card.priorityDesc));
+    refreshCollectionDisplay();
 }
 
-// ========== getSelectedKinds() —— 获取选定的 CardKind 列表 ==========
+void DeckPage::updateStartBattleButton()
+{
+    {
+        int filledCount = 0;
+        for (int value : m_selectedSlots) {
+            if (value >= 0
+                && value < m_allCards.size()
+                && CardCollection::isOwned(m_allCards[value].kind)) {
+                ++filledCount;
+            }
+        }
+        const bool complete = filledCount == MAX_DECK_SLOTS;
+        m_btnStartBattle->setEnabled(complete);
+        m_btnStartBattle->setToolTip(
+            complete ? "Start battle" : QString("Choose %1 more owned cards").arg(MAX_DECK_SLOTS - filledCount));
+        if (m_startHotspot) {
+            m_startHotspot->setSelected(complete);
+        }
+        return;
+    }
+    int filledCount = 0;
+    for (int value : m_selectedSlots) {
+        if (value >= 0) {
+            ++filledCount;
+        }
+    }
+    const bool complete = filledCount == MAX_DECK_SLOTS;
+    m_btnStartBattle->setEnabled(complete);
+    m_btnStartBattle->setToolTip(
+        complete ? "开始战斗" : QString("还需要选择 %1 张卡牌").arg(MAX_DECK_SLOTS - filledCount));
+    if (m_startHotspot) {
+        m_startHotspot->setSelected(complete);
+    }
+}
+
 QVector<game::core::CardKind> DeckPage::getSelectedKinds() const
 {
+    {
+        QVector<game::core::CardKind> kinds;
+        for (int cardIndex : m_selectedSlots) {
+            if (cardIndex >= 0
+                && cardIndex < m_allCards.size()
+                && CardCollection::isOwned(m_allCards[cardIndex].kind)) {
+                kinds.append(m_allCards[cardIndex].kind);
+            }
+        }
+        return kinds;
+    }
     QVector<game::core::CardKind> kinds;
-    for (int i = 0; i < MAX_DECK_SLOTS; ++i) {
-        if (m_selectedSlots[i] != -1) {
-            kinds.append(m_allCards[m_selectedSlots[i]].kind);
+    for (int cardIndex : m_selectedSlots) {
+        if (cardIndex >= 0 && cardIndex < m_allCards.size()) {
+            kinds.append(m_allCards[cardIndex].kind);
         }
     }
     return kinds;
 }
 
-// ========== connectSignals() —— 连接信号槽 ==========
+void DeckPage::refreshCollectionDisplay()
+{
+    if (!m_ticketLabel) return;
+    m_ticketLabel->setText(QString("Tickets %1").arg(CardCollection::tickets()));
+
+    for (int i = 0; i < m_cardLockLabels.size() && i < m_allCards.size(); ++i) {
+        const bool owned = CardCollection::isOwned(m_allCards[i].kind);
+        m_cardHotspots[i]->setToolTip(owned
+            ? QString("%1  Lv%2  Shards %3")
+                  .arg(m_allCards[i].name)
+                  .arg(CardCollection::level(m_allCards[i].kind))
+                  .arg(CardCollection::fragments(m_allCards[i].kind))
+            : QString("%1 - locked, draw to unlock").arg(m_allCards[i].name));
+    }
+
+    if (m_selectedCardIndex >= 0 && m_selectedCardIndex < m_allCards.size()) {
+        const auto kind = m_allCards[m_selectedCardIndex].kind;
+        m_btnUpgradeCard->setVisible(CardCollection::isOwned(kind));
+        m_btnUpgradeCard->setEnabled(CardCollection::canUpgrade(kind));
+        const int cost = CardCollection::upgradeCost(kind);
+        m_btnUpgradeCard->setText(cost > 0
+                                      ? QString("Lv Up %1/%2")
+                                            .arg(CardCollection::fragments(kind))
+                                            .arg(cost)
+                                      : "Max Lv");
+    }
+    updateLockLabelVisibilityForOverlay();
+    refreshDeckSlotsDisplay();
+    updateStartBattleButton();
+}
+
+void DeckPage::ensureDrawCardWidgets(int count)
+{
+    while (m_drawCardFrames.size() < count) {
+        auto *frame = new QWidget(m_drawCardsPanel);
+        frame->hide();
+        frame->setStyleSheet(
+            "QWidget { background: rgba(246,228,179,0.98);"
+            " border: 2px solid rgba(112,72,33,0.92); border-radius: 10px; }");
+
+        auto *artLabel = new QLabel(frame);
+        artLabel->setAlignment(Qt::AlignCenter);
+        artLabel->setStyleSheet("QLabel { background: transparent; border: none; }");
+
+        auto *nameLabel = new QLabel(frame);
+        nameLabel->setAlignment(Qt::AlignCenter);
+        nameLabel->setWordWrap(true);
+        nameLabel->setStyleSheet(
+            "QLabel { color:#362313; background: transparent; border: none;"
+            " font-size:12px; font-weight:900; padding:0px 4px; }");
+
+        auto *badgeLabel = new QLabel(frame);
+        badgeLabel->setAlignment(Qt::AlignCenter);
+        badgeLabel->setStyleSheet(
+            "QLabel { color:#2d1b0f; background: rgba(255,236,167,0.96);"
+            " border: 2px solid rgba(148,104,38,0.95); border-radius: 10px;"
+            " font-size:11px; font-weight:900; padding:1px 6px; }");
+
+        m_drawCardFrames.append(frame);
+        m_drawCardArtLabels.append(artLabel);
+        m_drawCardNameLabels.append(nameLabel);
+        m_drawCardBadgeLabels.append(badgeLabel);
+    }
+}
+
+void DeckPage::layoutDrawCards()
+{
+    if (!m_drawCardsPanel) return;
+
+    const QRect panelRect = m_drawCardsPanel->rect();
+    const int count = m_lastDrawResultCount;
+    for (int i = 0; i < m_drawCardFrames.size(); ++i) {
+        const bool visible = i < count;
+        m_drawCardFrames[i]->setVisible(visible);
+        if (!visible) {
+            continue;
+        }
+
+        QRect frameRect;
+        if (count == 1) {
+            const int width = qMin(panelRect.width(), qMax(220, panelRect.width() * 45 / 100));
+            const int height = panelRect.height();
+            frameRect = QRect((panelRect.width() - width) / 2, 0, width, height);
+        } else {
+            const int columns = qMin(5, count);
+            const int rows = (count + columns - 1) / columns;
+            const int gap = qMax(8, qMin(panelRect.width(), panelRect.height()) / 28);
+            const int tileW = (panelRect.width() - gap * (columns - 1)) / columns;
+            const int tileH = (panelRect.height() - gap * qMax(0, rows - 1)) / qMax(1, rows);
+            const int row = i / columns;
+            const int col = i % columns;
+            frameRect = QRect(col * (tileW + gap), row * (tileH + gap), tileW, tileH);
+        }
+
+        m_drawCardFrames[i]->setGeometry(frameRect);
+
+        const int badgeW = qMin(frameRect.width() - 12, qMax(70, frameRect.width() / 2));
+        const int badgeH = qBound(22, frameRect.height() / 7, 30);
+        m_drawCardBadgeLabels[i]->setGeometry(frameRect.width() - badgeW - 8, 8, badgeW, badgeH);
+
+        const int nameH = qBound(28, frameRect.height() / 5, 48);
+        m_drawCardNameLabels[i]->setGeometry(8, frameRect.height() - nameH - 8,
+                                             frameRect.width() - 16, nameH);
+
+        const QRect artRect(8, 12 + badgeH, frameRect.width() - 16,
+                            qMax(40, frameRect.height() - nameH - badgeH - 28));
+        m_drawCardArtLabels[i]->setGeometry(artRect);
+
+        const int cardIndex = m_drawCardFrames[i]->property("cardIndex").toInt();
+        if (cardIndex >= 0 && cardIndex < kCardRects.size()) {
+            static QPixmap artwork(":/images/artwork/deck_atlas.png");
+            const QPixmap cardArt = artwork.copy(kCardRects[cardIndex]);
+            m_drawCardArtLabels[i]->setPixmap(cardArt.scaled(
+                artRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        }
+    }
+}
+
+void DeckPage::clearDrawCards()
+{
+    m_lastDrawResultCount = 0;
+    for (int i = 0; i < m_drawCardFrames.size(); ++i) {
+        m_drawCardFrames[i]->hide();
+        m_drawCardArtLabels[i]->clear();
+        m_drawCardNameLabels[i]->clear();
+        m_drawCardBadgeLabels[i]->clear();
+        m_drawCardFrames[i]->setProperty("cardIndex", -1);
+    }
+}
+
+void DeckPage::showDrawInstructions()
+{
+    clearDrawCards();
+    m_drawTitleLabel->setText("Supply Draw");
+    m_drawBodyLabel->setText(
+        QString("Tickets: %1\n\nNew cards unlock unique towers.\nDuplicates become shards for the exact same card.")
+            .arg(CardCollection::tickets()));
+    m_drawBodyLabel->show();
+    m_drawResultLabel->clear();
+    m_drawResultLabel->hide();
+    refreshDrawOverlayLayout();
+}
+
+void DeckPage::populateDrawResults(const QVector<DrawResult>& results)
+{
+    m_lastDrawResultCount = results.size();
+    ensureDrawCardWidgets(results.size());
+
+    int newCount = 0;
+    int shardCount = 0;
+    for (int i = 0; i < results.size(); ++i) {
+        const DrawResult& result = results[i];
+        const int cardIndex = indexForKind(result.kind);
+        m_drawCardFrames[i]->setProperty("cardIndex", cardIndex);
+        m_drawCardNameLabels[i]->setText(cardNameForKind(result.kind));
+        if (result.isNew) {
+            ++newCount;
+            m_drawCardBadgeLabels[i]->setText("NEW");
+            m_drawCardBadgeLabels[i]->setStyleSheet(
+                "QLabel { color:#2d1b0f; background: rgba(255,236,167,0.98);"
+                " border: 2px solid rgba(148,104,38,0.95); border-radius: 10px;"
+                " font-size:11px; font-weight:900; padding:1px 6px; }");
+        } else {
+            shardCount += result.fragmentsGained;
+            m_drawCardBadgeLabels[i]->setText(QString("+%1 shards").arg(result.fragmentsGained));
+            m_drawCardBadgeLabels[i]->setStyleSheet(
+                "QLabel { color:#16351f; background: rgba(199,244,196,0.98);"
+                " border: 2px solid rgba(61,128,76,0.95); border-radius: 10px;"
+                " font-size:11px; font-weight:900; padding:1px 6px; }");
+        }
+    }
+
+    m_drawTitleLabel->setText("Supply Opened");
+    m_drawBodyLabel->hide();
+    m_drawResultLabel->setText(QString(
+        "New cards: %1    Shards: %2\nTickets left: %3")
+        .arg(newCount)
+        .arg(shardCount)
+        .arg(CardCollection::tickets()));
+    m_drawResultLabel->show();
+    refreshDrawOverlayLayout();
+    AudioManager::instance().playCardSelect();
+    for (int i = 0; i < results.size(); ++i) {
+        QWidget *frame = m_drawCardFrames[i];
+        QRect finalRect = frame->geometry();
+        QRect startRect = finalRect.adjusted(finalRect.width() / 10, finalRect.height() / 10,
+                                             -finalRect.width() / 10, -finalRect.height() / 10);
+        frame->setGeometry(startRect);
+        frame->show();
+        frame->raise();
+
+        auto *effect = qobject_cast<QGraphicsOpacityEffect*>(frame->graphicsEffect());
+        if (!effect) {
+            effect = new QGraphicsOpacityEffect(frame);
+            frame->setGraphicsEffect(effect);
+        }
+        effect->setOpacity(0.0);
+
+        auto *group = new QParallelAnimationGroup(frame);
+        auto *move = new QPropertyAnimation(frame, "geometry", group);
+        move->setDuration(260);
+        move->setStartValue(startRect);
+        move->setEndValue(finalRect);
+        move->setEasingCurve(QEasingCurve::OutBack);
+
+        auto *fade = new QPropertyAnimation(effect, "opacity", group);
+        fade->setDuration(220);
+        fade->setStartValue(0.0);
+        fade->setEndValue(1.0);
+
+        QTimer::singleShot(i * 70, frame, [group]() {
+            group->start(QAbstractAnimation::DeleteWhenStopped);
+        });
+    }
+}
+
+void DeckPage::openDrawPanel()
+{
+    showDrawInstructions();
+    setDrawOverlayVisible(true);
+}
+
+void DeckPage::performDraw(int count)
+{
+    const QVector<DrawResult> results = CardCollection::drawMany(count);
+    if (results.isEmpty()) {
+        m_drawTitleLabel->setText("No tickets left");
+        m_drawBodyLabel->setText("Finish a battle to earn more supply tickets.");
+        m_drawBodyLabel->show();
+        m_drawResultLabel->clear();
+        m_drawResultLabel->hide();
+        clearDrawCards();
+        refreshDrawOverlayLayout();
+        refreshCollectionDisplay();
+        return;
+    }
+    populateDrawResults(results);
+    refreshDetailPanel(qMax(0, m_selectedCardIndex));
+    refreshCollectionDisplay();
+}
+
+QString DeckPage::cardNameForKind(game::core::CardKind kind) const
+{
+    return QString::fromUtf8(game::core::cardName(kind));
+}
+
+int DeckPage::indexForKind(game::core::CardKind kind) const
+{
+    for (int i = 0; i < m_allCards.size(); ++i) {
+        if (m_allCards[i].kind == kind) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 void DeckPage::connectSignals()
 {
-    // 返回按钮
     connect(m_btnBack, &QPushButton::clicked, this, &DeckPage::signalBack);
-
-    // 开始战斗按钮 → 发出战斗开始信号 + 卡组选择信号
     connect(m_btnStartBattle, &QPushButton::clicked, this, [this]() {
-        QVector<game::core::CardKind> kinds = getSelectedKinds();
-        emit signalDeckSelected(kinds);   // 传递选定的卡组
+        const QVector<game::core::CardKind> kinds = getSelectedKinds();
+        emit signalDeckSelected(kinds);
         emit signalBattleStart();
     });
+}
+
+void DeckPage::refreshDrawOverlayLayout()
+{
+    if (!m_drawOverlay || !m_drawTitleLabel || !m_drawBodyLabel || !m_drawResultLabel || !m_drawCardsPanel) {
+        return;
+    }
+
+    const QRect overlayRect = m_drawOverlay->rect();
+    const int overlayW = overlayRect.width();
+    const int overlayH = overlayRect.height();
+    const int margin = qMax(18, overlayW / 26);
+    const int gap = qMax(10, overlayW / 42);
+    const int contentW = qMax(0, overlayW - margin * 2);
+    const int buttonW = (overlayW - margin * 2 - gap * 2) / 3;
+    const int buttonH = qBound(42, overlayH / 9, 58);
+    const int buttonY = overlayH - margin - buttonH;
+    const int blockGap = qMax(10, overlayH / 40);
+    const int sectionGap = qMax(14, overlayH / 30);
+    const auto wrappedHeight = [contentW](QLabel *label, int minHeight, int maxHeight) {
+        if (!label || !label->isVisible() || label->text().isEmpty() || contentW <= 0) {
+            return 0;
+        }
+        const QFontMetrics metrics(label->font());
+        const QRect bounds = metrics.boundingRect(QRect(0, 0, contentW, 2000),
+                                                  Qt::TextWordWrap, label->text());
+        return qBound(minHeight, bounds.height() + 8, maxHeight);
+    };
+
+    int top = margin;
+    const int titleH = qBound(42, overlayH / 10, 60);
+    m_drawTitleLabel->setGeometry(margin, top, contentW, titleH);
+    top += titleH + blockGap;
+
+    const int bodyH = wrappedHeight(m_drawBodyLabel, 70, qMax(110, overlayH / 3));
+    if (bodyH > 0) {
+        m_drawBodyLabel->setGeometry(margin, top, contentW, bodyH);
+        top += bodyH + sectionGap;
+    } else {
+        m_drawBodyLabel->setGeometry(0, 0, 0, 0);
+    }
+
+    const int summaryH = wrappedHeight(m_drawResultLabel, 42, qMax(72, overlayH / 5));
+    if (summaryH > 0) {
+        m_drawResultLabel->setGeometry(margin, top, contentW, summaryH);
+        top += summaryH + sectionGap;
+    } else {
+        m_drawResultLabel->setGeometry(0, 0, 0, 0);
+    }
+
+    const int cardsBottom = buttonY - qMax(14, overlayH / 34);
+    const bool showCards = m_lastDrawResultCount > 0;
+    m_drawCardsPanel->setVisible(showCards);
+    m_drawCardsPanel->setGeometry(margin, top, contentW, qMax(0, cardsBottom - top));
+    layoutDrawCards();
+
+    m_btnDrawOne->setGeometry(margin, buttonY, buttonW, buttonH);
+    m_btnDrawTen->setGeometry(margin + buttonW + gap, buttonY, buttonW, buttonH);
+    m_btnCloseDraw->setGeometry(margin + (buttonW + gap) * 2, buttonY, buttonW, buttonH);
+}
+
+void DeckPage::setDrawOverlayVisible(bool visible)
+{
+    m_drawOverlayVisible = visible;
+    if (m_drawOverlay) {
+        m_drawOverlay->setVisible(visible);
+        if (visible) {
+            m_drawOverlay->raise();
+        }
+    }
+    updateLockLabelVisibilityForOverlay();
+    if (!visible) {
+        refreshCollectionDisplay();
+    }
+}
+
+void DeckPage::updateLockLabelVisibilityForOverlay()
+{
+    for (int i = 0; i < m_cardLockLabels.size() && i < m_allCards.size(); ++i) {
+        const bool owned = CardCollection::isOwned(m_allCards[i].kind);
+        if (m_drawOverlayVisible) {
+            m_cardLockLabels[i]->hide();
+            continue;
+        }
+        m_cardLockLabels[i]->setVisible(!owned);
+        if (!owned) {
+            m_cardLockLabels[i]->raise();
+        }
+    }
 }

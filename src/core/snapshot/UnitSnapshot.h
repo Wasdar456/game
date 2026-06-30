@@ -12,6 +12,8 @@ namespace game::core {
 struct UnitSnapshot {
     // 单位 id，与 Card::id() 对应。
     int id = -1;
+    // 卡牌身份，供 UI/回放/收藏精确区分。
+    CardKind kind = CardKind::Attack;
     // 单位类型，决定 UI 图标/贴图。
     ObjectType type = ObjectType::None;
     // 网格位置。
@@ -25,6 +27,7 @@ struct UnitSnapshot {
     int level = 1;
     int range = 0;
     int moveLimit = 0;
+    int deployCost = 0;
 };
 
 } // namespace game::core
