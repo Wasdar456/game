@@ -118,9 +118,6 @@ void BattleManager::update(double deltaSeconds) {
 
     // 最后统一结算死亡奖励和逃逸扣血。
     removeResolvedMonsters();
-    if (isPvp_) {
-        visionManager_.updateVision(map_, cardSystem_.cards(), opponentCardSystem_.cards());
-    }
 }
 
 void BattleManager::clearBattle() {
@@ -139,7 +136,6 @@ void BattleManager::clearBattle() {
     resources_.setBaseHealth(constants::InitialBaseHealth);
     opponentResources_.setResources(constants::InitialResources);
     opponentResources_.setBaseHealth(constants::InitialBaseHealth);
-    visionManager_.clear();
 }
 
 void BattleManager::clearMonsters() {

@@ -51,15 +51,6 @@ std::vector<std::vector<MapPosition>> readRoutes(const QJsonValue& value) {
     return routes;
 }
 
-ViewRect readViewRect(const QJsonObject& object) {
-    ViewRect rect;
-    rect.x = object.value("x").toInt();
-    rect.y = object.value("y").toInt();
-    rect.width = object.value("width").toInt();
-    rect.height = object.value("height").toInt();
-    return rect;
-}
-
 } // namespace
 
 bool MapConfigLoader::loadFromJson(const std::string& path, LoadedMapConfig& config, std::string* error) {
@@ -79,10 +70,8 @@ bool MapConfigLoader::loadFromJson(const std::string& path, LoadedMapConfig& con
     const QJsonObject root = document.object();
     LoadedMapConfig loaded;
     loaded.name = root.value("name").toString().toStdString();
-    loaded.displayName = root.value("displayName").toString().toStdString();
     loaded.mode = root.value("mode").toString("PVE").toUpper().toStdString();
     loaded.image = root.value("image").toString().toStdString();
-    loaded.unitVisualScale = root.value("unitVisualScale").toDouble(0.0);
 
     const QJsonObject grid = root.value("grid").toObject();
     loaded.rows = grid.value("rows").toInt();
@@ -109,16 +98,6 @@ bool MapConfigLoader::loadFromJson(const std::string& path, LoadedMapConfig& con
         loaded.imageOffset.y = imageOffsetObj.value("y").toInt();
     }
 
-    const QJsonObject battleViewRectObj = root.value("battleViewRect").toObject();
-    if (!battleViewRectObj.isEmpty()) {
-        loaded.battleViewRect = readViewRect(battleViewRectObj);
-    }
-
-    const QJsonObject deployViewRectObj = root.value("deployViewRect").toObject();
-    if (!deployViewRectObj.isEmpty()) {
-        loaded.deployViewRect = readViewRect(deployViewRectObj);
-    }
-
     const QJsonArray tiles = root.value("tiles").toArray();
     loaded.tiles.reserve(static_cast<std::size_t>(tiles.size()));
     for (const QJsonValue& value : tiles) {
@@ -140,11 +119,6 @@ bool MapConfigLoader::loadFromJson(const std::string& path, LoadedMapConfig& con
     loaded.spawnB = readPointArray(points.value("SPAWN_B").toArray());
     loaded.coreA = readPointArray(points.value("CORE_A").toArray());
     loaded.coreB = readPointArray(points.value("CORE_B").toArray());
-    loaded.deployA = readPointArray(points.value("DEPLOY_A").toArray());
-    loaded.deployB = readPointArray(points.value("DEPLOY_B").toArray());
-    loaded.deployNeutral = readPointArray(points.value("DEPLOY_NEUTRAL").toArray());
-    loaded.visionBlock = readPointArray(points.value("VISION_BLOCK").toArray());
-    loaded.resource = readPointArray(points.value("RESOURCE").toArray());
 
     const QJsonObject routes = root.value("routes").toObject();
     loaded.routesA = readRoutes(routes.value("A"));

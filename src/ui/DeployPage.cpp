@@ -115,18 +115,11 @@ DeployView::DeployView(QWidget *parent)
     , m_corePos(10, 1)
     , m_mapRows(game::core::constants::DefaultMapRows)
     , m_mapCols(game::core::constants::DefaultMapCols)
-    , m_imageCropX(0)
-    , m_imageCropY(0)
-    , m_imageCropW(0)
-    , m_imageCropH(0)
-    , m_imageOffsetX(0)
-    , m_imageOffsetY(0)
     , m_artworkOverlayMode(false)
     , m_showGrid(true)
     , m_restrictPvpDeployment(false)
     , m_localIsHost(true)
     , m_unitVisualScale(1.0)
-    , m_useAllowedDeployCells(false)
     , m_animFrame(0)
     , m_btnUpgrade(nullptr)
     , m_btnMove(nullptr)
@@ -204,15 +197,7 @@ void DeployView::setMapSize(int rows, int cols)
     m_mapRows = rows;
     m_mapCols = cols;
     if (!m_artworkOverlayMode) {
-        if (!m_backgroundImage.isNull()) {
-            QSize imageSize = m_backgroundImage.size();
-            if (m_imageCropW > 0 && m_imageCropH > 0) {
-                imageSize = QSize(m_imageCropW, m_imageCropH);
-            }
-            this->setFixedSize(imageSize);
-        } else {
-            this->setFixedSize(cols * CELL_SIZE, rows * CELL_SIZE);
-        }
+        this->setFixedSize(cols * CELL_SIZE, rows * CELL_SIZE);
     }
 }
 
@@ -226,63 +211,6 @@ void DeployView::setPvpDeploymentSide(bool enabled, bool isHost)
 void DeployView::setUnitVisualScale(double scale)
 {
     m_unitVisualScale = std::max(0.5, scale);
-    update();
-}
-
-bool DeployView::setBackgroundImage(const QString& path)
-{
-    QPixmap image(path);
-    if (image.isNull()) {
-        m_backgroundImage = QPixmap();
-        update();
-        return false;
-    }
-    m_backgroundImage = image;
-    if (!m_artworkOverlayMode && m_mapRows > 0 && m_mapCols > 0) {
-        QSize imageSize = m_backgroundImage.size();
-        if (m_imageCropW > 0 && m_imageCropH > 0) {
-            imageSize = QSize(m_imageCropW, m_imageCropH);
-        }
-        this->setFixedSize(imageSize);
-    }
-    update();
-    return true;
-}
-
-void DeployView::clearBackgroundImage()
-{
-    m_backgroundImage = QPixmap();
-    if (!m_artworkOverlayMode && m_mapRows > 0 && m_mapCols > 0) {
-        this->setFixedSize(m_mapCols * CELL_SIZE, m_mapRows * CELL_SIZE);
-    }
-    update();
-}
-
-void DeployView::setImageCrop(int x, int y, int w, int h)
-{
-    m_imageCropX = x;
-    m_imageCropY = y;
-    m_imageCropW = w;
-    m_imageCropH = h;
-}
-
-void DeployView::setImageOffset(int x, int y)
-{
-    m_imageOffsetX = x;
-    m_imageOffsetY = y;
-}
-
-void DeployView::setAllowedDeployCells(const std::vector<game::core::MapPosition>& cells)
-{
-    m_useAllowedDeployCells = true;
-    m_allowedDeployCells = {cells.begin(), cells.end()};
-    update();
-}
-
-void DeployView::clearAllowedDeployCells()
-{
-    m_useAllowedDeployCells = false;
-    m_allowedDeployCells.clear();
     update();
 }
 
@@ -320,22 +248,12 @@ void DeployView::setArtworkOverlayMode(bool enabled)
 
 double DeployView::cellWidth() const
 {
-    if (m_mapCols <= 0) return CELL_SIZE;
-    if (!m_backgroundImage.isNull() && m_imageCropW > 0 && m_imageCropH > 0) {
-        const double imageScale = static_cast<double>(width()) / m_imageCropW;
-        return (m_imageCropW * imageScale) / m_mapCols;
-    }
-    return static_cast<double>(width()) / m_mapCols;
+    return m_mapCols > 0 ? static_cast<double>(width()) / m_mapCols : CELL_SIZE;
 }
 
 double DeployView::cellHeight() const
 {
-    if (m_mapRows <= 0) return CELL_SIZE;
-    if (!m_backgroundImage.isNull() && m_imageCropW > 0 && m_imageCropH > 0) {
-        const double imageScale = static_cast<double>(height()) / m_imageCropH;
-        return (m_imageCropH * imageScale) / m_mapRows;
-    }
-    return static_cast<double>(height()) / m_mapRows;
+    return m_mapRows > 0 ? static_cast<double>(height()) / m_mapRows : CELL_SIZE;
 }
 
 double DeployView::cellExtent() const
@@ -345,9 +263,7 @@ double DeployView::cellExtent() const
 
 QRectF DeployView::cellRect(int row, int col) const
 {
-    const double ox = m_backgroundImage.isNull() ? 0.0 : m_imageOffsetX;
-    const double oy = m_backgroundImage.isNull() ? 0.0 : m_imageOffsetY;
-    return QRectF(ox + col * cellWidth(), oy + row * cellHeight(), cellWidth(), cellHeight());
+    return QRectF(col * cellWidth(), row * cellHeight(), cellWidth(), cellHeight());
 }
 
 QPointF DeployView::cellCenter(int row, int col) const
@@ -357,16 +273,12 @@ QPointF DeployView::cellCenter(int row, int col) const
 
 int DeployView::rowAtPixel(int y) const
 {
-    if (cellHeight() <= 0.0) return -1;
-    const double oy = m_backgroundImage.isNull() ? 0.0 : m_imageOffsetY;
-    return static_cast<int>(std::floor((y - oy) / cellHeight()));
+    return cellHeight() > 0.0 ? static_cast<int>(std::floor(y / cellHeight())) : -1;
 }
 
 int DeployView::colAtPixel(int x) const
 {
-    if (cellWidth() <= 0.0) return -1;
-    const double ox = m_backgroundImage.isNull() ? 0.0 : m_imageOffsetX;
-    return static_cast<int>(std::floor((x - ox) / cellWidth()));
+    return cellWidth() > 0.0 ? static_cast<int>(std::floor(x / cellWidth())) : -1;
 }
 
 void DeployView::updateFromSnapshot(const game::core::BattleSnapshot &snapshot)
@@ -441,31 +353,12 @@ void DeployView::setShowGrid(bool show)
 
 void DeployView::drawTerrain(QPainter &painter)
 {
-    const bool hasImage = !m_backgroundImage.isNull();
-
-    if (m_artworkOverlayMode && !hasImage) {
+    if (m_artworkOverlayMode) {
         return;
-    }
-
-    if (hasImage) {
-        if (m_imageCropW > 0 && m_imageCropH > 0) {
-            painter.drawPixmap(rect(),
-                               m_backgroundImage,
-                               QRect(m_imageCropX, m_imageCropY, m_imageCropW, m_imageCropH));
-        } else {
-            painter.drawPixmap(rect(), m_backgroundImage);
-        }
     }
 
     for (const auto &grid : m_snapshot.map.grids) {
         QRectF cell = cellRect(grid.row, grid.col);
-
-        if (hasImage) {
-            painter.setPen(QPen(QColor(0, 0, 0, 25), 1));
-            painter.setBrush(Qt::NoBrush);
-            painter.drawRect(cell);
-            continue;
-        }
 
         QColor color;
         switch (grid.terrain) {
@@ -528,7 +421,8 @@ void DeployView::drawDeployable(QPainter &painter)
         if (!grid.occupied &&
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
-            if (!isDeploymentCellAllowed({grid.row, grid.col})) {
+            if (m_restrictPvpDeployment &&
+                !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {grid.row, grid.col})) {
                 continue;
             }
             QRectF cell = cellRect(grid.row, grid.col);
@@ -723,7 +617,8 @@ void DeployView::mousePressEvent(QMouseEvent *event)
             !grid.occupied &&
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
-            if (!isDeploymentCellAllowed({row, col})) {
+            if (m_restrictPvpDeployment &&
+                !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {row, col})) {
                 break;
             }
             canDeploy = true;
@@ -745,24 +640,14 @@ QVector<game::core::MapPosition> DeployView::getDeployableCells() const
         if (!grid.occupied &&
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
-            if (!isDeploymentCellAllowed({grid.row, grid.col})) {
+            if (m_restrictPvpDeployment &&
+                !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {grid.row, grid.col})) {
                 continue;
             }
             result.append(game::core::MapPosition(grid.row, grid.col));
         }
     }
     return result;
-}
-
-bool DeployView::isDeploymentCellAllowed(game::core::MapPosition position) const
-{
-    if (m_useAllowedDeployCells) {
-        return m_allowedDeployCells.find(position) != m_allowedDeployCells.end();
-    }
-    if (m_restrictPvpDeployment) {
-        return game::ui::isPvpDeploymentCellForHost(m_localIsHost, position);
-    }
-    return true;
 }
 
 QVector<game::core::MapPosition> DeployView::getMovableCells(int unitId) const
@@ -905,20 +790,16 @@ void DeployPage::paintEvent(QPaintEvent *event)
                       designRect.width() * sx,
                       designRect.height() * sy);
     };
+    const auto pvpLayout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
 
     if (!m_pvpArtwork.isNull()) {
-        if (!m_activeMapScene.imageResourcePath.isEmpty()) {
-            const QPixmap mapArtwork(m_activeMapScene.imageResourcePath);
-            if (!mapArtwork.isNull()) {
-                const auto& crop = m_activeMapScene.config.imageCrop;
-                const QRectF source(crop.x, crop.y, crop.width, crop.height);
-                const QRectF fallbackSource(mapArtwork.rect());
-                painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
-                                   mapArtwork,
-                                   source.isValid() ? source : fallbackSource);
-            }
+        if (m_netCtx.pvpMapId == "pvp_office_panic" && !m_pvpOfficeMapArtwork.isNull()) {
+            painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
+                               m_pvpOfficeMapArtwork, pvpLayout.backgroundSourceRect);
+        } else {
+            painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
+                               m_pvpArtwork, pvpLayout.backgroundSourceRect);
         }
-
         painter.drawPixmap(mapped(QRectF(0, 0, 1672, 126)),
                            m_pvpArtwork, QRectF(0, 0, 1672, 126));
         painter.drawPixmap(mapped(QRectF(0, 690, 1672, 251)),
@@ -943,8 +824,6 @@ void DeployPage::setNetworkContext(const NetworkContext& ctx)
     m_netCtx = ctx;
     m_isPvp = ctx.isPvp;
     m_isHost = ctx.isHost;
-    loadActiveMapScene();
-    applyMapSceneToDeployView();
     if (m_deployView) {
         m_deployView->setPvpDeploymentSide(m_isPvp, m_isHost);
     }
@@ -1047,75 +926,12 @@ QRect DeployPage::artworkRect() const
                  fitted.width(), fitted.height());
 }
 
-void DeployPage::loadActiveMapScene()
-{
-    const QString mapId = m_netCtx.pvpMapId.isEmpty() ? QString("pvp_sunny_beach") : m_netCtx.pvpMapId;
-    QString warning;
-    m_activeMapScene = game::ui::resolveMapScene(mapId, true, &warning);
-    if (!warning.isEmpty()) {
-        qWarning() << "[DeployPage]" << warning;
-    }
-}
-
-void DeployPage::applyMapSceneToDeployView()
-{
-    if (!m_deployView) return;
-
-    m_deployView->clearBackgroundImage();
-    m_deployView->setImageCrop(0, 0, 0, 0);
-    m_deployView->setImageOffset(0, 0);
-    const double visualScale = m_activeMapScene.config.unitVisualScale > 0.0
-                                   ? m_activeMapScene.config.unitVisualScale
-                                   : 1.0;
-    m_deployView->setUnitVisualScale(visualScale);
-}
-
-void DeployPage::refreshLocalVisionAndDeployMask()
-{
-    if (!m_battleManager || !m_deployView) return;
-
-    auto& vision = m_battleManager->visionManager();
-    vision.setVisionBlocks(game::ui::coreVisionBlockersForScene(m_activeMapScene));
-    vision.updateVision(m_battleManager->map(),
-                        m_battleManager->cardSystem().cards(),
-                        m_battleManager->opponentCardSystem().cards());
-
-    const auto& visible = m_isHost ? vision.visionCellsA() : vision.visionCellsB();
-    std::vector<game::core::MapPosition> allowed;
-    for (const auto& pos : m_battleManager->map().deployableCells()) {
-        if (!game::ui::isSceneDeploymentCellForSide(m_activeMapScene, m_isHost, pos)) {
-            continue;
-        }
-        if (!visible.empty() && visible.find(pos) == visible.end()) {
-            continue;
-        }
-        allowed.push_back(pos);
-    }
-    m_deployView->setAllowedDeployCells(allowed);
-}
-
-void DeployPage::updateDeployViewSnapshot(const game::core::BattleSnapshot& snapshot)
-{
-    refreshLocalVisionAndDeployMask();
-    m_deployView->updateFromSnapshot(snapshot);
-}
-
-bool DeployPage::canLocalPvpDeployAt(game::core::MapPosition pos) const
-{
-    if (!m_isPvp || !m_battleManager) return true;
-    if (!game::ui::isSceneDeploymentCellForSide(m_activeMapScene, m_isHost, pos)) {
-        return false;
-    }
-    const auto& vision = m_battleManager->visionManager();
-    const auto& visible = m_isHost ? vision.visionCellsA() : vision.visionCellsB();
-    return visible.empty() || visible.find(pos) != visible.end();
-}
-
 void DeployPage::layoutArtworkUi()
 {
     if (!m_deployView) return;
 
     const QRect canvas = artworkRect();
+    const auto pvpLayout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
     const qreal sx = canvas.width() / 1672.0;
     const qreal sy = canvas.height() / 941.0;
     auto mapped = [&](const QRectF &designRect) {
@@ -1161,10 +977,8 @@ void DeployPage::layoutArtworkUi()
         label->setStyleSheet(cardCostStyle);
     }
 
-    const QRectF deployRect = m_isPvp
-                                  ? game::ui::mapViewRectOrDefault(m_activeMapScene.config.deployViewRect,
-                                                                   QRectF(174, 126, 1324, 552))
-                                  : QRectF(174, 126, 1324, 552);
+    const QRectF deployRect = m_isPvp ? pvpLayout.deployViewRect
+                                      : QRectF(174, 126, 1324, 552);
     m_deployView->setGeometry(mapped(deployRect));
     m_titleLabel->setGeometry(mapped(QRectF(135, 35, 126, 50)));
     m_localCoreLabel->setGeometry(mapped(QRectF(615, 29, 210, 50)));
@@ -1238,7 +1052,7 @@ void DeployPage::connectSignals()
     connect(m_deployView, &DeployView::signalDeployCard,
             this, [this](game::core::CardKind kind, game::core::MapPosition pos) {
         if (m_battleManager) {
-            if (m_isPvp && !canLocalPvpDeployAt(pos)) {
+            if (m_isPvp && !game::ui::isPvpDeploymentCellForHost(m_isHost, pos)) {
                 return;
             }
             auto result = m_battleManager->deployCard(kind, pos);
@@ -1250,7 +1064,7 @@ void DeployPage::connectSignals()
                 }
 
                 game::core::BattleSnapshot snap = m_battleManager->snapshot();
-                updateDeployViewSnapshot(snap);
+                m_deployView->updateFromSnapshot(snap);
                 updateDeployCount();
             }
         }
@@ -1350,7 +1164,7 @@ void DeployPage::initDeployment()
     m_opponentLabel->setText("Syncing");
 
     game::core::BattleSnapshot snap = m_battleManager->snapshot();
-    updateDeployViewSnapshot(snap);
+    m_deployView->updateFromSnapshot(snap);
 }
 
 // ========== setupCardButtonConnections() —— 设置卡牌按钮连接（只调用一次） ==========
@@ -1387,20 +1201,15 @@ void DeployPage::setupCardButtonConnections()
 void DeployPage::setupMap()
 {
     auto& map = m_battleManager->map();
-    loadActiveMapScene();
-    applyMapSceneToDeployView();
-    game::ui::applyLoadedMapToCoreMap(map, m_activeMapScene.config);
+    const auto layout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
+    game::ui::applyPvpMapLayout(map, layout);
 
     m_battleManager->rebuildMapOccupancy();
-    m_battleManager->setPaths(game::ui::combinedRoutesForScene(m_activeMapScene));
+    m_battleManager->setPaths({layout.pathToA, layout.pathToB});
     m_deployView->setMapSize(map.rows(), map.cols());
-    m_deployView->m_spawnPos = game::ui::localSpawnForScene(m_activeMapScene, m_isHost);
-    m_deployView->m_corePos = game::ui::localCoreForScene(m_activeMapScene, m_isHost);
-    auto& vision = m_battleManager->visionManager();
-    vision.setVisionBlocks(game::ui::coreVisionBlockersForScene(m_activeMapScene));
-    vision.initDefaultVision(game::ui::localCoreForScene(m_activeMapScene, true),
-                             game::ui::localCoreForScene(m_activeMapScene, false));
-    refreshLocalVisionAndDeployMask();
+    m_deployView->setUnitVisualScale(layout.unitVisualScale);
+    m_deployView->m_spawnPos = layout.spawnA;
+    m_deployView->m_corePos = m_isHost ? layout.coreA : layout.coreB;
 }
 
 void DeployPage::updateDeployCount()
@@ -1424,7 +1233,7 @@ void DeployPage::refreshSnapshot()
     }
     m_deployedCount = deployed;
     updateDeployCount();
-    updateDeployViewSnapshot(m_battleManager->snapshot());
+    m_deployView->updateFromSnapshot(m_battleManager->snapshot());
 }
 
 // ========== reEnter() —— 重新进入部署阶段 ==========
@@ -1457,7 +1266,7 @@ void DeployPage::reEnter()
 
     // 渲染
     game::core::BattleSnapshot snap = m_battleManager->snapshot();
-    updateDeployViewSnapshot(snap);
+    m_deployView->updateFromSnapshot(snap);
 }
 
 void DeployPage::setShowGrid(bool show)

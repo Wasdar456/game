@@ -4,7 +4,6 @@
   "displayName": "Office Panic",
   "mode": "PVP",
   "image": "battle_pvp_office_map.png",
-  "unitVisualScale": 1.12,
   "grid": {
     "rows": 10,
     "cols": 28,
@@ -17,18 +16,6 @@
     "y": 120,
     "width": 1672,
     "height": 604
-  },
-  "battleViewRect": {
-    "x": 174,
-    "y": 126,
-    "width": 1324,
-    "height": 552
-  },
-  "deployViewRect": {
-    "x": 174,
-    "y": 126,
-    "width": 1324,
-    "height": 552
   },
   "points": {
     "SPAWN_A": [

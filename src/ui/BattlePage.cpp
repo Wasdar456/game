@@ -37,6 +37,9 @@
 #include <QtMath>
 #include <QDebug>
 #include <QtEndian>
+#include <QCoreApplication>
+#include <QFileInfo>
+#include <QDir>
 #include <QKeyEvent>
 #include <QResizeEvent>
 #include <QSettings>
@@ -54,6 +57,7 @@
 #include "core/systems/ResourceManager.h"  // 资源管理
 #include "network/protocol/BattleStateCodec.h"
 #include "core/base/Constants.h"           // 游戏常量
+#include "core/map/MapConfigLoader.h"
 
 // ========== 引入网络模块头文件 ==========
 #include "network/session/GameServer.h"
@@ -64,9 +68,54 @@ namespace {
 constexpr int MaxBattleImageWidth = 1180;
 constexpr int MaxBattleImageHeight = 560;
 
+QString findProjectFile(const QString& relativePath)
+{
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString cwd = QDir::currentPath();
+    const QStringList candidates = {
+        QDir(cwd).filePath(relativePath),
+        QDir(appDir).filePath(relativePath),
+        QDir(appDir).filePath("../" + relativePath),
+        QDir(appDir).filePath("../../" + relativePath),
+        QDir(appDir).filePath("../../../" + relativePath)
+    };
+    for (const QString& candidate : candidates) {
+        QFileInfo info(candidate);
+        if (info.exists() && info.isFile()) return info.absoluteFilePath();
+    }
+    return {};
+}
+
+game::core::TerrainType terrainFromMapTile(const std::string& type)
+{
+    if (type == "PATH_A" || type == "PATH_B" || type == "PATH_SHARED") {
+        return game::core::TerrainType::Path;
+    }
+    if (type == "SPAWN_A" || type == "SPAWN_B") return game::core::TerrainType::SpawnPoint;
+    if (type == "CORE_A") return game::core::TerrainType::CoreA;
+    if (type == "CORE_B") return game::core::TerrainType::CoreB;
+    if (type == "DEPLOY_A" || type == "DEPLOY_B" || type == "DEPLOY_NEUTRAL") {
+        return game::core::TerrainType::FlatLand;
+    }
+    if (type == "HIGH_GROUND") return game::core::TerrainType::HighGround;
+    return game::core::TerrainType::NoDeploy;
+}
+
+int terrainHeightFromMapTile(const std::string& type)
+{
+    return type == "HIGH_GROUND" ? 1 : 0;
+}
+
 QString cardDisplayName(game::core::CardKind kind)
 {
     return QString::fromUtf8(game::core::cardName(kind));
+}
+
+QString mapDisplayName(const QString& mapId)
+{
+    if (mapId == "lab_map_02") return "Sunny Beach";
+    if (mapId == "lab_map_01") return "Office Panic";
+    return "Jungle Ruins";
 }
 
 QString replayUnitName(const game::core::UnitSnapshot& unit)
@@ -265,7 +314,6 @@ BattleView::BattleView(QWidget *parent)
     , m_showGrid(true)
     , m_restrictPvpDeployment(false)
     , m_unitVisualScale(1.0)
-    , m_useAllowedDeployCells(false)
 {
     setMapSize(m_mapRows, m_mapCols);
 
@@ -388,26 +436,13 @@ void BattleView::setUnitVisualScale(double scale)
     update();
 }
 
-void BattleView::setAllowedDeployCells(const std::vector<game::core::MapPosition>& cells)
-{
-    m_useAllowedDeployCells = true;
-    m_allowedDeployCells = {cells.begin(), cells.end()};
-    update();
-}
-
-void BattleView::clearAllowedDeployCells()
-{
-    m_useAllowedDeployCells = false;
-    m_allowedDeployCells.clear();
-    update();
-}
-
 void BattleView::setArtworkOverlayMode(bool enabled)
 {
     m_artworkOverlayMode = enabled;
     setAttribute(Qt::WA_TranslucentBackground, enabled);
     setAutoFillBackground(!enabled);
     if (enabled) {
+        m_backgroundImage = QPixmap();
         setMinimumSize(0, 0);
         setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
         setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
@@ -426,8 +461,14 @@ bool BattleView::setBackgroundImage(const QString& path)
         return false;
     }
 
+    if (m_artworkOverlayMode) {
+        m_backgroundImage = QPixmap();
+        update();
+        return true;
+    }
+
     m_backgroundImage = image;
-    if (!m_artworkOverlayMode && m_mapRows > 0 && m_mapCols > 0) {
+    if (m_mapRows > 0 && m_mapCols > 0) {
         QSize imageSize = m_backgroundImage.size();
         if (m_imageCropW > 0 && m_imageCropH > 0) {
             imageSize = QSize(m_imageCropW, m_imageCropH);
@@ -651,7 +692,7 @@ void BattleView::drawTerrain(QPainter &painter)
 {
     const bool hasImage = !m_backgroundImage.isNull();
 
-    if (m_artworkOverlayMode && !hasImage) {
+    if (m_artworkOverlayMode) {
         return;
     }
 
@@ -1264,7 +1305,8 @@ void BattleView::mousePressEvent(QMouseEvent *event)
                 !grid.occupied &&
                 (grid.terrain == game::core::TerrainType::FlatLand ||
                  grid.terrain == game::core::TerrainType::HighGround)) {
-                if (!isDeploymentCellAllowed({row, col})) {
+                if (m_restrictPvpDeployment &&
+                    !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {row, col})) {
                     break;
                 }
                 canDeploy = true;
@@ -1389,24 +1431,14 @@ QVector<game::core::MapPosition> BattleView::getDeployableCells() const
         if (!grid.occupied &&
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
-            if (!isDeploymentCellAllowed({grid.row, grid.col})) {
+            if (m_restrictPvpDeployment &&
+                !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {grid.row, grid.col})) {
                 continue;
             }
             result.append(game::core::MapPosition(grid.row, grid.col));
         }
     }
     return result;
-}
-
-bool BattleView::isDeploymentCellAllowed(game::core::MapPosition position) const
-{
-    if (m_useAllowedDeployCells) {
-        return m_allowedDeployCells.find(position) != m_allowedDeployCells.end();
-    }
-    if (m_restrictPvpDeployment) {
-        return game::ui::isPvpDeploymentCellForHost(m_localIsHost, position);
-    }
-    return true;
 }
 
 QVector<game::core::MapPosition> BattleView::getMovableCells(int unitId) const
@@ -1802,108 +1834,6 @@ void BattlePage::updateTutorialTargets()
         m_coreHpLabel ? m_coreHpLabel->geometry() : QRect());
 }
 
-QString BattlePage::activeMapDisplayName() const
-{
-    if (!m_activeMapScene.displayName.isEmpty()) {
-        return m_activeMapScene.displayName;
-    }
-    return game::ui::fallbackMapDisplayName(m_isPvp ? m_netCtx.pvpMapId : m_activePveMapId,
-                                            m_isPvp);
-}
-
-void BattlePage::loadActiveMapScene()
-{
-    const QString mapId = m_isPvp
-                              ? (m_netCtx.pvpMapId.isEmpty() ? QString("pvp_sunny_beach")
-                                                             : m_netCtx.pvpMapId)
-                              : m_activePveMapId;
-    QString warning;
-    m_activeMapScene = game::ui::resolveMapScene(mapId, m_isPvp, &warning);
-    if (!warning.isEmpty()) {
-        qWarning() << "[BattlePage]" << warning;
-    }
-}
-
-void BattlePage::applyMapSceneToBattleView()
-{
-    if (!m_battleView) return;
-
-    if (m_isPvp) {
-        // PVP map art is drawn at page level in the original 1672x604 design slot.
-        // The view stays as a transparent gameplay overlay so the image is not stretched.
-        m_battleView->clearBackgroundImage();
-        m_battleView->setImageCrop(0, 0, 0, 0);
-        m_battleView->setImageOffset(0, 0);
-    } else if (m_activePveMapId != "island_pve") {
-        if (!m_activeMapScene.imageResourcePath.isEmpty()) {
-            m_battleView->setBackgroundImage(m_activeMapScene.imageResourcePath);
-        } else {
-            m_battleView->clearBackgroundImage();
-        }
-        m_battleView->setImageCrop(m_activeMapScene.config.imageCrop.x,
-                                   m_activeMapScene.config.imageCrop.y,
-                                   m_activeMapScene.config.imageCrop.width,
-                                   m_activeMapScene.config.imageCrop.height);
-        m_battleView->setImageOffset(m_activeMapScene.config.imageOffset.x,
-                                     m_activeMapScene.config.imageOffset.y);
-    } else {
-        m_battleView->clearBackgroundImage();
-        m_battleView->setImageCrop(0, 0, 0, 0);
-        m_battleView->setImageOffset(0, 0);
-    }
-
-    const double visualScale = m_activeMapScene.config.unitVisualScale > 0.0
-                                   ? m_activeMapScene.config.unitVisualScale
-                                   : 1.0;
-    m_battleView->setUnitVisualScale(visualScale);
-}
-
-void BattlePage::refreshLocalVisionAndDeployMask()
-{
-    if (!m_battleManager || !m_battleView) return;
-
-    if (!m_isPvp) {
-        m_battleView->clearAllowedDeployCells();
-        return;
-    }
-
-    auto& vision = m_battleManager->visionManager();
-    vision.setVisionBlocks(game::ui::coreVisionBlockersForScene(m_activeMapScene));
-    vision.updateVision(m_battleManager->map(),
-                        m_battleManager->cardSystem().cards(),
-                        m_battleManager->opponentCardSystem().cards());
-
-    const auto& visible = m_isHost ? vision.visionCellsA() : vision.visionCellsB();
-    std::vector<game::core::MapPosition> allowed;
-    for (const auto& pos : m_battleManager->map().deployableCells()) {
-        if (!game::ui::isSceneDeploymentCellForSide(m_activeMapScene, m_isHost, pos)) {
-            continue;
-        }
-        if (!visible.empty() && visible.find(pos) == visible.end()) {
-            continue;
-        }
-        allowed.push_back(pos);
-    }
-    m_battleView->setAllowedDeployCells(allowed);
-}
-
-void BattlePage::updateBattleViewSnapshot(const game::core::BattleSnapshot& snapshot)
-{
-    refreshLocalVisionAndDeployMask();
-    m_battleView->updateFromSnapshot(snapshot);
-}
-
-bool BattlePage::canLocalPvpDeployAt(game::core::MapPosition pos) const
-{
-    if (!m_isPvp || !m_battleManager) return true;
-    if (!game::ui::isSceneDeploymentCellForSide(m_activeMapScene, m_isHost, pos)) {
-        return false;
-    }
-    const auto& vision = m_battleManager->visionManager();
-    const auto& visible = m_isHost ? vision.visionCellsA() : vision.visionCellsB();
-    return visible.empty() || visible.find(pos) != visible.end();
-}
-
 QRect BattlePage::artworkRect() const
 {
     constexpr int DesignWidth = 1672;
@@ -1932,20 +1862,27 @@ void BattlePage::paintEvent(QPaintEvent *event)
                       designRect.width() * sx,
                       designRect.height() * sy);
     };
+    const auto pvpLayout = m_isPvp
+                               ? game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString())
+                               : game::ui::makePvpMapLayout();
 
-    if (!m_isPvp && m_activePveMapId == "island_pve" && !m_pveArtwork.isNull()) {
-        painter.drawPixmap(canvas, m_pveArtwork);
-    }
-
-    if (m_isPvp && !m_activeMapScene.imageResourcePath.isEmpty()) {
-        const QPixmap mapArtwork(m_activeMapScene.imageResourcePath);
-        if (!mapArtwork.isNull()) {
-            const auto& crop = m_activeMapScene.config.imageCrop;
-            const QRectF source(crop.x, crop.y, crop.width, crop.height);
-            const QRectF fallbackSource(mapArtwork.rect());
+    if (m_isPvp && !m_pvpArtwork.isNull()) {
+        if (m_netCtx.pvpMapId == "pvp_office_panic" && !m_pvpOfficeMapArtwork.isNull()) {
             painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
-                               mapArtwork,
-                               source.isValid() ? source : fallbackSource);
+                               m_pvpOfficeMapArtwork,
+                               pvpLayout.backgroundSourceRect);
+        } else {
+            painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
+                               m_pvpArtwork, pvpLayout.backgroundSourceRect);
+        }
+    } else if (m_activePveMapId == "island_pve" && !m_pveArtwork.isNull()) {
+        painter.drawPixmap(canvas, m_pveArtwork);
+    } else {
+        const QPixmap& mapArtwork = m_activePveMapId == "lab_map_02"
+                                        ? m_labMap02
+                                        : m_labMap01;
+        if (!mapArtwork.isNull()) {
+            painter.drawPixmap(canvas, mapArtwork);
         }
     }
 
@@ -1998,6 +1935,7 @@ void BattlePage::layoutArtworkUi()
     if (!m_battleView) return;
 
     const QRect canvas = artworkRect();
+    const auto pvpLayout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
     const qreal sx = canvas.width() / 1672.0;
     const qreal sy = canvas.height() / 941.0;
     auto mapped = [&](const QRectF &designRect) {
@@ -2044,9 +1982,7 @@ void BattlePage::layoutArtworkUi()
     }
 
     if (m_isPvp) {
-        m_battleView->setGeometry(mapped(game::ui::mapViewRectOrDefault(
-            m_activeMapScene.config.battleViewRect,
-            QRectF(174, 126, 1324, 552))));
+        m_battleView->setGeometry(mapped(pvpLayout.battleViewRect));
         m_waveLabel->setGeometry(mapped(QRectF(135, 35, 126, 50)));
         m_phaseLabel->setGeometry(mapped(QRectF(355, 35, 166, 50)));
         m_coreHpLabel->setGeometry(mapped(QRectF(615, 29, 210, 50)));
@@ -2058,9 +1994,7 @@ void BattlePage::layoutArtworkUi()
         if (m_activePveMapId == "island_pve") {
             m_battleView->setGeometry(mapped(QRectF(238, 164, 1328, 520)));
         } else {
-            m_battleView->setGeometry(mapped(game::ui::mapViewRectOrDefault(
-                m_activeMapScene.config.battleViewRect,
-                QRectF(0, 0, 1672, 941))));
+            m_battleView->setGeometry(canvas);
         }
         m_waveLabel->setGeometry(mapped(QRectF(485, 40, 185, 52)));
         m_coreHpLabel->setGeometry(mapped(QRectF(798, 40, 248, 52)));
@@ -2125,8 +2059,6 @@ void BattlePage::setNetworkContext(const NetworkContext& ctx)
     if (!m_isPvp) {
         m_activePveMapId = ctx.pveMapId.isEmpty() ? QString("island_pve") : ctx.pveMapId;
     }
-    loadActiveMapScene();
-    applyMapSceneToBattleView();
     if (m_battleView) {
         m_battleView->setPvpDeploymentSide(m_isPvp, !m_isPvp || m_isHost);
     }
@@ -2138,11 +2070,10 @@ void BattlePage::setNetworkContext(const NetworkContext& ctx)
 void BattlePage::setupPveMap()
 {
     auto& map = m_battleManager->map();
+    m_battleView->clearBackgroundImage();
     m_activePveMapId = m_netCtx.pveMapId.isEmpty()
                            ? QString("island_pve")
                            : m_netCtx.pveMapId;
-    loadActiveMapScene();
-    applyMapSceneToBattleView();
 
     if (m_activePveMapId == "island_pve") {
         map.resize(8, 18, game::core::TerrainType::FlatLand, 0);
@@ -2174,18 +2105,44 @@ void BattlePage::setupPveMap()
         m_battleView->m_spawnPos = spawnPos;
         m_battleView->m_corePos = corePos;
     } else {
-        if (m_activeMapScene.config.rows <= 0 || m_activeMapScene.config.cols <= 0) {
-            qWarning() << "[BattlePage] invalid PVE map config for" << m_activePveMapId;
+        const QString safeMapId = m_activePveMapId == "lab_map_02"
+                                      ? QString("lab_map_02")
+                                      : QString("lab_map_01");
+        m_activePveMapId = safeMapId;
+        const QString mapPath = findProjectFile(QString("assets/maps/%1.json").arg(safeMapId));
+        game::core::LoadedMapConfig config;
+        std::string error;
+        if (mapPath.isEmpty()
+            || !game::core::MapConfigLoader::loadFromJson(mapPath.toStdString(), config, &error)) {
+            qWarning() << "[BattlePage] failed to load map config" << mapPath
+                       << QString::fromStdString(error);
             m_activePveMapId = "island_pve";
             m_netCtx.pveMapId = m_activePveMapId;
             setupPveMap();
             return;
         }
 
-        game::ui::applyLoadedMapToCoreMap(map, m_activeMapScene.config);
-        m_battleManager->setPaths(m_activeMapScene.config.routesA);
-        m_battleView->m_spawnPos = game::ui::localSpawnForScene(m_activeMapScene, true);
-        m_battleView->m_corePos = game::ui::localCoreForScene(m_activeMapScene, true);
+        map.resize(config.rows, config.cols, game::core::TerrainType::NoDeploy, 0);
+        for (const auto& tile : config.tiles) {
+            map.setGrid({tile.row, tile.col},
+                        terrainFromMapTile(tile.type),
+                        terrainHeightFromMapTile(tile.type));
+        }
+        for (const auto& route : config.routesA) {
+            for (const auto& pos : route) {
+                const auto *grid = map.gridAt(pos);
+                if (grid && grid->terrainType() == game::core::TerrainType::NoDeploy) {
+                    map.setGrid(pos, game::core::TerrainType::Path, 0);
+                }
+            }
+        }
+        m_battleManager->setPaths(config.routesA);
+        m_battleView->m_spawnPos = !config.spawnA.empty()
+                                       ? config.spawnA.front()
+                                       : config.routesA.front().front();
+        m_battleView->m_corePos = !config.coreA.empty()
+                                      ? config.coreA.front()
+                                      : config.routesA.front().back();
     }
 
     m_battleView->setMapSize(map.rows(), map.cols());
@@ -2197,20 +2154,16 @@ void BattlePage::setupPveMap()
 void BattlePage::setupPvpMap()
 {
     auto& map = m_battleManager->map();
-    loadActiveMapScene();
-    applyMapSceneToBattleView();
-    game::ui::applyLoadedMapToCoreMap(map, m_activeMapScene.config);
+    m_battleView->clearBackgroundImage();
+    const auto layout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
+    game::ui::applyPvpMapLayout(map, layout);
 
     m_battleManager->rebuildMapOccupancy();
-    m_battleManager->setPaths(game::ui::combinedRoutesForScene(m_activeMapScene));
+    m_battleManager->setPaths({layout.pathToA, layout.pathToB});
     m_battleView->setMapSize(map.rows(), map.cols());
-    m_battleView->m_spawnPos = game::ui::localSpawnForScene(m_activeMapScene, m_isHost);
-    m_battleView->m_corePos = game::ui::localCoreForScene(m_activeMapScene, m_isHost);
-    auto& vision = m_battleManager->visionManager();
-    vision.setVisionBlocks(game::ui::coreVisionBlockersForScene(m_activeMapScene));
-    vision.initDefaultVision(game::ui::localCoreForScene(m_activeMapScene, true),
-                             game::ui::localCoreForScene(m_activeMapScene, false));
-    refreshLocalVisionAndDeployMask();
+    m_battleView->setUnitVisualScale(layout.unitVisualScale);
+    m_battleView->m_spawnPos = layout.spawnA;
+    m_battleView->m_corePos = m_isHost ? layout.coreA : layout.coreB;
     layoutArtworkUi();
     update();
 }
@@ -2221,7 +2174,7 @@ void BattlePage::sendDeployAction(game::core::CardKind kind, game::core::MapPosi
     // 本地执行
     bool deployed = false;
     if (m_battleManager) {
-        if (m_isPvp && !canLocalPvpDeployAt(pos)) {
+        if (m_isPvp && !game::ui::isPvpDeploymentCellForHost(m_isHost, pos)) {
             return;
         }
         deployed = static_cast<bool>(m_battleManager->deployCard(kind, pos));
@@ -2527,13 +2480,9 @@ void BattlePage::startBattle()
         m_battleManager->setRandomSeed(m_netCtx.seed);
 
         // 初始化视野系统
+        const auto pvpLayout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
         auto& vision = m_battleManager->visionManager();
-        vision.setVisionBlocks(game::ui::coreVisionBlockersForScene(m_activeMapScene));
-        vision.initDefaultVision(game::ui::localCoreForScene(m_activeMapScene, true),
-                                 game::ui::localCoreForScene(m_activeMapScene, false));
-        vision.updateVision(m_battleManager->map(),
-                            m_battleManager->cardSystem().cards(),
-                            m_battleManager->opponentCardSystem().cards());
+        vision.initDefaultVision(pvpLayout.coreA, pvpLayout.coreB);
 
         // 连接网络信号
         if (m_isHost && m_netCtx.server) {
@@ -2627,7 +2576,7 @@ void BattlePage::startBattle()
 
     // 立即渲染一帧
     game::core::BattleSnapshot snap = m_battleManager->snapshot();
-    updateBattleViewSnapshot(snap);
+    m_battleView->updateFromSnapshot(snap);
     updateStatusBar(snap);
     recordReplaySnapshot(snap, 0.0, true);
 
@@ -2674,7 +2623,7 @@ void BattlePage::onGameTick()
     if (m_isPvp && !m_waveStarted) {
         // 还没收到波次，只渲染
         game::core::BattleSnapshot snap = m_battleManager->snapshot();
-        updateBattleViewSnapshot(snap);
+        m_battleView->updateFromSnapshot(snap);
         updateStatusBar(snap);
         return;
     }
@@ -2702,7 +2651,7 @@ void BattlePage::onGameTick()
             sendBattleState(snap);
         }
         recordReplaySnapshot(snap, 0.0, true);
-        updateBattleViewSnapshot(snap);
+        m_battleView->updateFromSnapshot(snap);
         updateStatusBar(snap);
         finishBattle(snap);
         return;
@@ -2732,7 +2681,7 @@ void BattlePage::onGameTick()
 
         game::core::BattleSnapshot currentSnap = m_battleManager->snapshot();
         recordReplaySnapshot(currentSnap, 0.0, true);
-        updateBattleViewSnapshot(currentSnap);
+        m_battleView->updateFromSnapshot(currentSnap);
         updateStatusBar(currentSnap);
         return;
     }
@@ -2741,7 +2690,7 @@ void BattlePage::onGameTick()
     if (!m_isPvp && !snap.waveActive) {
         if (m_currentWaveId >= m_pveFinalWave) {
             recordReplaySnapshot(snap, 0.0, true);
-            updateBattleViewSnapshot(snap);
+            m_battleView->updateFromSnapshot(snap);
             updateStatusBar(snap);
             finishBattle(snap, true);
             return;
@@ -2759,7 +2708,7 @@ void BattlePage::onGameTick()
 
     // PVP: 定期同步资源
     if ((++m_renderTick & 1) == 0) {
-        updateBattleViewSnapshot(snap);
+        m_battleView->updateFromSnapshot(snap);
         updateStatusBar(snap);
     }
 
@@ -3146,7 +3095,7 @@ void BattlePage::updateStatusBar(const game::core::BattleSnapshot &snapshot)
     }
     m_phaseLabel->setText(m_isPvp
                               ? (snapshot.waveActive ? "Battle Phase" : "Resource Phase")
-                              : activeMapDisplayName());
+                              : mapDisplayName(m_activePveMapId));
     m_coreHpLabel->setText(QString("Your Core %1/10").arg(snapshot.baseHealth));
     m_resourceLabel->setText(QString("Resource %1").arg(snapshot.resources));
     if (m_isPvp && m_opponentLabel) {
