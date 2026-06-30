@@ -907,6 +907,18 @@ void DeployPage::paintEvent(QPaintEvent *event)
     };
 
     if (!m_pvpArtwork.isNull()) {
+        if (!m_activeMapScene.imageResourcePath.isEmpty()) {
+            const QPixmap mapArtwork(m_activeMapScene.imageResourcePath);
+            if (!mapArtwork.isNull()) {
+                const auto& crop = m_activeMapScene.config.imageCrop;
+                const QRectF source(crop.x, crop.y, crop.width, crop.height);
+                const QRectF fallbackSource(mapArtwork.rect());
+                painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
+                                   mapArtwork,
+                                   source.isValid() ? source : fallbackSource);
+            }
+        }
+
         painter.drawPixmap(mapped(QRectF(0, 0, 1672, 126)),
                            m_pvpArtwork, QRectF(0, 0, 1672, 126));
         painter.drawPixmap(mapped(QRectF(0, 690, 1672, 251)),
@@ -1049,17 +1061,9 @@ void DeployPage::applyMapSceneToDeployView()
 {
     if (!m_deployView) return;
 
-    if (!m_activeMapScene.imageResourcePath.isEmpty()) {
-        m_deployView->setBackgroundImage(m_activeMapScene.imageResourcePath);
-    } else {
-        m_deployView->clearBackgroundImage();
-    }
-    m_deployView->setImageCrop(m_activeMapScene.config.imageCrop.x,
-                               m_activeMapScene.config.imageCrop.y,
-                               m_activeMapScene.config.imageCrop.width,
-                               m_activeMapScene.config.imageCrop.height);
-    m_deployView->setImageOffset(m_activeMapScene.config.imageOffset.x,
-                                 m_activeMapScene.config.imageOffset.y);
+    m_deployView->clearBackgroundImage();
+    m_deployView->setImageCrop(0, 0, 0, 0);
+    m_deployView->setImageOffset(0, 0);
     const double visualScale = m_activeMapScene.config.unitVisualScale > 0.0
                                    ? m_activeMapScene.config.unitVisualScale
                                    : 1.0;

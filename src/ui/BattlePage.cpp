@@ -1828,7 +1828,13 @@ void BattlePage::applyMapSceneToBattleView()
 {
     if (!m_battleView) return;
 
-    if (m_isPvp || m_activePveMapId != "island_pve") {
+    if (m_isPvp) {
+        // PVP map art is drawn at page level in the original 1672x604 design slot.
+        // The view stays as a transparent gameplay overlay so the image is not stretched.
+        m_battleView->clearBackgroundImage();
+        m_battleView->setImageCrop(0, 0, 0, 0);
+        m_battleView->setImageOffset(0, 0);
+    } else if (m_activePveMapId != "island_pve") {
         if (!m_activeMapScene.imageResourcePath.isEmpty()) {
             m_battleView->setBackgroundImage(m_activeMapScene.imageResourcePath);
         } else {
@@ -1884,7 +1890,7 @@ void BattlePage::refreshLocalVisionAndDeployMask()
 void BattlePage::updateBattleViewSnapshot(const game::core::BattleSnapshot& snapshot)
 {
     refreshLocalVisionAndDeployMask();
-    updateBattleViewSnapshot(snapshot);
+    m_battleView->updateFromSnapshot(snapshot);
 }
 
 bool BattlePage::canLocalPvpDeployAt(game::core::MapPosition pos) const
@@ -1929,6 +1935,18 @@ void BattlePage::paintEvent(QPaintEvent *event)
 
     if (!m_isPvp && m_activePveMapId == "island_pve" && !m_pveArtwork.isNull()) {
         painter.drawPixmap(canvas, m_pveArtwork);
+    }
+
+    if (m_isPvp && !m_activeMapScene.imageResourcePath.isEmpty()) {
+        const QPixmap mapArtwork(m_activeMapScene.imageResourcePath);
+        if (!mapArtwork.isNull()) {
+            const auto& crop = m_activeMapScene.config.imageCrop;
+            const QRectF source(crop.x, crop.y, crop.width, crop.height);
+            const QRectF fallbackSource(mapArtwork.rect());
+            painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
+                               mapArtwork,
+                               source.isValid() ? source : fallbackSource);
+        }
     }
 
     if (m_isPvp && !m_pvpArtwork.isNull()) {
