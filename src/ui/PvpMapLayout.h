@@ -41,21 +41,21 @@ inline PvpMapLayout makeSunnyBeachPvpMapLayout()
     layout.unitVisualScale = 1.0;
     layout.spawnA = {0, 13};
     layout.spawnB = {9, 14};
-    layout.coreA = {6, 2};
-    layout.coreB = {6, 25};
+    layout.coreA = {5, 3};
+    layout.coreB = {5, 23};
 
     layout.pathToA = {
         layout.spawnA,
         {1, 13}, {2, 13}, {3, 13}, {4, 13}, {5, 13},
         {5, 12}, {5, 11}, {5, 10}, {5, 9}, {5, 8},
-        {5, 7}, {5, 6}, {5, 5}, {5, 4}, {5, 3},
+        {5, 7}, {5, 6}, {5, 5}, {5, 4},
         layout.coreA
     };
     layout.pathToB = {
         layout.spawnB,
         {8, 14}, {7, 14}, {6, 14}, {5, 14},
         {5, 15}, {5, 16}, {5, 17}, {5, 18}, {5, 19},
-        {5, 20}, {5, 21}, {5, 22}, {5, 23}, {6, 23}, {6, 24},
+        {5, 20}, {5, 21}, {5, 22},
         layout.coreB
     };
 

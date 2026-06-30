@@ -1957,16 +1957,11 @@ void BattlePage::layoutArtworkUi()
 
     const int labelPx = qMax(11, qRound(20 * std::min(sx, sy)));
     const QString labelStyle = QString(
-        "QLabel { color: #3B2819; background: transparent;"
-        " border: none;"
-        " font-size: %1px; font-weight: 800; padding: 0px; }")
+        "QLabel { color: #3B2819; background: #F2DCA9;"
+        " border-radius: %1px;"
+        " font-size: %2px; font-weight: 700; padding: 1px 4px; }")
+        .arg(qMax(3, qRound(5 * sx)))
         .arg(labelPx);
-    const QString pveValueStyle = QString(
-        "QLabel { color: #2E1D12; background: rgba(246,226,176,245);"
-        " border: none; border-radius: %1px;"
-        " font-size: %2px; font-weight: 850; padding: 0px 4px; }")
-        .arg(qMax(3, qRound(4 * sx)))
-        .arg(qMax(11, qRound(19 * std::min(sx, sy))));
     for (QLabel *label : {m_waveLabel, m_phaseLabel, m_coreHpLabel,
                           m_opponentLabel, m_resourceLabel}) {
         label->setStyleSheet(labelStyle);
@@ -2006,17 +2001,14 @@ void BattlePage::layoutArtworkUi()
         m_phaseLabel->show();
         m_opponentLabel->show();
     } else {
-        m_waveLabel->setStyleSheet(pveValueStyle);
-        m_coreHpLabel->setStyleSheet(pveValueStyle);
-        m_resourceLabel->setStyleSheet(pveValueStyle);
         if (m_activePveMapId == "island_pve") {
             m_battleView->setGeometry(mapped(QRectF(238, 164, 1328, 520)));
         } else {
             m_battleView->setGeometry(canvas);
         }
-        m_waveLabel->setGeometry(mapped(QRectF(590, 44, 82, 44)));
-        m_coreHpLabel->setGeometry(mapped(QRectF(930, 44, 110, 44)));
-        m_resourceLabel->setGeometry(mapped(QRectF(1274, 44, 86, 44)));
+        m_waveLabel->setGeometry(mapped(QRectF(485, 40, 185, 52)));
+        m_coreHpLabel->setGeometry(mapped(QRectF(798, 40, 248, 52)));
+        m_resourceLabel->setGeometry(mapped(QRectF(1188, 40, 185, 52)));
         m_phaseLabel->hide();
         m_opponentLabel->hide();
     }
@@ -3107,19 +3099,15 @@ void BattlePage::updateStatusBar(const game::core::BattleSnapshot &snapshot)
     m_displayResources = snapshot.resources;
 
     if (!m_isPvp) {
-        m_waveLabel->setText(QString("%1/%2").arg(snapshot.currentWave).arg(m_pveFinalWave));
+        m_waveLabel->setText(QString("Wave %1/%2").arg(snapshot.currentWave).arg(m_pveFinalWave));
     } else {
         m_waveLabel->setText(QString("Wave %1").arg(snapshot.currentWave));
     }
     m_phaseLabel->setText(m_isPvp
                               ? (snapshot.waveActive ? "Battle Phase" : "Resource Phase")
                               : mapDisplayName(m_activePveMapId));
-    m_coreHpLabel->setText(m_isPvp
-                               ? QString("Your Core %1/10").arg(snapshot.baseHealth)
-                               : QString("%1/10").arg(snapshot.baseHealth));
-    m_resourceLabel->setText(m_isPvp
-                                 ? QString("Resource %1").arg(snapshot.resources)
-                                 : QString::number(snapshot.resources));
+    m_coreHpLabel->setText(QString("Your Core %1/10").arg(snapshot.baseHealth));
+    m_resourceLabel->setText(QString("Resource %1").arg(snapshot.resources));
     if (m_isPvp && m_opponentLabel) {
         m_opponentLabel->setText(QString("Enemy Core %1/10")
                                      .arg(snapshot.opponentBaseHealth));
