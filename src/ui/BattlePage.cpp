@@ -1103,7 +1103,18 @@ void BattleView::drawMonsters(QPainter &painter)
     const QPixmap* monsterSprites[] = { &tomatoA, &tomatoB, &tomatoC };
 
     for (const auto &monster : m_snapshot.monsters) {
-        QRectF mRect = cellRect(monster.row, monster.col);
+        const qreal cellW = cellWidth();
+        const qreal cellH = cellHeight();
+        const QPointF center(monster.exactCol >= 0.0
+                                 ? monster.exactCol * cellW + cellW * 0.5
+                                 : cellCenter(monster.row, monster.col).x(),
+                             monster.exactRow >= 0.0
+                                 ? monster.exactRow * cellH + cellH * 0.5
+                                 : cellCenter(monster.row, monster.col).y());
+        QRectF mRect(center.x() - cellW * 0.5,
+                     center.y() - cellH * 0.5,
+                     cellW,
+                     cellH);
         QRectF innerRect = mRect.adjusted(6, 6, -6, -6);
         const qreal bob = qSin((m_animFrame + monster.id * 13) * 0.18) * 2.0 * m_unitVisualScale;
 
@@ -1117,13 +1128,13 @@ void BattleView::drawMonsters(QPainter &painter)
         if (!sprite.isNull()) {
             painter.setBrush(QColor(42, 24, 18, 85));
             const qreal extent = cellExtent();
-            painter.drawEllipse(QRectF(mRect.center().x() - extent * 0.39,
+            painter.drawEllipse(QRectF(center.x() - extent * 0.39,
                                        mRect.bottom() - extent * 0.20,
                                        extent * 0.78,
                                        extent * 0.24));
             const qreal spriteW = extent * 1.36 * m_unitVisualScale;
             const qreal spriteH = extent * 1.46 * m_unitVisualScale;
-            const QRectF spriteRect(mRect.center().x() - spriteW * 0.5,
+            const QRectF spriteRect(center.x() - spriteW * 0.5,
                                     mRect.bottom() - extent * 1.42 * m_unitVisualScale + bob,
                                     spriteW,
                                     spriteH);
@@ -2198,13 +2209,7 @@ void BattlePage::sendDeployAction(game::core::CardKind kind, game::core::MapPosi
 
     // 网络发送
     if (m_isPvp) {
-        game::network::DeployPayload payload;
-        payload.cardKind = static_cast<quint8>(kind);
-        payload.row = static_cast<quint8>(pos.row);
-        payload.col = static_cast<quint8>(pos.col);
-        payload.unitId = 0;
-
-        QByteArray body(reinterpret_cast<const char*>(&payload), sizeof(payload));
+        QByteArray body = game::network::BattleStateCodec::encodeDeployAction(kind, pos);
 
         if (m_isHost && m_netCtx.server) {
             m_netCtx.server->sendPacket(game::network::MsgType::DEPLOY, body);
@@ -2222,11 +2227,7 @@ void BattlePage::sendUpgradeAction(int unitId)
     }
 
     if (m_isPvp) {
-        game::network::UpgradePayload payload;
-        payload.unitId = static_cast<quint8>(unitId);
-        payload.targetLevel = 0;
-
-        QByteArray body(reinterpret_cast<const char*>(&payload), sizeof(payload));
+        QByteArray body = game::network::BattleStateCodec::encodeUpgradeAction(unitId);
 
         if (m_isHost && m_netCtx.server) {
             m_netCtx.server->sendPacket(game::network::MsgType::UPGRADE_UNIT, body);
@@ -2244,10 +2245,7 @@ void BattlePage::sendMoveAction(int unitId, game::core::MapPosition target)
     }
 
     if (m_isPvp) {
-        QByteArray body;
-        body.append(static_cast<char>(unitId));
-        body.append(static_cast<char>(target.row));
-        body.append(static_cast<char>(target.col));
+        QByteArray body = game::network::BattleStateCodec::encodeMoveAction(unitId, target);
 
         if (m_isHost && m_netCtx.server) {
             m_netCtx.server->sendPacket(game::network::MsgType::MOVE_UNIT, body);
@@ -2265,10 +2263,7 @@ void BattlePage::sendRecallAction(int unitId)
     }
 
     if (m_isPvp) {
-        game::network::RecallPayload payload;
-        payload.unitId = static_cast<quint8>(unitId);
-
-        QByteArray body(reinterpret_cast<const char*>(&payload), sizeof(payload));
+        QByteArray body = game::network::BattleStateCodec::encodeRecallAction(unitId);
 
         if (m_isHost && m_netCtx.server) {
             m_netCtx.server->sendPacket(game::network::MsgType::RECALL_UNIT, body);
@@ -2324,9 +2319,8 @@ void BattlePage::handleRemoteBattleState(const game::core::BattleSnapshot& snaps
         m_localWaveClear = true;
         qDebug() << "[BattlePage] remote state shows WAVE_CLEAR for wave" << m_currentWaveId;
         if (m_netCtx.client) {
-            QByteArray body;
-            body.append(static_cast<char>(m_currentWaveId));
-            m_netCtx.client->sendPacket(game::network::MsgType::WAVE_CLEAR, body);
+            m_netCtx.client->sendPacket(game::network::MsgType::WAVE_CLEAR,
+                                        game::network::BattleStateCodec::encodeWaveId(m_currentWaveId));
         }
     }
 }
@@ -2339,51 +2333,49 @@ void BattlePage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
     switch (type) {
     case game::network::MsgType::DEPLOY: {
         if (!m_inBattlePhase) break;
-        if (body.size() >= 4) {
-            auto kind = static_cast<game::core::CardKind>(static_cast<quint8>(body[0]));
-            int row = static_cast<quint8>(body[1]);
-            int col = static_cast<quint8>(body[2]);
+        game::network::BattleStateCodec::DeployAction action;
+        if (game::network::BattleStateCodec::decodeDeployAction(body, action)) {
             // 对方部署，使用 deployOpponentCard
-            m_battleManager->deployOpponentCard(kind, game::core::MapPosition(row, col));
-            qDebug() << "[BattlePage] received opponent DEPLOY:" << (int)kind << "at" << row << col;
+            m_battleManager->deployOpponentCard(action.cardKind, action.position);
+            qDebug() << "[BattlePage] received opponent DEPLOY:" << static_cast<int>(action.cardKind)
+                     << "at" << action.position.row << action.position.col;
         }
         break;
     }
     case game::network::MsgType::UPGRADE_UNIT: {
         if (!m_inBattlePhase) break;
-        if (body.size() >= 2) {
-            int unitId = static_cast<quint8>(body[0]);
+        game::network::BattleStateCodec::UnitAction action;
+        if (game::network::BattleStateCodec::decodeUpgradeAction(body, action)) {
             // 对方升级，需要加上偏移量
-            m_battleManager->upgradeOpponentCard(unitId);
-            qDebug() << "[BattlePage] received opponent UPGRADE unit" << unitId;
+            m_battleManager->upgradeOpponentCard(action.unitId);
+            qDebug() << "[BattlePage] received opponent UPGRADE unit" << action.unitId;
         }
         break;
     }
     case game::network::MsgType::MOVE_UNIT: {
         if (!m_inBattlePhase) break;
-        if (body.size() >= 3) {
-            int unitId = static_cast<quint8>(body[0]);
-            int row = static_cast<quint8>(body[1]);
-            int col = static_cast<quint8>(body[2]);
+        game::network::BattleStateCodec::UnitAction action;
+        if (game::network::BattleStateCodec::decodeMoveAction(body, action)) {
             // 对方移动
-            m_battleManager->moveOpponentCard(unitId, game::core::MapPosition(row, col));
-            qDebug() << "[BattlePage] received opponent MOVE unit" << unitId << "to" << row << col;
+            m_battleManager->moveOpponentCard(action.unitId, action.position);
+            qDebug() << "[BattlePage] received opponent MOVE unit" << action.unitId << "to"
+                     << action.position.row << action.position.col;
         }
         break;
     }
     case game::network::MsgType::RECALL_UNIT: {
         if (!m_inBattlePhase) break;
-        if (body.size() >= 1) {
-            int unitId = static_cast<quint8>(body[0]);
+        game::network::BattleStateCodec::UnitAction action;
+        if (game::network::BattleStateCodec::decodeRecallAction(body, action)) {
             // 对方撤回
-            m_battleManager->recallOpponentCard(unitId);
-            qDebug() << "[BattlePage] received opponent RECALL unit" << unitId;
+            m_battleManager->recallOpponentCard(action.unitId);
+            qDebug() << "[BattlePage] received opponent RECALL unit" << action.unitId;
         }
         break;
     }
     case game::network::MsgType::WAVE_START: {
-        if (body.size() >= 1) {
-            int waveId = static_cast<quint8>(body[0]);
+        int waveId = 0;
+        if (game::network::BattleStateCodec::decodeWaveId(body, waveId)) {
             if (m_waveStarted && m_currentWaveId == waveId) {
                 qDebug() << "[BattlePage] duplicated WAVE_START ignored:" << waveId;
                 break;
@@ -2407,9 +2399,8 @@ void BattlePage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
         qDebug() << "[BattlePage] received peer WAVE_CLEAR for wave" << m_currentWaveId;
         if (m_localWaveClear) {
             if (m_netCtx.server) {
-                QByteArray body;
-                body.append(static_cast<char>(m_currentWaveId));
-                m_netCtx.server->sendPacket(game::network::MsgType::WAVE_COMPLETE, body);
+                m_netCtx.server->sendPacket(game::network::MsgType::WAVE_COMPLETE,
+                                            game::network::BattleStateCodec::encodeWaveId(m_currentWaveId));
             }
             completePvpWave();
         }
@@ -2561,9 +2552,8 @@ void BattlePage::startBattle()
             m_waveStarted = true;
             m_battleManager->startWave(m_currentWaveId);
 
-            QByteArray body;
-            body.append(static_cast<char>(m_currentWaveId));
-            m_netCtx.server->sendPacket(game::network::MsgType::WAVE_START, body);
+            m_netCtx.server->sendPacket(game::network::MsgType::WAVE_START,
+                                        game::network::BattleStateCodec::encodeWaveId(m_currentWaveId));
         } else {
             qDebug() << "[BattlePage] Client waiting for WAVE_START, seed:" << m_netCtx.seed
                      << "expected wave:" << m_currentWaveId;
@@ -2667,16 +2657,14 @@ void BattlePage::onGameTick()
             if (m_isHost) {
                 if (m_peerWaveClear) {
                     if (m_netCtx.server) {
-                        QByteArray body;
-                        body.append(static_cast<char>(m_currentWaveId));
-                        m_netCtx.server->sendPacket(game::network::MsgType::WAVE_COMPLETE, body);
+                        m_netCtx.server->sendPacket(game::network::MsgType::WAVE_COMPLETE,
+                                                    game::network::BattleStateCodec::encodeWaveId(m_currentWaveId));
                     }
                     completePvpWave();
                 }
             } else if (m_netCtx.client) {
-                QByteArray body;
-                body.append(static_cast<char>(m_currentWaveId));
-                m_netCtx.client->sendPacket(game::network::MsgType::WAVE_CLEAR, body);
+                m_netCtx.client->sendPacket(game::network::MsgType::WAVE_CLEAR,
+                                            game::network::BattleStateCodec::encodeWaveId(m_currentWaveId));
             }
         }
 
@@ -2708,7 +2696,7 @@ void BattlePage::onGameTick()
     }
 
     // PVP: 定期同步资源
-    if ((++m_renderTick & 1) == 0) {
+    if (!m_isPvp || (++m_renderTick & 1) == 0) {
         m_battleView->updateFromSnapshot(snap);
         updateStatusBar(snap);
     }
@@ -2814,6 +2802,8 @@ void BattlePage::resetReplayRecorder()
     m_replaySampleTimer = 0.0;
     m_previousReplayResources = -1;
     m_hasReplaySnapshot = false;
+    m_lastReplayEventSequence = 0;
+    m_eventResolvedReplayMonsters.clear();
     m_lastReplaySnapshot = game::core::BattleSnapshot();
 }
 
@@ -2877,6 +2867,72 @@ void BattlePage::recordReplaySnapshot(const game::core::BattleSnapshot &snapshot
         previousTargetSource.insert(projectile.targetId, projectile.sourceId);
     }
 
+    bool sawDamageEvent = false;
+    bool sawHealEvent = false;
+    bool sawResourceEvent = false;
+    for (const auto& event : snapshot.events) {
+        if (event.sequenceId <= m_lastReplayEventSequence) continue;
+        m_lastReplayEventSequence = qMax(m_lastReplayEventSequence, event.sequenceId);
+
+        switch (event.type) {
+        case game::core::BattleEventType::Damage:
+            if (event.amount > 0
+                && event.sourceId >= 0
+                && m_replayUnitStats.contains(event.sourceId)) {
+                m_replayUnitStats[event.sourceId].damage += event.amount;
+                m_replayData.totalDamage += event.amount;
+                sawDamageEvent = true;
+            }
+            break;
+        case game::core::BattleEventType::Heal:
+            if (event.amount > 0) {
+                if (event.sourceId >= 0 && m_replayUnitStats.contains(event.sourceId)) {
+                    m_replayUnitStats[event.sourceId].healing += event.amount;
+                }
+                m_replayData.totalHealing += event.amount;
+                sawHealEvent = true;
+            }
+            break;
+        case game::core::BattleEventType::ResourceGain:
+            if (event.amount > 0) {
+                m_replayData.totalResourceGain += event.amount;
+                sawResourceEvent = true;
+            }
+            break;
+        case game::core::BattleEventType::MonsterKilled: {
+            m_eventResolvedReplayMonsters.insert(event.targetId);
+            BattleMonsterStatEntry &monsterEntry =
+                m_replayMonsterStats[static_cast<int>(event.monsterKind)];
+            monsterEntry.kind = event.monsterKind;
+            monsterEntry.name = replayMonsterName(event.monsterKind);
+            monsterEntry.defeated += 1;
+            monsterEntry.threatScore += qMax(10, event.amount);
+            addHeat(m_deathHeatCells, m_replayData.rows, m_replayData.cols, event.row, event.col);
+            break;
+        }
+        case game::core::BattleEventType::MonsterEscaped: {
+            m_eventResolvedReplayMonsters.insert(event.sourceId);
+            BattleMonsterStatEntry &monsterEntry =
+                m_replayMonsterStats[static_cast<int>(event.monsterKind)];
+            monsterEntry.kind = event.monsterKind;
+            monsterEntry.name = replayMonsterName(event.monsterKind);
+            monsterEntry.escaped += 1;
+            monsterEntry.threatScore += qMax(120, event.amount * 20);
+            break;
+        }
+        case game::core::BattleEventType::Deploy:
+            if (event.row >= 0 && event.col >= 0) {
+                addHeat(m_deployHeatCells, m_replayData.rows, m_replayData.cols,
+                        event.row, event.col);
+            }
+            break;
+        case game::core::BattleEventType::Upgrade:
+        case game::core::BattleEventType::Move:
+        case game::core::BattleEventType::Recall:
+            break;
+        }
+    }
+
     if (m_hasReplaySnapshot) {
         QHash<int, game::core::MonsterSnapshot> previousMonsters;
         QHash<int, game::core::UnitSnapshot> previousUnits;
@@ -2905,7 +2961,7 @@ void BattlePage::recordReplaySnapshot(const game::core::BattleSnapshot &snapshot
             if (!previousMonsters.contains(monster.id)) continue;
             const auto previous = previousMonsters.value(monster.id);
             const int damage = qMax(0, previous.hp - monster.hp);
-            if (damage <= 0) continue;
+            if (damage <= 0 || sawDamageEvent) continue;
             int sourceId = currentTargetSource.value(monster.id,
                                                      previousTargetSource.value(monster.id, -1));
             if (sourceId < 0) {
@@ -2919,6 +2975,7 @@ void BattlePage::recordReplaySnapshot(const game::core::BattleSnapshot &snapshot
 
         for (const auto& previous : m_lastReplaySnapshot.monsters) {
             if (!currentMonsters.contains(previous.id)) {
+                if (m_eventResolvedReplayMonsters.contains(previous.id)) continue;
                 BattleMonsterStatEntry &monsterEntry =
                     m_replayMonsterStats[static_cast<int>(previous.kind)];
                 monsterEntry.kind = previous.kind;
@@ -2953,7 +3010,7 @@ void BattlePage::recordReplaySnapshot(const game::core::BattleSnapshot &snapshot
         for (const auto& unit : snapshot.units) {
             if (!previousUnits.contains(unit.id)) continue;
             const int healing = qMax(0, unit.hp - previousUnits.value(unit.id).hp);
-            if (healing <= 0) continue;
+            if (healing <= 0 || sawHealEvent) continue;
             const int healerId = nearestHealer(unit);
             const int statId = healerId >= 0 ? healerId : unit.id;
             if (m_replayUnitStats.contains(statId)) {
@@ -2963,7 +3020,7 @@ void BattlePage::recordReplaySnapshot(const game::core::BattleSnapshot &snapshot
         }
     }
 
-    if (m_previousReplayResources >= 0 && snapshot.resources > m_previousReplayResources) {
+    if (!sawResourceEvent && m_previousReplayResources >= 0 && snapshot.resources > m_previousReplayResources) {
         const int gain = snapshot.resources - m_previousReplayResources;
         QVector<int> producers;
         for (const auto& unit : snapshot.units) {

@@ -277,6 +277,8 @@ private:
     double m_replaySampleTimer = 0.0;
     int m_previousReplayResources = -1;
     bool m_hasReplaySnapshot = false;
+    int m_lastReplayEventSequence = 0;
+    QSet<int> m_eventResolvedReplayMonsters;
 
     // ========== 核心层引用 ==========
     game::core::BattleManager *m_battleManager;  ///< 通过 MainWindow 获取

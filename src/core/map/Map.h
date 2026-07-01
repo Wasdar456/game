@@ -35,6 +35,7 @@ public:
     // 设置/清除占用信息，用于部署、移动和撤回。
     bool setOccupied(MapPosition position, bool occupied, int occupantId = -1);
     bool clearOccupant(MapPosition position);
+    void clearOccupancy();
 
     // 部署合法性和行走合法性的统一入口。
     bool canDeployAt(MapPosition position) const;

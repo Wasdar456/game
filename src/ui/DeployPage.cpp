@@ -8,6 +8,7 @@
 #include "ui/MainWindow.h"
 #include "ui/AudioManager.h"
 #include "ui/PvpMapLayout.h"
+#include "network/protocol/BattleStateCodec.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -1276,13 +1277,7 @@ void DeployPage::setShowGrid(bool show)
 
 void DeployPage::sendDeployToNetwork(game::core::CardKind kind, game::core::MapPosition pos)
 {
-    game::network::DeployPayload payload;
-    payload.cardKind = static_cast<quint8>(kind);
-    payload.row = static_cast<quint8>(pos.row);
-    payload.col = static_cast<quint8>(pos.col);
-    payload.unitId = 0;
-
-    QByteArray body(reinterpret_cast<const char*>(&payload), sizeof(payload));
+    QByteArray body = game::network::BattleStateCodec::encodeDeployAction(kind, pos);
 
     if (m_isHost && m_netCtx.server) {
         m_netCtx.server->sendPacket(game::network::MsgType::DEPLOY, body);
@@ -1293,10 +1288,7 @@ void DeployPage::sendDeployToNetwork(game::core::CardKind kind, game::core::MapP
 
 void DeployPage::sendUpgradeToNetwork(int unitId)
 {
-    game::network::UpgradePayload payload;
-    payload.unitId = static_cast<quint8>(unitId);
-    payload.targetLevel = 0;
-    QByteArray body(reinterpret_cast<const char*>(&payload), sizeof(payload));
+    QByteArray body = game::network::BattleStateCodec::encodeUpgradeAction(unitId);
 
     if (m_isHost && m_netCtx.server) {
         m_netCtx.server->sendPacket(game::network::MsgType::UPGRADE_UNIT, body);
@@ -1307,10 +1299,7 @@ void DeployPage::sendUpgradeToNetwork(int unitId)
 
 void DeployPage::sendMoveToNetwork(int unitId, game::core::MapPosition pos)
 {
-    QByteArray body;
-    body.append(static_cast<char>(unitId));
-    body.append(static_cast<char>(pos.row));
-    body.append(static_cast<char>(pos.col));
+    QByteArray body = game::network::BattleStateCodec::encodeMoveAction(unitId, pos);
 
     if (m_isHost && m_netCtx.server) {
         m_netCtx.server->sendPacket(game::network::MsgType::MOVE_UNIT, body);
@@ -1321,9 +1310,7 @@ void DeployPage::sendMoveToNetwork(int unitId, game::core::MapPosition pos)
 
 void DeployPage::sendRecallToNetwork(int unitId)
 {
-    game::network::RecallPayload payload;
-    payload.unitId = static_cast<quint8>(unitId);
-    QByteArray body(reinterpret_cast<const char*>(&payload), sizeof(payload));
+    QByteArray body = game::network::BattleStateCodec::encodeRecallAction(unitId);
 
     if (m_isHost && m_netCtx.server) {
         m_netCtx.server->sendPacket(game::network::MsgType::RECALL_UNIT, body);
@@ -1392,13 +1379,12 @@ void DeployPage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
     case game::network::MsgType::DEPLOY: {
         // 迷雾部署阶段只缓存对方本轮新部署，不立即写入 BattleManager。
         // 这样部署阶段只能看到上一轮战斗已经暴露过的单位；本轮新部署到开战时再揭示。
-        if (body.size() >= 4) {
-            auto kind = static_cast<game::core::CardKind>(static_cast<quint8>(body[0]));
-            int row = static_cast<quint8>(body[1]);
-            int col = static_cast<quint8>(body[2]);
-            m_pendingOpponentDeploys.append({kind, game::core::MapPosition(row, col)});
-            qDebug() << "[DeployPage] cached hidden opponent DEPLOY:" << (int)kind
-                     << "at" << row << col;
+        game::network::BattleStateCodec::DeployAction action;
+        if (game::network::BattleStateCodec::decodeDeployAction(body, action)) {
+            m_pendingOpponentDeploys.append({action.cardKind, action.position});
+            qDebug() << "[DeployPage] cached hidden opponent DEPLOY:"
+                     << static_cast<int>(action.cardKind)
+                     << "at" << action.position.row << action.position.col;
         }
         break;
     }
@@ -1430,28 +1416,27 @@ void DeployPage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
         break;
     }
     case game::network::MsgType::UPGRADE_UNIT: {
-        if (body.size() >= 1) {
-            int unitId = static_cast<quint8>(body[0]);
-            m_pendingOpponentOps.append({type, unitId, {}});
-            qDebug() << "[DeployPage] cached hidden opponent UPGRADE:" << unitId;
+        game::network::BattleStateCodec::UnitAction action;
+        if (game::network::BattleStateCodec::decodeUpgradeAction(body, action)) {
+            m_pendingOpponentOps.append({type, action.unitId, {}});
+            qDebug() << "[DeployPage] cached hidden opponent UPGRADE:" << action.unitId;
         }
         break;
     }
     case game::network::MsgType::MOVE_UNIT: {
-        if (body.size() >= 3) {
-            int unitId = static_cast<quint8>(body[0]);
-            int row = static_cast<quint8>(body[1]);
-            int col = static_cast<quint8>(body[2]);
-            m_pendingOpponentOps.append({type, unitId, game::core::MapPosition(row, col)});
-            qDebug() << "[DeployPage] cached hidden opponent MOVE:" << unitId << row << col;
+        game::network::BattleStateCodec::UnitAction action;
+        if (game::network::BattleStateCodec::decodeMoveAction(body, action)) {
+            m_pendingOpponentOps.append({type, action.unitId, action.position});
+            qDebug() << "[DeployPage] cached hidden opponent MOVE:" << action.unitId
+                     << action.position.row << action.position.col;
         }
         break;
     }
     case game::network::MsgType::RECALL_UNIT: {
-        if (body.size() >= 1) {
-            int unitId = static_cast<quint8>(body[0]);
-            m_pendingOpponentOps.append({type, unitId, {}});
-            qDebug() << "[DeployPage] cached hidden opponent RECALL:" << unitId;
+        game::network::BattleStateCodec::UnitAction action;
+        if (game::network::BattleStateCodec::decodeRecallAction(body, action)) {
+            m_pendingOpponentOps.append({type, action.unitId, {}});
+            qDebug() << "[DeployPage] cached hidden opponent RECALL:" << action.unitId;
         }
         break;
     }

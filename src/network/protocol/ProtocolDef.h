@@ -156,29 +156,37 @@ struct WaveStartPayload {
     quint8  reserved[3];  // 保留，填 0
 };
 
-// ─── DEPLOY 消息 payload（4 字节）───
+// ─── DEPLOY 消息 payload（7 字节）───
 // 迷雾阶段双方各自部署，DEPLOYMENT_END 后 Host 统一同步。
 // 实时部署阶段（若允许看到对方）也用此包。
-// layout: [ cardKind(1) | row(1) | col(1) | unitId(1) ]
+// layout: [ cardKind(1) | row(2) | col(2) | unitId(2) ], big-endian.
 struct DeployPayload {
     quint8 cardKind;  // CardKind 枚举值
-    quint8 row;       // 部署行（0-based）
-    quint8 col;       // 部署列（0-based）
-    quint8 unitId;    // Host 分配的单位 ID（迷雾同步时用，实时部署可填 0）
+    qint16 row;       // 部署行（0-based）
+    qint16 col;       // 部署列（0-based）
+    quint16 unitId;   // Host 分配的单位 ID（迷雾同步时用，实时部署可填 0）
 };
 
-// ─── UPGRADE_UNIT 消息 payload（2 字节）───
+// ─── UPGRADE_UNIT 消息 payload（3 字节）───
 // 触发条件：玩家消耗资源，升级已部署的某个 Card
-// layout: [ unitId(1) | targetLevel(1) ]
+// layout: [ unitId(2) | targetLevel(1) ], big-endian.
 struct UpgradePayload {
-    quint8 unitId;      // 要升级的单位 ID（与部署时分配的 unitId 对应）
+    quint16 unitId;     // 要升级的单位 ID（与部署时分配的 unitId 对应）
     quint8 targetLevel; // 目标等级（当前 Card 支持 1~3 级）
 };
 
-// ─── RECALL_UNIT 消息 payload（1 字节）───
-// layout: [ unitId(1) ]
+// ─── MOVE_UNIT 消息 payload（6 字节）───
+// layout: [ unitId(2) | row(2) | col(2) ], big-endian signed/unsigned integers.
+struct MovePayload {
+    quint16 unitId;
+    qint16 row;
+    qint16 col;
+};
+
+// ─── RECALL_UNIT 消息 payload（2 字节）───
+// layout: [ unitId(2) ], big-endian.
 struct RecallPayload {
-    quint8 unitId;  // 要撤回的单位 ID
+    quint16 unitId;  // 要撤回的单位 ID
 };
 
 // ─── CORE_HP_SYNC 消息 payload（4 字节）───

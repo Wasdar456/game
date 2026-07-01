@@ -259,7 +259,10 @@ void ReplayCanvas::paintEvent(QPaintEvent *event)
     }
 
     for (const auto& monster : snapshot.monsters) {
-        QPointF c(grid.left() + (monster.col + 0.5) * cell, grid.top() + (monster.row + 0.5) * cell);
+        const double exactRow = monster.exactRow >= 0.0 ? monster.exactRow : monster.row;
+        const double exactCol = monster.exactCol >= 0.0 ? monster.exactCol : monster.col;
+        QPointF c(grid.left() + (exactCol + 0.5) * cell,
+                  grid.top() + (exactRow + 0.5) * cell);
         painter.setPen(QPen(QColor(82, 42, 33), 2));
         painter.setBrush(QColor(103, 83, 178));
         painter.drawRoundedRect(QRectF(c.x() - cell * 0.28, c.y() - cell * 0.28,

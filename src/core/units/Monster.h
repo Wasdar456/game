@@ -31,6 +31,8 @@ public:
     int attackRange() const { return attackRange_; }
     RouteType routeType() const { return routeType_; }
     bool escaped() const { return escaped_; }
+    double exactRow() const { return exactRow_; }
+    double exactCol() const { return exactCol_; }
 
     void setPath(std::vector<MapPosition> path);
     const std::vector<MapPosition>& path() const { return path_; }

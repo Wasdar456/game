@@ -14,6 +14,9 @@ struct MonsterSnapshot {
     // 网格位置。
     int row = 0;
     int col = 0;
+    // 浮点位置，用于平滑渲染；row/col 仍保留给网格逻辑和兼容旧代码。
+    double exactRow = 0.0;
+    double exactCol = 0.0;
     // 生命值。
     int hp = 0;
     int maxHp = 0;

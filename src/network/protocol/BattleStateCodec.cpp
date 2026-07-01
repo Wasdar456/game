@@ -41,6 +41,8 @@ QByteArray BattleStateCodec::encodeHostSnapshot(const game::core::BattleSnapshot
             << static_cast<quint8>(monster.kind)
             << static_cast<qint16>(monster.row)
             << static_cast<qint16>(monster.col)
+            << static_cast<double>(monster.exactRow)
+            << static_cast<double>(monster.exactCol)
             << static_cast<qint32>(monster.hp)
             << static_cast<qint32>(monster.maxHp)
             << static_cast<quint8>(monster.escaped ? 1 : 0);
@@ -57,6 +59,19 @@ QByteArray BattleStateCodec::encodeHostSnapshot(const game::core::BattleSnapshot
             << static_cast<double>(projectile.progress)
             << static_cast<quint8>(projectile.kind)
             << static_cast<qint16>(projectile.splashRadius);
+    }
+
+    out << static_cast<quint16>(snapshot.events.size());
+    for (const auto& event : snapshot.events) {
+        out << static_cast<qint32>(event.sequenceId)
+            << static_cast<quint8>(event.type)
+            << static_cast<qint32>(event.sourceId)
+            << static_cast<qint32>(event.targetId)
+            << static_cast<qint32>(event.amount)
+            << static_cast<qint16>(event.row)
+            << static_cast<qint16>(event.col)
+            << static_cast<quint8>(event.cardKind)
+            << static_cast<quint8>(event.monsterKind);
     }
 
     out << static_cast<quint32>(checksum(snapshot));
@@ -139,10 +154,12 @@ BattleStateDecodeResult BattleStateCodec::decodeHostSnapshot(const QByteArray& b
         quint8 kind = 0;
         qint16 row = 0;
         qint16 col = 0;
+        double exactRow = 0.0;
+        double exactCol = 0.0;
         qint32 hp = 0;
         qint32 maxHp = 0;
         quint8 escaped = 0;
-        in >> id >> kind >> row >> col >> hp >> maxHp >> escaped;
+        in >> id >> kind >> row >> col >> exactRow >> exactCol >> hp >> maxHp >> escaped;
         if (in.status() != QDataStream::Ok) return result;
 
         game::core::MonsterSnapshot monster;
@@ -150,6 +167,8 @@ BattleStateDecodeResult BattleStateCodec::decodeHostSnapshot(const QByteArray& b
         monster.kind = static_cast<game::core::MonsterKind>(kind);
         monster.row = row;
         monster.col = col;
+        monster.exactRow = exactRow;
+        monster.exactCol = exactCol;
         monster.hp = hp;
         monster.maxHp = maxHp;
         monster.escaped = escaped != 0;
@@ -188,6 +207,38 @@ BattleStateDecodeResult BattleStateCodec::decodeHostSnapshot(const QByteArray& b
         snapshot.projectiles.push_back(projectile);
     }
 
+    quint16 eventCount = 0;
+    in >> eventCount;
+    if (in.status() != QDataStream::Ok) return result;
+
+    snapshot.events.reserve(eventCount);
+    for (quint16 i = 0; i < eventCount; ++i) {
+        qint32 sequenceId = 0;
+        quint8 type = 0;
+        qint32 sourceId = 0;
+        qint32 targetId = 0;
+        qint32 amount = 0;
+        qint16 row = 0;
+        qint16 col = 0;
+        quint8 cardKind = 0;
+        quint8 monsterKind = 0;
+        in >> sequenceId >> type >> sourceId >> targetId >> amount >> row >> col
+           >> cardKind >> monsterKind;
+        if (in.status() != QDataStream::Ok) return result;
+
+        game::core::BattleEvent event;
+        event.sequenceId = sequenceId;
+        event.type = static_cast<game::core::BattleEventType>(type);
+        event.sourceId = sourceId;
+        event.targetId = targetId;
+        event.amount = amount;
+        event.row = row;
+        event.col = col;
+        event.cardKind = static_cast<game::core::CardKind>(cardKind);
+        event.monsterKind = static_cast<game::core::MonsterKind>(monsterKind);
+        snapshot.events.push_back(event);
+    }
+
     snapshot.gameOver = snapshot.baseHealth <= 0 || snapshot.opponentBaseHealth <= 0;
     result.ok = true;
 
@@ -204,6 +255,124 @@ BattleStateDecodeResult BattleStateCodec::decodeHostSnapshot(const QByteArray& b
     }
 
     return result;
+}
+
+QByteArray BattleStateCodec::encodeDeployAction(game::core::CardKind kind,
+                                                game::core::MapPosition position,
+                                                int unitId)
+{
+    QByteArray body;
+    QDataStream out(&body, QIODevice::WriteOnly);
+    out.setByteOrder(QDataStream::BigEndian);
+    out << static_cast<quint8>(kind)
+        << static_cast<qint16>(position.row)
+        << static_cast<qint16>(position.col)
+        << static_cast<quint16>(unitId);
+    return body;
+}
+
+bool BattleStateCodec::decodeDeployAction(const QByteArray& body, DeployAction& action)
+{
+    QDataStream in(body);
+    in.setByteOrder(QDataStream::BigEndian);
+    quint8 kind = 0;
+    qint16 row = 0;
+    qint16 col = 0;
+    quint16 unitId = 0;
+    in >> kind >> row >> col >> unitId;
+    if (in.status() != QDataStream::Ok) return false;
+    action.cardKind = static_cast<game::core::CardKind>(kind);
+    action.position = {row, col};
+    action.unitId = unitId;
+    return true;
+}
+
+QByteArray BattleStateCodec::encodeUpgradeAction(int unitId, int targetLevel)
+{
+    QByteArray body;
+    QDataStream out(&body, QIODevice::WriteOnly);
+    out.setByteOrder(QDataStream::BigEndian);
+    out << static_cast<quint16>(unitId)
+        << static_cast<quint8>(targetLevel);
+    return body;
+}
+
+bool BattleStateCodec::decodeUpgradeAction(const QByteArray& body, UnitAction& action)
+{
+    QDataStream in(body);
+    in.setByteOrder(QDataStream::BigEndian);
+    quint16 unitId = 0;
+    quint8 targetLevel = 0;
+    in >> unitId >> targetLevel;
+    if (in.status() != QDataStream::Ok) return false;
+    action.unitId = unitId;
+    action.targetLevel = targetLevel;
+    return true;
+}
+
+QByteArray BattleStateCodec::encodeMoveAction(int unitId, game::core::MapPosition position)
+{
+    QByteArray body;
+    QDataStream out(&body, QIODevice::WriteOnly);
+    out.setByteOrder(QDataStream::BigEndian);
+    out << static_cast<quint16>(unitId)
+        << static_cast<qint16>(position.row)
+        << static_cast<qint16>(position.col);
+    return body;
+}
+
+bool BattleStateCodec::decodeMoveAction(const QByteArray& body, UnitAction& action)
+{
+    QDataStream in(body);
+    in.setByteOrder(QDataStream::BigEndian);
+    quint16 unitId = 0;
+    qint16 row = 0;
+    qint16 col = 0;
+    in >> unitId >> row >> col;
+    if (in.status() != QDataStream::Ok) return false;
+    action.unitId = unitId;
+    action.position = {row, col};
+    return true;
+}
+
+QByteArray BattleStateCodec::encodeRecallAction(int unitId)
+{
+    QByteArray body;
+    QDataStream out(&body, QIODevice::WriteOnly);
+    out.setByteOrder(QDataStream::BigEndian);
+    out << static_cast<quint16>(unitId);
+    return body;
+}
+
+bool BattleStateCodec::decodeRecallAction(const QByteArray& body, UnitAction& action)
+{
+    QDataStream in(body);
+    in.setByteOrder(QDataStream::BigEndian);
+    quint16 unitId = 0;
+    in >> unitId;
+    if (in.status() != QDataStream::Ok) return false;
+    action.unitId = unitId;
+    return true;
+}
+
+QByteArray BattleStateCodec::encodeWaveId(int waveId)
+{
+    QByteArray body;
+    QDataStream out(&body, QIODevice::WriteOnly);
+    out.setByteOrder(QDataStream::BigEndian);
+    out << static_cast<quint16>(waveId);
+    return body;
+}
+
+bool BattleStateCodec::decodeWaveId(const QByteArray& body, int& waveId)
+{
+    QDataStream in(body);
+    in.setByteOrder(QDataStream::BigEndian);
+    quint16 value = 0;
+    in >> value;
+    if (in.status() != QDataStream::Ok) return false;
+    waveId = value;
+    return true;
 }
 
 quint32 BattleStateCodec::checksum(const game::core::BattleSnapshot& snapshot)
@@ -238,6 +407,8 @@ quint32 BattleStateCodec::checksum(const game::core::BattleSnapshot& snapshot)
         mix(static_cast<quint32>(monster.kind));
         mix(static_cast<quint32>(monster.row));
         mix(static_cast<quint32>(monster.col));
+        mix(static_cast<quint32>(monster.exactRow * 1000.0));
+        mix(static_cast<quint32>(monster.exactCol * 1000.0));
         mix(static_cast<quint32>(monster.hp));
         mix(static_cast<quint32>(monster.maxHp));
     }

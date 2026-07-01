@@ -53,6 +53,12 @@ bool Map::clearOccupant(MapPosition position) {
     return true;
 }
 
+void Map::clearOccupancy() {
+    for (MapGrid& grid : grids_) {
+        grid.clearOccupant();
+    }
+}
+
 bool Map::canDeployAt(MapPosition position) const {
     const MapGrid* grid = gridAt(position);
     return grid && grid->isDeployable();

@@ -81,27 +81,36 @@ public:
         return d;
     }
 
-    // DeployPayload → 4 字节
+    // DeployPayload → 7 字节
     static QByteArray serialize(const DeployPayload& p) {
         QByteArray d;
         d.push_back(static_cast<char>(p.cardKind));
-        d.push_back(static_cast<char>(p.row));
-        d.push_back(static_cast<char>(p.col));
-        d.push_back(static_cast<char>(p.unitId));
+        d.append(encodeUint16(static_cast<quint16>(p.row)));
+        d.append(encodeUint16(static_cast<quint16>(p.col)));
+        d.append(encodeUint16(p.unitId));
         return d;
     }
 
-    // UpgradePayload → 2 字节
+    // UpgradePayload → 3 字节
     static QByteArray serialize(const UpgradePayload& p) {
         QByteArray d;
-        d.push_back(static_cast<char>(p.unitId));
+        d.append(encodeUint16(p.unitId));
         d.push_back(static_cast<char>(p.targetLevel));
         return d;
     }
 
-    // RecallPayload → 1 字节
+    // MovePayload → 6 字节
+    static QByteArray serialize(const MovePayload& p) {
+        QByteArray d;
+        d.append(encodeUint16(p.unitId));
+        d.append(encodeUint16(static_cast<quint16>(p.row)));
+        d.append(encodeUint16(static_cast<quint16>(p.col)));
+        return d;
+    }
+
+    // RecallPayload → 2 字节
     static QByteArray serialize(const RecallPayload& p) {
-        return encodeUint8(p.unitId);
+        return encodeUint16(p.unitId);
     }
 
     // CoreHpPayload → 4 字节

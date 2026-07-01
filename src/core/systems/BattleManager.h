@@ -85,6 +85,13 @@ public:
     BattleSnapshot opponentSnapshot() const;
 
 private:
+    void recordEvent(BattleEventType type,
+                     int sourceId,
+                     int targetId,
+                     int amount,
+                     MapPosition position,
+                     CardKind cardKind = CardKind::Attack,
+                     MonsterKind monsterKind = MonsterKind::AtkNormal);
     // 移除死亡怪物并发放奖励；移除逃逸怪物并扣基地血。
     void removeResolvedMonsters();
     void releaseDueSpawns();
@@ -111,6 +118,8 @@ private:
     std::vector<ScheduledMonsterSpawn> pendingSpawns_;
     std::vector<Projectile> projectiles_;
     std::unordered_map<int, double> monsterCooldowns_;
+    std::vector<BattleEvent> events_;
+    int nextEventSequence_ = 1;
     double waveElapsedSeconds_ = 0.0;
     // 当前波次编号。
     int currentWave_;

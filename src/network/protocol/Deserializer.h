@@ -47,6 +47,13 @@ public:
         return true;
     }
 
+    bool decodeInt16(qint16& out) {
+        quint16 tmp;
+        if (!decodeUint16(tmp)) return false;
+        out = static_cast<qint16>(tmp);
+        return true;
+    }
+
     bool decodeUint32(quint32& out) {
         if (!hasData(4)) return false;
         out = qFromBigEndian<quint32>(
@@ -99,29 +106,30 @@ public:
         return true;
     }
 
-    // DeployPayload → 4 字节
+    // DeployPayload → 7 字节
     bool decode(DeployPayload& out) {
-        if (!hasData(4)) return false;
-        out.cardKind = static_cast<quint8>(m_data[m_pos]);
-        out.row      = static_cast<quint8>(m_data[m_pos + 1]);
-        out.col      = static_cast<quint8>(m_data[m_pos + 2]);
-        out.unitId   = static_cast<quint8>(m_data[m_pos + 3]);
-        m_pos += 4;
-        return true;
+        if (!decodeUint8(out.cardKind)) return false;
+        if (!decodeInt16(out.row)) return false;
+        if (!decodeInt16(out.col)) return false;
+        return decodeUint16(out.unitId);
     }
 
-    // UpgradePayload → 2 字节
+    // UpgradePayload → 3 字节
     bool decode(UpgradePayload& out) {
-        if (!hasData(2)) return false;
-        out.unitId      = static_cast<quint8>(m_data[m_pos]);
-        out.targetLevel = static_cast<quint8>(m_data[m_pos + 1]);
-        m_pos += 2;
-        return true;
+        if (!decodeUint16(out.unitId)) return false;
+        return decodeUint8(out.targetLevel);
     }
 
-    // RecallPayload → 1 字节
+    // MovePayload → 6 字节
+    bool decode(MovePayload& out) {
+        if (!decodeUint16(out.unitId)) return false;
+        if (!decodeInt16(out.row)) return false;
+        return decodeInt16(out.col);
+    }
+
+    // RecallPayload → 2 字节
     bool decode(RecallPayload& out) {
-        return decodeUint8(out.unitId);
+        return decodeUint16(out.unitId);
     }
 
     // CoreHpPayload → 4 字节
