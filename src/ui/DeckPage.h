@@ -2,8 +2,10 @@
 #define DECKPAGE_H
 
 #include "ui/CardCollection.h"
+#include "ui/PresetManager.h"
 
 #include <QColor>
+#include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QRectF>
@@ -65,9 +67,15 @@ private:
     QPushButton *m_btnDrawTen;
     QPushButton *m_btnCloseDraw;
     QPushButton *m_btnUpgradeCard;
+    QComboBox   *m_presetSelector;
+    QPushButton *m_btnSavePreset;
+    QPushButton *m_btnLoadPreset;
+    QPushButton *m_btnDeletePreset;
 
     QVector<CardDisplayInfo> m_allCards;
     QVector<int> m_selectedSlots;
+    PresetManager m_presetManager;
+    QVector<DeckPreset> m_presets;
     int m_selectedCardIndex;
 
     QVector<QPushButton*> m_slotButtons;
@@ -105,6 +113,11 @@ private:
     void refreshDrawOverlayLayout();
     void setDrawOverlayVisible(bool visible);
     void updateLockLabelVisibilityForOverlay();
+    void refreshPresetControls(const QString& selectedId = QString());
+    void saveCurrentDeckAsPreset();
+    void loadSelectedPreset();
+    void deleteSelectedPreset();
+    bool applyDeckKinds(const QVector<game::core::CardKind>& kinds);
 };
 
 #endif // DECKPAGE_H

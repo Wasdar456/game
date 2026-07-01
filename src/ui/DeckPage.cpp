@@ -6,10 +6,14 @@
 #include "ui/CardCollection.h"
 
 #include <QEasingCurve>
+#include <QComboBox>
 #include <QGraphicsOpacityEffect>
 #include <QIcon>
+#include <QInputDialog>
 #include <QLabel>
 #include <QFontMetrics>
+#include <QLineEdit>
+#include <QMessageBox>
 #include <QParallelAnimationGroup>
 #include <QPainter>
 #include <QPaintEvent>
@@ -106,6 +110,23 @@ QString skillTextForSpec(const game::core::CardSpec& spec)
     return "单体攻击单位";
 }
 
+QString roleNoteForSpec(const game::core::CardSpec& spec)
+{
+    if (game::core::isProduceCardKind(spec.kind)) {
+        return "Economy unit. Protect it early to accelerate deployments.";
+    }
+    if (game::core::isHealCardKind(spec.kind)) {
+        return "Support unit. Keeps damaged allies alive inside its range.";
+    }
+    if (spec.projectileKind == game::core::ProjectileKind::Aoe) {
+        return "Area attacker. Best against clustered enemies on bends.";
+    }
+    if (spec.projectileKind == game::core::ProjectileKind::Sniper) {
+        return "Long-range attacker. Covers distant lanes from safe tiles.";
+    }
+    return "Frontline attacker. Reliable damage with flexible placement.";
+}
+
 } // namespace
 
 DeckPage::DeckPage(QWidget *parent)
@@ -125,6 +146,10 @@ DeckPage::DeckPage(QWidget *parent)
     , m_btnDrawTen(nullptr)
     , m_btnCloseDraw(nullptr)
     , m_btnUpgradeCard(nullptr)
+    , m_presetSelector(nullptr)
+    , m_btnSavePreset(nullptr)
+    , m_btnLoadPreset(nullptr)
+    , m_btnDeletePreset(nullptr)
     , m_selectedCardIndex(0)
     , m_cardPoolScroll(nullptr)
     , m_backHotspot(nullptr)
@@ -180,6 +205,7 @@ void DeckPage::showEvent(QShowEvent *event)
     refreshDeckSlotsDisplay();
     updateStartBattleButton();
     refreshCollectionDisplay();
+    refreshPresetControls();
     update();
 }
 
@@ -319,11 +345,11 @@ void DeckPage::initUI()
     m_detailPanel->setWordWrap(true);
     m_detailPanel->setStyleSheet(
         "QLabel {"
-        " background-color: rgb(239, 219, 173);"
+        " background-color: rgba(239, 219, 173, 0.98);"
         " color: #3a2819;"
-        " border: 2px solid rgba(92, 64, 36, 0.72);"
-        " border-radius: 5px;"
-        " padding: 14px;"
+        " border: 3px solid rgba(92, 64, 36, 0.78);"
+        " border-radius: 7px;"
+        " padding: 16px;"
         " font-family: 'Microsoft YaHei UI', 'PingFang SC', sans-serif;"
         " font-size: 13px;"
         "}"
@@ -360,7 +386,7 @@ void DeckPage::initUI()
         lockLabel->setStyleSheet(
             "QLabel { color:#fff1c4; background:rgba(35,25,18,0.64);"
             " border:2px solid rgba(255,218,115,0.72); border-radius:5px;"
-            " font-size:22px; font-weight:900; }");
+            " font-size:18px; font-weight:900; letter-spacing:0px; }");
         m_cardLockLabels.append(lockLabel);
     }
 
@@ -467,6 +493,39 @@ void DeckPage::initUI()
         }
     });
 
+    const QString presetButtonStyle =
+        "QPushButton { color:#352314; background:rgba(246,218,147,0.97);"
+        " border:2px solid #704821; border-radius:7px; font-size:13px; font-weight:900; }"
+        "QPushButton:hover { background:#ffe4a0; border-color:#d4a047; }"
+        "QPushButton:pressed { background:#c99653; }"
+        "QPushButton:disabled { color:#8f7352; background:rgba(210,188,145,0.72); border-color:#8a7354; }";
+    m_presetSelector = new QComboBox(this);
+    m_presetSelector->setCursor(Qt::PointingHandCursor);
+    m_presetSelector->setStyleSheet(
+        "QComboBox { color:#352314; background:rgba(244,224,174,0.97);"
+        " border:2px solid rgba(92,64,36,0.82); border-radius:7px;"
+        " font-size:13px; font-weight:850; padding:3px 8px; }"
+        "QComboBox::drop-down { width:24px; border:none; }"
+        "QComboBox QAbstractItemView { color:#352314; background:#f1dca9;"
+        " selection-background-color:#d4a047; selection-color:#24170d; }");
+    m_btnSavePreset = new QPushButton("Save", this);
+    m_btnLoadPreset = new QPushButton("Load", this);
+    m_btnDeletePreset = new QPushButton("Delete", this);
+    for (QPushButton *button : {m_btnSavePreset, m_btnLoadPreset, m_btnDeletePreset}) {
+        button->setCursor(Qt::PointingHandCursor);
+        button->setStyleSheet(presetButtonStyle);
+    }
+    m_btnDeletePreset->setToolTip("Delete the selected saved preset");
+    connect(m_btnSavePreset, &QPushButton::clicked, this, &DeckPage::saveCurrentDeckAsPreset);
+    connect(m_btnLoadPreset, &QPushButton::clicked, this, &DeckPage::loadSelectedPreset);
+    connect(m_btnDeletePreset, &QPushButton::clicked, this, &DeckPage::deleteSelectedPreset);
+    connect(m_presetSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this]() {
+                const bool savedPreset = m_presetSelector->currentData().toString() != "default";
+                m_btnDeletePreset->setEnabled(savedPreset);
+            });
+    refreshPresetControls();
+
     updateArtworkLayout();
 }
 
@@ -495,6 +554,10 @@ void DeckPage::updateArtworkLayout()
     m_ticketLabel->setGeometry(scaledRect(QRect(1214, 688, 280, 42), m_canvasRect).toRect());
     m_btnDrawPanel->setGeometry(scaledRect(QRect(1214, 738, 132, 52), m_canvasRect).toRect());
     m_btnUpgradeCard->setGeometry(scaledRect(QRect(1362, 738, 132, 52), m_canvasRect).toRect());
+    m_presetSelector->setGeometry(scaledRect(QRect(1214, 168, 280, 34), m_canvasRect).toRect());
+    m_btnSavePreset->setGeometry(scaledRect(QRect(1214, 210, 84, 38), m_canvasRect).toRect());
+    m_btnLoadPreset->setGeometry(scaledRect(QRect(1312, 210, 84, 38), m_canvasRect).toRect());
+    m_btnDeletePreset->setGeometry(scaledRect(QRect(1410, 210, 84, 38), m_canvasRect).toRect());
     m_backHotspot->setCanvasRect(scaledRect(kBackRect, m_canvasRect));
     m_startHotspot->setCanvasRect(scaledRect(kStartRect, m_canvasRect));
 
@@ -509,6 +572,10 @@ void DeckPage::updateArtworkLayout()
     m_ticketLabel->raise();
     m_btnDrawPanel->raise();
     m_btnUpgradeCard->raise();
+    m_presetSelector->raise();
+    m_btnSavePreset->raise();
+    m_btnLoadPreset->raise();
+    m_btnDeletePreset->raise();
     m_backHotspot->raise();
     m_startHotspot->raise();
     updateLockLabelVisibilityForOverlay();
@@ -621,39 +688,53 @@ void DeckPage::refreshDetailPanel(int cardIndex)
     const int battleUpgradeLv3 = game::core::constants::UpgradeBaseCost * 2;
     const int recallPercent = game::core::constants::RecallRefundPercent;
 
+    const auto& spec = game::core::cardSpec(card.kind);
+    const QString attackText = card.attack > 0 ? QString::number(card.attack) : QString("-");
+    const QString rangeText = card.attackRange > 0 ? QString::number(card.attackRange) : QString("-");
+    const QString cooldownText = card.attackInterval > 0.0
+                                     ? QString("%1 s").arg(card.attackInterval, 0, 'f', 1)
+                                     : QString("-");
+
     m_detailPanel->setText(QString(
-        "<div style='font-size:20px; font-weight:800; margin-bottom:10px;'>%1</div>"
-        "<div style='color:#76552d; font-weight:700; margin-bottom:9px;'>%2 | %3</div>"
-        "<hr style='border:0; border-top:1px solid #9b7545;'>"
-        "<table cellspacing='5'>"
-        "<tr><td><b>HP</b></td><td>%4</td></tr>"
-        "<tr><td><b>ATK</b></td><td>%5</td></tr>"
-        "<tr><td><b>Range</b></td><td>%6</td></tr>"
-        "<tr><td><b>Interval</b></td><td>%7 s</td></tr>"
-        "<tr><td><b>Move</b></td><td>%8 cells</td></tr>"
-        "<tr><td><b>Cost</b></td><td>%9 Juice</td></tr>"
+        "<div style='font-size:22px; font-weight:900; margin-bottom:4px;'>%1</div>"
+        "<div style='color:#684723; font-size:13px; font-weight:850; margin-bottom:10px;'>%2 · %3 · Lv %4</div>"
+        "<table width='100%' cellspacing='5' cellpadding='3' style='font-size:13px;'>"
+        "<tr>"
+        "<td bgcolor='#f7e6bd'><b>Cost</b><br><span style='font-size:17px;'>%5</span></td>"
+        "<td bgcolor='#f7e6bd'><b>HP</b><br><span style='font-size:17px;'>%6</span></td>"
+        "<td bgcolor='#f7e6bd'><b>ATK</b><br><span style='font-size:17px;'>%7</span></td>"
+        "</tr><tr>"
+        "<td bgcolor='#eed19a'><b>Range</b><br>%8</td>"
+        "<td bgcolor='#eed19a'><b>Cooldown</b><br>%9</td>"
+        "<td bgcolor='#eed19a'><b>Move</b><br>%10</td>"
+        "</tr>"
         "</table>"
-        "<hr style='border:0; border-top:1px solid #9b7545;'>"
-        "<div><b>Collection</b><br>Level %10 | Shards %11 | Next Collection Upgrade %12</div>"
-        "<div style='margin-top:9px;'><b>Battle Upgrade</b><br>Lv1 → Lv2: %13 Juice | Lv2 → Lv3: %14 Juice | Recall refund: %15%% deploy cost</div>"
-        "<div style='margin-top:9px;'><b>Skill</b><br>%16</div>"
-        "<div style='margin-top:9px;'><b>Target Priority</b><br>%17</div>")
+        "<div style='margin-top:8px; padding:7px; background:#f6e2b3;'>"
+        "<b>Role</b><br>%11</div>"
+        "<div style='margin-top:8px; padding:7px; background:#efd39b;'>"
+        "<b>Special</b><br>%12</div>"
+        "<div style='margin-top:8px; padding:7px; background:#f6e2b3;'>"
+        "<b>Collection</b><br>Shards %13 · Next %14</div>"
+        "<div style='margin-top:8px; color:#6f4b25; font-size:12px;'>"
+        "Battle upgrades: Lv2 %15 Juice · Lv3 %16 Juice · Recall refund %17%%<br>"
+        "Priority: %18</div>")
         .arg(card.name)
         .arg(cardTypeText(card.kind))
         .arg(owned ? "Owned" : "Locked")
-        .arg(card.maxHp)
-        .arg(card.attack)
-        .arg(card.attackRange)
-        .arg(card.attackInterval)
-        .arg(card.moveLimit)
-        .arg(card.deployCost)
         .arg(level)
+        .arg(card.deployCost)
+        .arg(card.maxHp)
+        .arg(attackText)
+        .arg(rangeText)
+        .arg(cooldownText)
+        .arg(card.moveLimit)
+        .arg(roleNoteForSpec(spec))
+        .arg(card.skillDesc)
         .arg(fragments)
         .arg(upgradeCost > 0 ? QString("%1 shards").arg(upgradeCost) : QString("Max"))
         .arg(battleUpgradeLv2)
         .arg(battleUpgradeLv3)
         .arg(recallPercent)
-        .arg(card.skillDesc)
         .arg(card.priorityDesc));
     refreshCollectionDisplay();
 }
@@ -1068,4 +1149,124 @@ void DeckPage::updateLockLabelVisibilityForOverlay()
             m_cardLockLabels[i]->raise();
         }
     }
+}
+
+void DeckPage::refreshPresetControls(const QString& selectedId)
+{
+    if (!m_presetSelector) return;
+
+    const QString currentId = selectedId.isEmpty()
+                                  ? m_presetSelector->currentData().toString()
+                                  : selectedId;
+    m_presets = m_presetManager.listPresets();
+    m_presetSelector->blockSignals(true);
+    m_presetSelector->clear();
+    int selectedIndex = 0;
+    for (int i = 0; i < m_presets.size(); ++i) {
+        const auto& preset = m_presets[i];
+        const QString suffix = preset.id == "default"
+                                   ? QString("built-in")
+                                   : preset.updatedAt.toLocalTime().toString("MM-dd hh:mm");
+        m_presetSelector->addItem(QString("%1  (%2)").arg(preset.displayName, suffix), preset.id);
+        if (preset.id == currentId) {
+            selectedIndex = i;
+        }
+    }
+    m_presetSelector->setCurrentIndex(selectedIndex);
+    m_presetSelector->blockSignals(false);
+    const bool savedPreset = m_presetSelector->currentData().toString() != "default";
+    m_btnDeletePreset->setEnabled(savedPreset);
+    m_btnDeletePreset->setToolTip(savedPreset
+                                      ? "Delete selected saved preset"
+                                      : "The built-in default preset cannot be deleted");
+    m_presetSelector->setToolTip(QString("Presets stored at %1").arg(m_presetManager.storagePath()));
+}
+
+bool DeckPage::applyDeckKinds(const QVector<game::core::CardKind>& kinds)
+{
+    QVector<int> presetSlots(MAX_DECK_SLOTS, -1);
+    int slotIndex = 0;
+    for (game::core::CardKind kind : kinds) {
+        if (slotIndex >= MAX_DECK_SLOTS) break;
+        const int index = indexForKind(kind);
+        if (index < 0) continue;
+        if (!CardCollection::isOwned(kind)) continue;
+        presetSlots[slotIndex++] = index;
+    }
+    if (slotIndex == 0) {
+        return false;
+    }
+    m_selectedSlots = presetSlots;
+    refreshDeckSlotsDisplay();
+    updateStartBattleButton();
+    return true;
+}
+
+void DeckPage::saveCurrentDeckAsPreset()
+{
+    const QVector<game::core::CardKind> deck = getSelectedKinds();
+    if (deck.isEmpty()) {
+        QToolTip::showText(mapToGlobal(m_canvasRect.center().toPoint()),
+                           "Select at least one owned card before saving.", this);
+        return;
+    }
+
+    bool ok = false;
+    const QString name = QInputDialog::getText(this,
+                                               "Save Deck Preset",
+                                               "Preset name:",
+                                               QLineEdit::Normal,
+                                               QString("Squad %1").arg(m_presets.size()),
+                                               &ok).trimmed();
+    if (!ok) return;
+
+    QString id;
+    QString error;
+    if (!m_presetManager.savePreset(name, deck, &id, &error)) {
+        QMessageBox::warning(this, "Preset Not Saved", error);
+        return;
+    }
+    refreshPresetControls(id);
+}
+
+void DeckPage::loadSelectedPreset()
+{
+    if (!m_presetSelector) return;
+    DeckPreset preset;
+    if (!m_presetManager.loadPreset(m_presetSelector->currentData().toString(), preset)) {
+        QMessageBox::warning(this, "Preset Not Loaded", "The selected preset could not be loaded.");
+        refreshPresetControls();
+        return;
+    }
+    if (!applyDeckKinds(preset.cards)) {
+        QMessageBox::information(this,
+                                 "Preset Needs Cards",
+                                 "None of the cards in this preset are currently unlocked.");
+        return;
+    }
+    QToolTip::showText(mapToGlobal(m_canvasRect.center().toPoint()),
+                       QString("Loaded %1").arg(preset.displayName), this);
+}
+
+void DeckPage::deleteSelectedPreset()
+{
+    if (!m_presetSelector) return;
+    const QString id = m_presetSelector->currentData().toString();
+    if (id == "default") {
+        QToolTip::showText(mapToGlobal(m_canvasRect.center().toPoint()),
+                           "The built-in default preset cannot be deleted.", this);
+        return;
+    }
+    const QString name = m_presetSelector->currentText();
+    if (QMessageBox::question(this,
+                              "Delete Preset",
+                              QString("Delete %1?").arg(name))
+        != QMessageBox::Yes) {
+        return;
+    }
+    QString error;
+    if (!m_presetManager.deletePreset(id, &error)) {
+        QMessageBox::warning(this, "Preset Not Deleted", error);
+    }
+    refreshPresetControls();
 }

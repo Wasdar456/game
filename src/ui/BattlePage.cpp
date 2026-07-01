@@ -1631,6 +1631,8 @@ void BattlePage::initUI()
 
     m_btnSkill = new QPushButton("自动技能", this);
     m_btnSkill->setEnabled(false);
+    m_btnSkill->setVisible(false);
+    m_btnSkill->setToolTip("No player-triggered skills are available in this build.");
     m_btnSkill->setStyleSheet(roundButtonStyle);
 
     m_btnExit = new QPushButton("Menu", this);
