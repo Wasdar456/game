@@ -100,6 +100,7 @@ private:
 
     // ========== 页面导航辅助 ==========
     QWidget *m_previousPage;  ///< 记录切换到 DeckPage 前的来源页面
+    QWidget *m_settingsReturnPage;
 
     // ========== 网络上下文（PVP 模式） ==========
     NetworkContext m_networkContext;  ///< 从 LobbyPage 传递到 BattlePage 的联机信息

@@ -70,6 +70,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_resultPage(nullptr)
     , m_transitionOverlay(nullptr)
     , m_previousPage(nullptr)
+    , m_settingsReturnPage(nullptr)
     , m_battleRevealPlayed(false)
 {
     // ----- 鍒涘缓 BattleManager -----
@@ -80,7 +81,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_battleManager = new game::core::BattleManager();
 
     // 璁剧疆绐楀彛鍩烘湰灞炴€?
-    this->setWindowTitle("濉旈槻瀵规垬");
+    this->setWindowTitle("Crazy Fruity Fight");
     this->setMinimumSize(1280, 720);
     this->resize(1280, 720);
 
@@ -226,6 +227,7 @@ void MainWindow::connectSignals()
     // 鐐瑰嚮 [璁剧疆] 鈫?鍒囨崲鍒拌缃〉
     connect(m_startPage, &StartPage::signalSettingsClicked,
             this, [this]() {
+                m_settingsReturnPage = m_startPage;
                 fadeToPage(m_settingsPage);
             });
 
@@ -354,6 +356,12 @@ void MainWindow::connectSignals()
                 }
             });
 
+    connect(m_battlePage, &BattlePage::signalSettingsRequested,
+            this, [this]() {
+                m_settingsReturnPage = m_battlePage;
+                fadeToPage(m_settingsPage);
+            });
+
     connect(m_resultPage, &ResultPage::signalReplay,
             this, [this]() {
                 m_battleManager->clearBattle();
@@ -404,7 +412,7 @@ void MainWindow::connectSignals()
     // 鐐瑰嚮 [杩斿洖] 鈫?鍥炲埌璧峰椤?
     connect(m_settingsPage, &SettingsPage::signalBack,
             this, [this]() {
-                fadeToPage(m_startPage);
+                fadeToPage(m_settingsReturnPage ? m_settingsReturnPage : m_startPage);
             });
 
     connect(m_settingsPage, &SettingsPage::signalVolumeChanged,

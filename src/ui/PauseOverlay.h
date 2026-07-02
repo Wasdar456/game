@@ -18,6 +18,7 @@ public:
 
 signals:
     void signalResume();
+    void signalSettings();
     void signalRestart();
     void signalExitToLobby();
 
@@ -28,6 +29,7 @@ private:
     QWidget *m_panel;
     QLabel *m_modeLabel;
     QPushButton *m_resumeButton;
+    QPushButton *m_settingsButton;
     QPushButton *m_restartButton;
     QPushButton *m_exitButton;
     qreal m_phase;

@@ -3218,6 +3218,8 @@ void BattlePage::connectSignals()
 
     connect(m_pauseOverlay, &PauseOverlay::signalResume,
             this, [this]() { setPaused(false); });
+    connect(m_pauseOverlay, &PauseOverlay::signalSettings,
+            this, [this]() { emit signalSettingsRequested(); });
     connect(m_pauseOverlay, &PauseOverlay::signalRestart,
             this, [this]() {
                 setPaused(false);

@@ -36,6 +36,7 @@ PauseOverlay::PauseOverlay(QWidget *parent)
     , m_panel(nullptr)
     , m_modeLabel(nullptr)
     , m_resumeButton(nullptr)
+    , m_settingsButton(nullptr)
     , m_restartButton(nullptr)
     , m_exitButton(nullptr)
     , m_phase(0.0)
@@ -48,7 +49,7 @@ PauseOverlay::PauseOverlay(QWidget *parent)
     outer->addStretch();
 
     m_panel = new QFrame(this);
-    m_panel->setFixedSize(470, 470);
+    m_panel->setFixedSize(470, 540);
     m_panel->setStyleSheet(
         "QFrame {"
         " background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
@@ -75,9 +76,10 @@ PauseOverlay::PauseOverlay(QWidget *parent)
     panelLayout->addSpacing(12);
 
     m_resumeButton = new QPushButton("继续战斗", m_panel);
+    m_settingsButton = new QPushButton("设置", m_panel);
     m_restartButton = new QPushButton("重新开始", m_panel);
     m_exitButton = new QPushButton("返回大厅", m_panel);
-    for (QPushButton *button : {m_resumeButton, m_restartButton, m_exitButton}) {
+    for (QPushButton *button : {m_resumeButton, m_settingsButton, m_restartButton, m_exitButton}) {
         button->setFixedHeight(60);
         button->setCursor(Qt::PointingHandCursor);
         button->setStyleSheet(buttonStyle(button == m_resumeButton));
@@ -96,6 +98,7 @@ PauseOverlay::PauseOverlay(QWidget *parent)
     outer->addStretch();
 
     connect(m_resumeButton, &QPushButton::clicked, this, &PauseOverlay::signalResume);
+    connect(m_settingsButton, &QPushButton::clicked, this, &PauseOverlay::signalSettings);
     connect(m_restartButton, &QPushButton::clicked, this, &PauseOverlay::signalRestart);
     connect(m_exitButton, &QPushButton::clicked, this, &PauseOverlay::signalExitToLobby);
 

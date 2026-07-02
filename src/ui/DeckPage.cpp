@@ -434,9 +434,8 @@ void DeckPage::initUI()
     }
 
     for (int i = 0; i < kSquadRects.size(); ++i) {
-        auto *hotspot = new ArtHotspot(artwork, kSquadRects[i], this);
-        hotspot->setGlowColor(QColor(255, 223, 117));
-        hotspot->setToolTip(QString("切换到 Squad %1").arg(i + 1));
+        auto *hotspot = new ArtHotspot(QString(), kSquadRects[i], this);
+        hotspot->setGlowColor(QColor(255, 218, 92));
         hotspot->setClickHandler([this, i]() {
             switchSquad(i);
         });
@@ -1325,15 +1324,11 @@ void DeckPage::switchSquad(int squadIndex)
         return;
     }
     if (squadIndex == m_currentSquadIndex) {
-        QToolTip::showText(mapToGlobal(scaledRect(kSquadRects[squadIndex], m_canvasRect).center().toPoint()),
-                           QString("正在编辑 Squad %1").arg(squadIndex + 1), this);
         return;
     }
 
     saveCurrentSquad();
     loadSquadToDeck(squadIndex);
-    QToolTip::showText(mapToGlobal(scaledRect(kSquadRects[squadIndex], m_canvasRect).center().toPoint()),
-                       QString("已切换到 Squad %1").arg(squadIndex + 1), this);
 }
 
 void DeckPage::saveCurrentSquad()
@@ -1373,8 +1368,6 @@ void DeckPage::refreshSquadVisuals()
 {
     for (int i = 0; i < m_squadHotspots.size(); ++i) {
         m_squadHotspots[i]->setSelected(i == m_currentSquadIndex);
-        m_squadHotspots[i]->setToolTip(QString("Squad %1%2")
-                                           .arg(i + 1)
-                                           .arg(i == m_currentSquadIndex ? "（当前）" : " - 点击切换"));
+        m_squadHotspots[i]->setToolTip(QString());
     }
 }

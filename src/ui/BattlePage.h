@@ -226,6 +226,7 @@ signals:
     void signalBattleFinished(const BattleResult &result);
     void signalBattleCancelled();
     void signalBattleRestartRequested();
+    void signalSettingsRequested();
     void signalBackToDeploy();      ///< 怪物清空，返回部署阶段
 
 protected:
