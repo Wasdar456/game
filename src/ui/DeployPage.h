@@ -180,6 +180,7 @@ private:
     // ========== UI 组件 ==========
     DeployView *m_deployView;
     QLabel *m_titleLabel;
+    QLabel *m_phaseLabel;
     QLabel *m_deployCountLabel;
     QLabel *m_localCoreLabel;
     QLabel *m_enemyCoreLabel;

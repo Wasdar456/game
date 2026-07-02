@@ -244,6 +244,7 @@ private:
     QLabel *m_coreHpLabel;          ///< 核心血量
     QLabel *m_resourceLabel;        ///< 资源点数
     QLabel *m_phaseLabel;
+    QLabel *m_syncLabel;
 
     // ===== 底部操作栏 =====
     QVector<QPushButton*> m_cardButtons;  ///< 底部卡牌按钮（对应 CardKind）

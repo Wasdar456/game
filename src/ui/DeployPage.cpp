@@ -733,6 +733,7 @@ DeployPage::DeployPage(QWidget *parent)
     : QWidget(parent)
     , m_deployView(nullptr)
     , m_titleLabel(nullptr)
+    , m_phaseLabel(nullptr)
     , m_deployCountLabel(nullptr)
     , m_localCoreLabel(nullptr)
     , m_enemyCoreLabel(nullptr)
@@ -850,12 +851,13 @@ void DeployPage::initUI()
         "QLabel { color: #3B2819; background: #F2DCA9;"
         " border-radius: 4px;"
         " font-size: 18px; font-weight: 700; padding: 2px 6px; }";
-    m_titleLabel = new QLabel("Deploy Phase", this);
-    m_deployCountLabel = new QLabel("Resource 0", this);
-    m_localCoreLabel = new QLabel("Your Core 10/10", this);
-    m_enemyCoreLabel = new QLabel("Enemy Core 10/10", this);
-    m_opponentLabel = new QLabel("Syncing", this);
-    for (QLabel *label : {m_titleLabel, m_deployCountLabel, m_localCoreLabel,
+    m_titleLabel = new QLabel("0", this);
+    m_phaseLabel = new QLabel("Resource", this);
+    m_deployCountLabel = new QLabel("0", this);
+    m_localCoreLabel = new QLabel("10/10", this);
+    m_enemyCoreLabel = new QLabel("10/10", this);
+    m_opponentLabel = new QLabel("...", this);
+    for (QLabel *label : {m_titleLabel, m_phaseLabel, m_deployCountLabel, m_localCoreLabel,
                           m_enemyCoreLabel, m_opponentLabel}) {
         label->setAlignment(Qt::AlignCenter);
         label->setStyleSheet(labelStyle);
@@ -943,14 +945,14 @@ void DeployPage::layoutArtworkUi()
                      qMax(1, qRound(designRect.height() * sy)));
     };
 
-    const int fontPx = qMax(11, qRound(19 * std::min(sx, sy)));
+    const int fontPx = qMax(11, qRound(21 * std::min(sx, sy)));
     const QString labelStyle = QString(
         "QLabel { color: #3B2819; background: transparent;"
         " border: none;"
-        " font-size: %1px; font-weight: 800; padding: 0px; }")
+        " font-size: %1px; font-weight: 900; padding: 0px; }")
         .arg(fontPx);
     for (QLabel *label : {m_titleLabel, m_deployCountLabel, m_localCoreLabel,
-                          m_enemyCoreLabel, m_opponentLabel}) {
+                          m_phaseLabel, m_enemyCoreLabel, m_opponentLabel}) {
         label->setStyleSheet(labelStyle);
     }
 
@@ -981,11 +983,12 @@ void DeployPage::layoutArtworkUi()
     const QRectF deployRect = m_isPvp ? pvpLayout.deployViewRect
                                       : QRectF(174, 126, 1324, 552);
     m_deployView->setGeometry(mapped(deployRect));
-    m_titleLabel->setGeometry(mapped(QRectF(135, 35, 126, 50)));
-    m_localCoreLabel->setGeometry(mapped(QRectF(615, 29, 210, 50)));
-    m_enemyCoreLabel->setGeometry(mapped(QRectF(918, 29, 212, 50)));
-    m_deployCountLabel->setGeometry(mapped(QRectF(1210, 35, 137, 50)));
-    m_opponentLabel->setGeometry(mapped(QRectF(1410, 35, 112, 50)));
+    m_titleLabel->setGeometry(mapped(QRectF(210, 36, 52, 50)));
+    m_phaseLabel->setGeometry(mapped(QRectF(450, 36, 104, 50)));
+    m_localCoreLabel->setGeometry(mapped(QRectF(775, 36, 96, 50)));
+    m_enemyCoreLabel->setGeometry(mapped(QRectF(1090, 36, 96, 50)));
+    m_deployCountLabel->setGeometry(mapped(QRectF(1368, 36, 58, 50)));
+    m_opponentLabel->setGeometry(mapped(QRectF(1568, 36, 62, 50)));
     m_btnBack->setGeometry(mapped(QRectF(90, 775, 190, 64)));
     m_btnStartBattle->setGeometry(mapped(QRectF(1380, 775, 205, 64)));
 
@@ -1007,7 +1010,7 @@ void DeployPage::layoutArtworkUi()
 
     m_deployView->lower();
     const QVector<QWidget*> foregroundWidgets = {
-        m_titleLabel, m_deployCountLabel, m_localCoreLabel, m_enemyCoreLabel, m_opponentLabel,
+        m_titleLabel, m_phaseLabel, m_deployCountLabel, m_localCoreLabel, m_enemyCoreLabel, m_opponentLabel,
         m_btnBack, m_btnStartBattle
     };
     for (QWidget *widget : foregroundWidgets) {
@@ -1162,7 +1165,7 @@ void DeployPage::initDeployment()
     updateDeployCount();
     m_btnStartBattle->setEnabled(true);
     m_btnStartBattle->setText("Ready");
-    m_opponentLabel->setText("Syncing");
+    m_opponentLabel->setText("...");
 
     game::core::BattleSnapshot snap = m_battleManager->snapshot();
     m_deployView->updateFromSnapshot(snap);
@@ -1216,12 +1219,13 @@ void DeployPage::setupMap()
 void DeployPage::updateDeployCount()
 {
     int resources = m_battleManager ? m_battleManager->resources().resources() : 0;
-    m_titleLabel->setText(QString("Deploy %1").arg(m_deployedCount));
-    m_deployCountLabel->setText(QString("Resource %1").arg(resources));
+    m_titleLabel->setText("0");
+    m_phaseLabel->setText("Resource");
+    m_deployCountLabel->setText(QString::number(resources));
     if (m_battleManager) {
         const auto snapshot = m_battleManager->snapshot();
-        m_localCoreLabel->setText(QString("Your Core %1/10").arg(snapshot.baseHealth));
-        m_enemyCoreLabel->setText(QString("Enemy Core %1/10").arg(snapshot.opponentBaseHealth));
+        m_localCoreLabel->setText(QString("%1/10").arg(snapshot.baseHealth));
+        m_enemyCoreLabel->setText(QString("%1/10").arg(snapshot.opponentBaseHealth));
     }
 }
 
@@ -1245,7 +1249,7 @@ void DeployPage::reEnter()
     m_opponentReady = false;
     m_btnStartBattle->setEnabled(true);
     m_btnStartBattle->setText("Ready");
-    m_opponentLabel->setText("Syncing");
+    m_opponentLabel->setText("...");
     m_selectedUnitId = -1;
     m_deployView->m_selectedUnitId = -1;
     m_deployView->hideRadialMenu();
@@ -1365,11 +1369,7 @@ void DeployPage::sendDeploymentEnd()
         m_netCtx.client->sendPacket(game::network::MsgType::DEPLOYMENT_END);
     }
 
-    m_opponentLabel->setText("Sync OK");
-    m_opponentLabel->setStyleSheet(
-        "QLabel { color:#287a43; background-color:rgb(242,222,176);"
-        " border:1px solid rgba(94,66,37,0.55); border-radius:4px;"
-        " font-size:16px; font-weight:800; }");
+    m_opponentLabel->setText("OK");
     m_opponentLabel->update();
 }
 
@@ -1390,11 +1390,7 @@ void DeployPage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
     }
     case game::network::MsgType::DEPLOYMENT_END: {
         m_opponentReady = true;
-        m_opponentLabel->setText("Sync OK");
-        m_opponentLabel->setStyleSheet(
-            "QLabel { color:#287a43; background-color:rgb(242,222,176);"
-            " border:1px solid rgba(94,66,37,0.55); border-radius:4px;"
-            " font-size:16px; font-weight:800; }");
+        m_opponentLabel->setText("OK");
         m_opponentLabel->update();
 
         // Host 检查双方是否都准备好了

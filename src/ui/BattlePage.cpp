@@ -1495,6 +1495,7 @@ BattlePage::BattlePage(QWidget *parent)
     , m_coreHpLabel(nullptr)
     , m_resourceLabel(nullptr)
     , m_phaseLabel(nullptr)
+    , m_syncLabel(nullptr)
     , m_btnPause(nullptr)
     , m_btnSpeed(nullptr)
     , m_btnSkill(nullptr)
@@ -1548,13 +1549,14 @@ void BattlePage::initUI()
         "QLabel { color: #3B2819; background: #F2DCA9;"
         " border-radius: 4px;"
         " font-weight: 700; padding: 2px 6px; }";
-    m_waveLabel = new QLabel("Wave 0", this);
-    m_phaseLabel = new QLabel("Battle Phase", this);
-    m_coreHpLabel = new QLabel("Your Core 10/10", this);
-    m_opponentLabel = new QLabel("Enemy Core 10/10", this);
-    m_resourceLabel = new QLabel("Resource 0", this);
+    m_waveLabel = new QLabel("0", this);
+    m_phaseLabel = new QLabel("Resource", this);
+    m_coreHpLabel = new QLabel("10/10", this);
+    m_opponentLabel = new QLabel("10/10", this);
+    m_resourceLabel = new QLabel("0", this);
+    m_syncLabel = new QLabel("OK", this);
     for (QLabel *label : {m_waveLabel, m_phaseLabel, m_coreHpLabel,
-                          m_opponentLabel, m_resourceLabel}) {
+                          m_opponentLabel, m_resourceLabel, m_syncLabel}) {
         label->setAlignment(Qt::AlignCenter);
         label->setStyleSheet(labelStyle);
     }
@@ -1959,15 +1961,20 @@ void BattlePage::layoutArtworkUi()
                      qMax(1, qRound(designRect.height() * sy)));
     };
 
-    const int labelPx = qMax(11, qRound(20 * std::min(sx, sy)));
-    const QString labelStyle = QString(
-        "QLabel { color: #3B2819; background: #F2DCA9;"
-        " border-radius: %1px;"
-        " font-size: %2px; font-weight: 700; padding: 1px 4px; }")
-        .arg(qMax(3, qRound(5 * sx)))
-        .arg(labelPx);
+    const int labelPx = qMax(11, qRound((m_isPvp ? 21 : 20) * std::min(sx, sy)));
+    const QString labelStyle = m_isPvp
+        ? QString(
+              "QLabel { color: #2B1A10; background: transparent;"
+              " border: none; font-size: %1px; font-weight: 900; padding: 0px; }")
+              .arg(labelPx)
+        : QString(
+              "QLabel { color: #3B2819; background: #F2DCA9;"
+              " border-radius: %1px;"
+              " font-size: %2px; font-weight: 700; padding: 1px 4px; }")
+              .arg(qMax(3, qRound(5 * sx)))
+              .arg(labelPx);
     for (QLabel *label : {m_waveLabel, m_phaseLabel, m_coreHpLabel,
-                          m_opponentLabel, m_resourceLabel}) {
+                          m_opponentLabel, m_resourceLabel, m_syncLabel}) {
         label->setStyleSheet(labelStyle);
     }
 
@@ -1997,13 +2004,15 @@ void BattlePage::layoutArtworkUi()
 
     if (m_isPvp) {
         m_battleView->setGeometry(mapped(pvpLayout.battleViewRect));
-        m_waveLabel->setGeometry(mapped(QRectF(135, 35, 126, 50)));
-        m_phaseLabel->setGeometry(mapped(QRectF(355, 35, 166, 50)));
-        m_coreHpLabel->setGeometry(mapped(QRectF(615, 29, 210, 50)));
-        m_opponentLabel->setGeometry(mapped(QRectF(918, 29, 212, 50)));
-        m_resourceLabel->setGeometry(mapped(QRectF(1210, 35, 137, 50)));
+        m_waveLabel->setGeometry(mapped(QRectF(210, 36, 52, 50)));
+        m_phaseLabel->setGeometry(mapped(QRectF(450, 36, 104, 50)));
+        m_coreHpLabel->setGeometry(mapped(QRectF(775, 36, 96, 50)));
+        m_opponentLabel->setGeometry(mapped(QRectF(1090, 36, 96, 50)));
+        m_resourceLabel->setGeometry(mapped(QRectF(1368, 36, 58, 50)));
+        m_syncLabel->setGeometry(mapped(QRectF(1568, 36, 62, 50)));
         m_phaseLabel->show();
         m_opponentLabel->show();
+        m_syncLabel->show();
     } else {
         if (m_activePveMapId == "island_pve") {
             m_battleView->setGeometry(mapped(QRectF(238, 164, 1328, 520)));
@@ -2015,6 +2024,7 @@ void BattlePage::layoutArtworkUi()
         m_resourceLabel->setGeometry(mapped(QRectF(1188, 40, 185, 52)));
         m_phaseLabel->hide();
         m_opponentLabel->hide();
+        m_syncLabel->hide();
     }
 
     const QRectF pvpCards[] = {
@@ -2047,7 +2057,7 @@ void BattlePage::layoutArtworkUi()
     m_battleView->lower();
     const QVector<QWidget*> foregroundWidgets = {
         m_waveLabel, m_phaseLabel, m_coreHpLabel, m_opponentLabel,
-        m_resourceLabel, m_btnPause, m_btnSpeed, m_btnGuide
+        m_resourceLabel, m_syncLabel, m_btnPause, m_btnSpeed, m_btnGuide
     };
     for (QWidget *widget : foregroundWidgets) {
         widget->raise();
@@ -3162,17 +3172,20 @@ void BattlePage::updateStatusBar(const game::core::BattleSnapshot &snapshot)
         m_waveLabel->setText(m_pveEndlessMode
                                  ? QString("无尽 Wave %1").arg(snapshot.currentWave)
                                  : QString("Wave %1/%2").arg(snapshot.currentWave).arg(m_pveFinalWave));
+        m_phaseLabel->setText(mapDisplayName(m_activePveMapId));
+        m_coreHpLabel->setText(QString("Your Core %1/10").arg(snapshot.baseHealth));
+        m_resourceLabel->setText(QString("Resource %1").arg(snapshot.resources));
     } else {
-        m_waveLabel->setText(QString("Wave %1").arg(snapshot.currentWave));
-    }
-    m_phaseLabel->setText(m_isPvp
-                              ? (snapshot.waveActive ? "Battle Phase" : "Resource Phase")
-                              : mapDisplayName(m_activePveMapId));
-    m_coreHpLabel->setText(QString("Your Core %1/10").arg(snapshot.baseHealth));
-    m_resourceLabel->setText(QString("Resource %1").arg(snapshot.resources));
-    if (m_isPvp && m_opponentLabel) {
-        m_opponentLabel->setText(QString("Enemy Core %1/10")
-                                     .arg(snapshot.opponentBaseHealth));
+        m_waveLabel->setText(QString::number(snapshot.currentWave));
+        m_phaseLabel->setText(snapshot.waveActive ? "Battle" : "Resource");
+        m_coreHpLabel->setText(QString("%1/10").arg(snapshot.baseHealth));
+        m_resourceLabel->setText(QString::number(snapshot.resources));
+        if (m_opponentLabel) {
+            m_opponentLabel->setText(QString("%1/10").arg(snapshot.opponentBaseHealth));
+        }
+        if (m_syncLabel) {
+            m_syncLabel->setText("OK");
+        }
     }
     if (resourcesChanged) {
         updateCardVisualState(snapshot.resources);
