@@ -160,7 +160,7 @@ void ArtHotspot::paintEvent(QPaintEvent *event)
     }
 
     const qreal emphasis = qMax(m_glow, m_selected ? 0.82 : 0.0);
-    if (emphasis > 0.01) {
+    if (emphasis > 0.01 && m_glowColor.alpha() > 0) {
         QColor wash = m_glowColor;
         wash.setAlphaF(0.07 * emphasis);
         painter.setPen(Qt::NoPen);

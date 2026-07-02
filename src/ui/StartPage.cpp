@@ -30,9 +30,9 @@ struct MenuHotspotSpec {
 const QVector<MenuHotspotSpec> kMenuHotspots = {
     {{806, 288, 490, 126}, "单人 PVE"},
     {{786, 411, 534, 129}, "多人 PVP"},
-    {{725, 547, 355, 127}, "图鉴与卡组"},
+    {{738, 560, 322, 101}, "图鉴与卡组"},
     {{1110, 548, 332, 124}, "设置"},
-    {{879, 681, 360, 117}, "退出游戏"},
+    {{906, 696, 314, 91}, "退出游戏"},
 };
 
 void drawCover(QPainter &painter, const QPixmap &pixmap, const QRect &target)
@@ -398,7 +398,7 @@ void StartPage::initUI()
         const auto &spec = kMenuHotspots[i];
         auto *button = new ArtHotspot(artwork, spec.rect, m_menuLayer);
         button->setToolTip(QString::fromUtf8(spec.tooltip));
-        button->setGlowColor(QColor(255, 222, 132));
+        button->setGlowColor(QColor(255, 222, 132, 0));
         button->setSwayEnabled(true);
         m_buttons.append(button);
     }
