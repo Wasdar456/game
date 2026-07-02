@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "name": "pvp_office_panic",
-  "displayName": "Office Panic",
+  "name": "pvp_sunny_beach",
+  "displayName": "Sunny Beach",
   "mode": "PVP",
-  "image": "battle_pvp_office_map.png",
+  "image": "battle_pvp.png",
   "grid": {
     "rows": 10,
     "cols": 28,
@@ -13,68 +13,68 @@
   },
   "imageCrop": {
     "x": 0,
-    "y": 120,
+    "y": 96,
     "width": 1672,
     "height": 604
   },
   "points": {
     "SPAWN_A": [
       {
-        "row": 1,
-        "col": 14
+        "row": 0,
+        "col": 13
       }
     ],
     "SPAWN_B": [
       {
-        "row": 8,
+        "row": 9,
         "col": 14
       }
     ],
     "CORE_A": [
       {
-        "row": 6,
+        "row": 5,
         "col": 3
       }
     ],
     "CORE_B": [
       {
-        "row": 6,
-        "col": 24
+        "row": 5,
+        "col": 23
       }
     ]
   },
   "routes": {
     "A": [
       {
-        "id": "office_top_spawn_to_blue_core",
+        "id": "sunny_top_cross_to_blue",
         "spawn": {
-          "row": 1,
-          "col": 14
+          "row": 0,
+          "col": 13
         },
         "core": {
-          "row": 6,
+          "row": 5,
           "col": 3
         },
         "path": [
           {
+            "row": 0,
+            "col": 13
+          },
+          {
             "row": 1,
-            "col": 14
+            "col": 13
           },
           {
             "row": 2,
-            "col": 14
+            "col": 13
           },
           {
             "row": 3,
-            "col": 14
+            "col": 13
           },
           {
             "row": 4,
-            "col": 14
-          },
-          {
-            "row": 5,
-            "col": 14
+            "col": 13
           },
           {
             "row": 5,
@@ -113,15 +113,11 @@
             "col": 5
           },
           {
-            "row": 6,
-            "col": 5
-          },
-          {
-            "row": 6,
+            "row": 5,
             "col": 4
           },
           {
-            "row": 6,
+            "row": 5,
             "col": 3
           }
         ]
@@ -129,16 +125,20 @@
     ],
     "B": [
       {
-        "id": "office_bottom_spawn_to_red_core",
+        "id": "sunny_bottom_cross_to_red",
         "spawn": {
-          "row": 8,
+          "row": 9,
           "col": 14
         },
         "core": {
-          "row": 6,
-          "col": 24
+          "row": 5,
+          "col": 23
         },
         "path": [
+          {
+            "row": 9,
+            "col": 14
+          },
           {
             "row": 8,
             "col": 14
@@ -188,16 +188,8 @@
             "col": 22
           },
           {
-            "row": 6,
-            "col": 22
-          },
-          {
-            "row": 6,
+            "row": 5,
             "col": 23
-          },
-          {
-            "row": 6,
-            "col": 24
           }
         ]
       }
@@ -272,154 +264,154 @@
     {
       "row": 0,
       "col": 13,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 0,
-      "col": 14,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 0,
-      "col": 15,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 0,
-      "col": 16,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 0,
-      "col": 17,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 0,
-      "col": 18,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 0,
-      "col": 19,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 0,
-      "col": 20,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 0,
-      "col": 21,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 0,
-      "col": 22,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 0,
-      "col": 23,
-      "type": "BLOCKED"
-    },
-    {
-      "row": 0,
-      "col": 24,
-      "type": "BLOCKED"
-    },
-    {
-      "row": 0,
-      "col": 25,
-      "type": "BLOCKED"
-    },
-    {
-      "row": 0,
-      "col": 26,
-      "type": "BLOCKED"
-    },
-    {
-      "row": 0,
-      "col": 27,
-      "type": "BLOCKED"
-    },
-    {
-      "row": 1,
-      "col": 0,
-      "type": "BLOCKED"
-    },
-    {
-      "row": 1,
-      "col": 1,
-      "type": "BLOCKED"
-    },
-    {
-      "row": 1,
-      "col": 2,
-      "type": "BLOCKED"
-    },
-    {
-      "row": 1,
-      "col": 3,
-      "type": "BLOCKED"
-    },
-    {
-      "row": 1,
-      "col": 4,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 1,
-      "col": 5,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 1,
-      "col": 6,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 1,
-      "col": 7,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 1,
-      "col": 8,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 1,
-      "col": 9,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 1,
-      "col": 10,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 1,
-      "col": 11,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 1,
-      "col": 12,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 1,
-      "col": 13,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 1,
-      "col": 14,
       "type": "SPAWN_A"
     },
     {
+      "row": 0,
+      "col": 14,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 0,
+      "col": 15,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 0,
+      "col": 16,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 0,
+      "col": 17,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 0,
+      "col": 18,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 0,
+      "col": 19,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 0,
+      "col": 20,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 0,
+      "col": 21,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 0,
+      "col": 22,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 0,
+      "col": 23,
+      "type": "BLOCKED"
+    },
+    {
+      "row": 0,
+      "col": 24,
+      "type": "BLOCKED"
+    },
+    {
+      "row": 0,
+      "col": 25,
+      "type": "BLOCKED"
+    },
+    {
+      "row": 0,
+      "col": 26,
+      "type": "BLOCKED"
+    },
+    {
+      "row": 0,
+      "col": 27,
+      "type": "BLOCKED"
+    },
+    {
+      "row": 1,
+      "col": 0,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 1,
+      "col": 1,
+      "type": "BLOCKED"
+    },
+    {
+      "row": 1,
+      "col": 2,
+      "type": "BLOCKED"
+    },
+    {
+      "row": 1,
+      "col": 3,
+      "type": "BLOCKED"
+    },
+    {
+      "row": 1,
+      "col": 4,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 1,
+      "col": 5,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 1,
+      "col": 6,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 1,
+      "col": 7,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 1,
+      "col": 8,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 1,
+      "col": 9,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 1,
+      "col": 10,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 1,
+      "col": 11,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 1,
+      "col": 12,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 1,
+      "col": 13,
+      "type": "PATH_A"
+    },
+    {
+      "row": 1,
+      "col": 14,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
       "row": 1,
       "col": 15,
       "type": "DEPLOY_NEUTRAL"
@@ -482,7 +474,7 @@
     {
       "row": 1,
       "col": 27,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 2,
@@ -507,7 +499,7 @@
     {
       "row": 2,
       "col": 4,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 2,
@@ -522,12 +514,12 @@
     {
       "row": 2,
       "col": 7,
-      "type": "HIGH_GROUND"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 2,
       "col": 8,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "HIGH_GROUND"
     },
     {
       "row": 2,
@@ -537,12 +529,12 @@
     {
       "row": 2,
       "col": 10,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 2,
       "col": 11,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 2,
@@ -552,12 +544,12 @@
     {
       "row": 2,
       "col": 13,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
       "row": 2,
       "col": 14,
-      "type": "PATH_A"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 2,
@@ -567,12 +559,12 @@
     {
       "row": 2,
       "col": 16,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 2,
       "col": 17,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 2,
@@ -582,12 +574,12 @@
     {
       "row": 2,
       "col": 19,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "HIGH_GROUND"
     },
     {
       "row": 2,
       "col": 20,
-      "type": "HIGH_GROUND"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 2,
@@ -602,7 +594,7 @@
     {
       "row": 2,
       "col": 23,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 2,
@@ -642,7 +634,7 @@
     {
       "row": 3,
       "col": 3,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 3,
@@ -662,12 +654,12 @@
     {
       "row": 3,
       "col": 7,
-      "type": "HIGH_GROUND"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 3,
       "col": 8,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "HIGH_GROUND"
     },
     {
       "row": 3,
@@ -692,12 +684,12 @@
     {
       "row": 3,
       "col": 13,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
       "row": 3,
       "col": 14,
-      "type": "PATH_A"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 3,
@@ -722,12 +714,12 @@
     {
       "row": 3,
       "col": 19,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "HIGH_GROUND"
     },
     {
       "row": 3,
       "col": 20,
-      "type": "HIGH_GROUND"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 3,
@@ -747,7 +739,7 @@
     {
       "row": 3,
       "col": 24,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 3,
@@ -802,7 +794,7 @@
     {
       "row": 4,
       "col": 7,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "HIGH_GROUND"
     },
     {
       "row": 4,
@@ -832,12 +824,12 @@
     {
       "row": 4,
       "col": 13,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
       "row": 4,
       "col": 14,
-      "type": "PATH_A"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 4,
@@ -867,7 +859,7 @@
     {
       "row": 4,
       "col": 20,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "HIGH_GROUND"
     },
     {
       "row": 4,
@@ -921,258 +913,258 @@
     },
     {
       "row": 5,
-      "col": 3,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 5,
-      "col": 4,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 5,
-      "col": 5,
-      "type": "PATH_A"
-    },
-    {
-      "row": 5,
-      "col": 6,
-      "type": "PATH_A"
-    },
-    {
-      "row": 5,
-      "col": 7,
-      "type": "PATH_A"
-    },
-    {
-      "row": 5,
-      "col": 8,
-      "type": "PATH_A"
-    },
-    {
-      "row": 5,
-      "col": 9,
-      "type": "PATH_A"
-    },
-    {
-      "row": 5,
-      "col": 10,
-      "type": "PATH_A"
-    },
-    {
-      "row": 5,
-      "col": 11,
-      "type": "PATH_A"
-    },
-    {
-      "row": 5,
-      "col": 12,
-      "type": "PATH_A"
-    },
-    {
-      "row": 5,
-      "col": 13,
-      "type": "PATH_A"
-    },
-    {
-      "row": 5,
-      "col": 14,
-      "type": "PATH_SHARED"
-    },
-    {
-      "row": 5,
-      "col": 15,
-      "type": "PATH_B"
-    },
-    {
-      "row": 5,
-      "col": 16,
-      "type": "PATH_B"
-    },
-    {
-      "row": 5,
-      "col": 17,
-      "type": "PATH_B"
-    },
-    {
-      "row": 5,
-      "col": 18,
-      "type": "PATH_B"
-    },
-    {
-      "row": 5,
-      "col": 19,
-      "type": "PATH_B"
-    },
-    {
-      "row": 5,
-      "col": 20,
-      "type": "PATH_B"
-    },
-    {
-      "row": 5,
-      "col": 21,
-      "type": "PATH_B"
-    },
-    {
-      "row": 5,
-      "col": 22,
-      "type": "PATH_B"
-    },
-    {
-      "row": 5,
-      "col": 23,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 5,
-      "col": 24,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 5,
-      "col": 25,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 5,
-      "col": 26,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 5,
-      "col": 27,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 6,
-      "col": 0,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 6,
-      "col": 1,
-      "type": "DEPLOY_NEUTRAL"
-    },
-    {
-      "row": 6,
-      "col": 2,
-      "type": "BLOCKED"
-    },
-    {
-      "row": 6,
       "col": 3,
       "type": "CORE_A"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 4,
       "type": "PATH_A"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 5,
       "type": "PATH_A"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 6,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 7,
-      "type": "HIGH_GROUND"
+      "type": "PATH_A"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 8,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 9,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 10,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 11,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 12,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 13,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_A"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 14,
       "type": "PATH_B"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 15,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_B"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 16,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_B"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 17,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_B"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 18,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_B"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 19,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_B"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 20,
-      "type": "HIGH_GROUND"
+      "type": "PATH_B"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 21,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "PATH_B"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 22,
       "type": "PATH_B"
     },
     {
-      "row": 6,
+      "row": 5,
       "col": 23,
-      "type": "PATH_B"
-    },
-    {
-      "row": 6,
-      "col": 24,
       "type": "CORE_B"
     },
     {
+      "row": 5,
+      "col": 24,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 5,
+      "col": 25,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 5,
+      "col": 26,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 5,
+      "col": 27,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 0,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 1,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 2,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 3,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 4,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 5,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 6,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 7,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 8,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 9,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 10,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 11,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 12,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 13,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 14,
+      "type": "PATH_B"
+    },
+    {
+      "row": 6,
+      "col": 15,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 16,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 17,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 18,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 19,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 20,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 21,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 22,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 23,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
+      "row": 6,
+      "col": 24,
+      "type": "DEPLOY_NEUTRAL"
+    },
+    {
       "row": 6,
       "col": 25,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 6,
@@ -1192,12 +1184,12 @@
     {
       "row": 7,
       "col": 1,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 7,
       "col": 2,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 7,
@@ -1237,12 +1229,12 @@
     {
       "row": 7,
       "col": 10,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 7,
       "col": 11,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 7,
@@ -1267,12 +1259,12 @@
     {
       "row": 7,
       "col": 16,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 7,
       "col": 17,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 7,
@@ -1312,12 +1304,12 @@
     {
       "row": 7,
       "col": 25,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 7,
       "col": 26,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 7,
@@ -1327,12 +1319,12 @@
     {
       "row": 8,
       "col": 0,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 8,
       "col": 1,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 8,
@@ -1347,7 +1339,7 @@
     {
       "row": 8,
       "col": 4,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "BLOCKED"
     },
     {
       "row": 8,
@@ -1397,7 +1389,7 @@
     {
       "row": 8,
       "col": 14,
-      "type": "SPAWN_B"
+      "type": "PATH_B"
     },
     {
       "row": 8,
@@ -1442,7 +1434,7 @@
     {
       "row": 8,
       "col": 23,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "BLOCKED"
     },
     {
       "row": 8,
@@ -1457,12 +1449,12 @@
     {
       "row": 8,
       "col": 26,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 8,
       "col": 27,
-      "type": "BLOCKED"
+      "type": "DEPLOY_NEUTRAL"
     },
     {
       "row": 9,
@@ -1537,7 +1529,7 @@
     {
       "row": 9,
       "col": 14,
-      "type": "DEPLOY_NEUTRAL"
+      "type": "SPAWN_B"
     },
     {
       "row": 9,

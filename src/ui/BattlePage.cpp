@@ -1903,8 +1903,10 @@ void BattlePage::paintEvent(QPaintEvent *event)
     }
 
     if (m_isPvp && !m_pvpArtwork.isNull()) {
+        static QPixmap pvpHud(":/images/artwork/battle_pvp_hud_clean.png");
+        const QPixmap& hudArtwork = pvpHud.isNull() ? m_pvpArtwork : pvpHud;
         painter.drawPixmap(mapped(QRectF(0, 0, 1672, 126)),
-                           m_pvpArtwork, QRectF(0, 0, 1672, 126));
+                           hudArtwork, QRectF(0, 0, 1672, 126));
         painter.drawPixmap(mapped(QRectF(0, 690, 1672, 251)),
                            m_pvpArtwork, QRectF(0, 690, 1672, 251));
     } else if (!m_pveUiOverlay.isNull()) {
@@ -2005,11 +2007,11 @@ void BattlePage::layoutArtworkUi()
     if (m_isPvp) {
         m_battleView->setGeometry(mapped(pvpLayout.battleViewRect));
         m_waveLabel->setGeometry(mapped(QRectF(210, 36, 52, 50)));
-        m_phaseLabel->setGeometry(mapped(QRectF(450, 36, 104, 50)));
-        m_coreHpLabel->setGeometry(mapped(QRectF(775, 36, 96, 50)));
-        m_opponentLabel->setGeometry(mapped(QRectF(1090, 36, 96, 50)));
-        m_resourceLabel->setGeometry(mapped(QRectF(1368, 36, 58, 50)));
-        m_syncLabel->setGeometry(mapped(QRectF(1568, 36, 62, 50)));
+        m_phaseLabel->setGeometry(mapped(QRectF(416, 36, 104, 50)));
+        m_coreHpLabel->setGeometry(mapped(QRectF(736, 30, 104, 44)));
+        m_opponentLabel->setGeometry(mapped(QRectF(1048, 30, 96, 44)));
+        m_resourceLabel->setGeometry(mapped(QRectF(1288, 36, 54, 50)));
+        m_syncLabel->setGeometry(mapped(QRectF(1462, 36, 68, 50)));
         m_phaseLabel->show();
         m_opponentLabel->show();
         m_syncLabel->show();

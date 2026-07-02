@@ -1,9 +1,14 @@
 #ifndef GAMEPROJECT_UI_PVPMAPLAYOUT_H
 #define GAMEPROJECT_UI_PVPMAPLAYOUT_H
 
+#include "core/map/MapConfigLoader.h"
 #include "core/map/Map.h"
 #include "core/map/MapPosition.h"
 
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
+#include <QString>
 #include <QRectF>
 
 #include <string>
@@ -127,8 +132,112 @@ inline PvpMapLayout makeOfficePanicPvpMapLayout()
     return layout;
 }
 
+inline QString findPvpMapConfigFile(const std::string& mapId)
+{
+    const QString relativePath = QString("assets/maps/%1.json")
+                                     .arg(QString::fromStdString(mapId));
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString cwd = QDir::currentPath();
+    const QStringList candidates = {
+        QDir(cwd).filePath(relativePath),
+        QDir(appDir).filePath(relativePath),
+        QDir(appDir).filePath("../" + relativePath),
+        QDir(appDir).filePath("../../" + relativePath),
+        QDir(appDir).filePath("../../../" + relativePath)
+    };
+    for (const QString& candidate : candidates) {
+        const QFileInfo info(candidate);
+        if (info.exists() && info.isFile()) {
+            return info.absoluteFilePath();
+        }
+    }
+    return {};
+}
+
+inline game::core::TerrainType pvpTerrainFromMapTile(const std::string& type)
+{
+    if (type == "PATH_A" || type == "PATH_B" || type == "PATH_SHARED") {
+        return game::core::TerrainType::Path;
+    }
+    if (type == "SPAWN_A" || type == "SPAWN_B") return game::core::TerrainType::SpawnPoint;
+    if (type == "CORE_A") return game::core::TerrainType::CoreA;
+    if (type == "CORE_B") return game::core::TerrainType::CoreB;
+    if (type == "HIGH_GROUND") return game::core::TerrainType::HighGround;
+    if (type == "DEPLOY_A" || type == "DEPLOY_B" || type == "DEPLOY_NEUTRAL") {
+        return game::core::TerrainType::FlatLand;
+    }
+    return game::core::TerrainType::NoDeploy;
+}
+
+inline int pvpTerrainHeightFromMapTile(const std::string& type)
+{
+    return type == "HIGH_GROUND" ? 1 : 0;
+}
+
+inline PvpMapLayout makePvpMapLayoutFromConfig(const game::core::LoadedMapConfig& config)
+{
+    PvpMapLayout layout;
+    layout.id = config.name.empty() ? "pvp_sunny_beach" : config.name;
+    layout.image = config.image.empty()
+                       ? (layout.id == "pvp_office_panic"
+                              ? "battle_pvp_office_map.png"
+                              : "battle_pvp.png")
+                       : config.image;
+    layout.rows = config.rows;
+    layout.cols = config.cols;
+    if (config.imageCrop.width > 0 && config.imageCrop.height > 0) {
+        layout.backgroundSourceRect = QRectF(config.imageCrop.x,
+                                             config.imageCrop.y,
+                                             config.imageCrop.width,
+                                             config.imageCrop.height);
+    } else {
+        layout.backgroundSourceRect = layout.id == "pvp_office_panic"
+                                          ? QRectF(0, 120, 1672, 604)
+                                          : QRectF(0, 96, 1672, 604);
+    }
+    layout.battleViewRect = QRectF(174, 126, 1324, 552);
+    layout.deployViewRect = layout.battleViewRect;
+    layout.unitVisualScale = layout.id == "pvp_office_panic" ? 1.12 : 1.0;
+
+    if (!config.spawnA.empty()) layout.spawnA = config.spawnA.front();
+    if (!config.spawnB.empty()) layout.spawnB = config.spawnB.front();
+    if (!config.coreA.empty()) layout.coreA = config.coreA.front();
+    if (!config.coreB.empty()) layout.coreB = config.coreB.front();
+    if (!config.routesA.empty()) layout.pathToA = config.routesA.front();
+    if (!config.routesB.empty()) layout.pathToB = config.routesB.front();
+
+    for (const auto& tile : config.tiles) {
+        const game::core::MapPosition position(tile.row, tile.col);
+        const auto terrain = pvpTerrainFromMapTile(tile.type);
+        if (terrain == game::core::TerrainType::NoDeploy) {
+            layout.blocked.push_back(position);
+        } else if (terrain == game::core::TerrainType::HighGround) {
+            layout.highGround.push_back(position);
+        }
+    }
+
+    return layout;
+}
+
 inline PvpMapLayout makePvpMapLayout(const std::string& mapId = "pvp_sunny_beach")
 {
+    const QString configPath = findPvpMapConfigFile(mapId);
+    game::core::LoadedMapConfig config;
+    std::string error;
+    if (!configPath.isEmpty()
+        && game::core::MapConfigLoader::loadFromJson(configPath.toStdString(),
+                                                     config,
+                                                     &error)
+        && config.mode == "PVP"
+        && !config.routesA.empty()
+        && !config.routesB.empty()
+        && !config.spawnA.empty()
+        && !config.spawnB.empty()
+        && !config.coreA.empty()
+        && !config.coreB.empty()) {
+        return makePvpMapLayoutFromConfig(config);
+    }
+
     return mapId == "pvp_office_panic"
                ? makeOfficePanicPvpMapLayout()
                : makeSunnyBeachPvpMapLayout();

@@ -803,8 +803,10 @@ void DeployPage::paintEvent(QPaintEvent *event)
             painter.drawPixmap(mapped(QRectF(0, 96, 1672, 604)),
                                m_pvpArtwork, pvpLayout.backgroundSourceRect);
         }
+        static QPixmap pvpHud(":/images/artwork/battle_pvp_hud_clean.png");
+        const QPixmap& hudArtwork = pvpHud.isNull() ? m_pvpArtwork : pvpHud;
         painter.drawPixmap(mapped(QRectF(0, 0, 1672, 126)),
-                           m_pvpArtwork, QRectF(0, 0, 1672, 126));
+                           hudArtwork, QRectF(0, 0, 1672, 126));
         painter.drawPixmap(mapped(QRectF(0, 690, 1672, 251)),
                            m_pvpArtwork, QRectF(0, 690, 1672, 251));
 
@@ -984,11 +986,11 @@ void DeployPage::layoutArtworkUi()
                                       : QRectF(174, 126, 1324, 552);
     m_deployView->setGeometry(mapped(deployRect));
     m_titleLabel->setGeometry(mapped(QRectF(210, 36, 52, 50)));
-    m_phaseLabel->setGeometry(mapped(QRectF(450, 36, 104, 50)));
-    m_localCoreLabel->setGeometry(mapped(QRectF(775, 36, 96, 50)));
-    m_enemyCoreLabel->setGeometry(mapped(QRectF(1090, 36, 96, 50)));
-    m_deployCountLabel->setGeometry(mapped(QRectF(1368, 36, 58, 50)));
-    m_opponentLabel->setGeometry(mapped(QRectF(1568, 36, 62, 50)));
+    m_phaseLabel->setGeometry(mapped(QRectF(416, 36, 104, 50)));
+    m_localCoreLabel->setGeometry(mapped(QRectF(736, 30, 104, 44)));
+    m_enemyCoreLabel->setGeometry(mapped(QRectF(1048, 30, 96, 44)));
+    m_deployCountLabel->setGeometry(mapped(QRectF(1288, 36, 54, 50)));
+    m_opponentLabel->setGeometry(mapped(QRectF(1462, 36, 68, 50)));
     m_btnBack->setGeometry(mapped(QRectF(90, 775, 190, 64)));
     m_btnStartBattle->setGeometry(mapped(QRectF(1380, 775, 205, 64)));
 
