@@ -84,7 +84,7 @@ private:
     QRectF m_canvasRect;
     QVector<ArtHotspot*> m_cardHotspots;
     QVector<QLabel*> m_cardLockLabels;
-    QVector<ArtHotspot*> m_squadHotspots;
+    QVector<QPushButton*> m_squadButtons;
     ArtHotspot *m_backHotspot;
     ArtHotspot *m_startHotspot;
     QVector<QWidget*> m_drawCardFrames;

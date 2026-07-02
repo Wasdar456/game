@@ -177,6 +177,7 @@ DeckPage::DeckPage(QWidget *parent)
     refreshDeckSlotsDisplay();
     updateStartBattleButton();
     refreshSquadVisuals();
+    updateArtworkLayout();
 }
 
 void DeckPage::paintEvent(QPaintEvent *event)
@@ -205,9 +206,6 @@ void DeckPage::showEvent(QShowEvent *event)
     setGraphicsEffect(nullptr);
     updateArtworkLayout();
     for (ArtHotspot *hotspot : m_cardHotspots) {
-        hotspot->refreshVisual();
-    }
-    for (ArtHotspot *hotspot : m_squadHotspots) {
         hotspot->refreshVisual();
     }
     if (m_backHotspot) {
@@ -434,12 +432,13 @@ void DeckPage::initUI()
     }
 
     for (int i = 0; i < kSquadRects.size(); ++i) {
-        auto *hotspot = new ArtHotspot(QString(), kSquadRects[i], this);
-        hotspot->setGlowColor(QColor(255, 218, 92));
-        hotspot->setClickHandler([this, i]() {
+        auto *button = new QPushButton(QString("Squad %1").arg(i + 1), this);
+        button->setCursor(Qt::PointingHandCursor);
+        button->setFocusPolicy(Qt::NoFocus);
+        connect(button, &QPushButton::clicked, this, [this, i]() {
             switchSquad(i);
         });
-        m_squadHotspots.append(hotspot);
+        m_squadButtons.append(button);
     }
 
     m_backHotspot = new ArtHotspot(artwork, kBackRect, this);
@@ -588,9 +587,13 @@ void DeckPage::updateArtworkLayout()
                                              qMax(6, m_slotButtons[i]->height() / 18)));
         m_slotButtons[i]->raise();
     }
-    for (int i = 0; i < m_squadHotspots.size(); ++i) {
-        m_squadHotspots[i]->setCanvasRect(scaledRect(kSquadRects[i], m_canvasRect));
-        m_squadHotspots[i]->raise();
+    for (int i = 0; i < m_squadButtons.size(); ++i) {
+        QRect rect = scaledRect(kSquadRects[i], m_canvasRect).toRect();
+        if (i == m_currentSquadIndex) {
+            rect = rect.adjusted(-7, -7, 7, 7);
+        }
+        m_squadButtons[i]->setGeometry(rect);
+        m_squadButtons[i]->raise();
     }
 
     m_detailPanel->setGeometry(scaledRect(kDetailRect, m_canvasRect).toRect());
@@ -1320,7 +1323,7 @@ void DeckPage::deleteSelectedPreset()
 
 void DeckPage::switchSquad(int squadIndex)
 {
-    if (squadIndex < 0 || squadIndex >= m_squadHotspots.size()) {
+    if (squadIndex < 0 || squadIndex >= m_squadButtons.size()) {
         return;
     }
     if (squadIndex == m_currentSquadIndex) {
@@ -1366,8 +1369,26 @@ void DeckPage::loadSquadToDeck(int squadIndex)
 
 void DeckPage::refreshSquadVisuals()
 {
-    for (int i = 0; i < m_squadHotspots.size(); ++i) {
-        m_squadHotspots[i]->setSelected(i == m_currentSquadIndex);
-        m_squadHotspots[i]->setToolTip(QString());
+    const QString baseStyle =
+        "QPushButton {"
+        " color:#3a2819; background:rgba(231,197,132,0.96);"
+        " border:2px solid rgba(92,62,34,0.82); border-radius:4px;"
+        " font-family:'Microsoft YaHei UI','PingFang SC',sans-serif;"
+        " font-size:16px; font-weight:900;"
+        "}"
+        "QPushButton:hover { background:rgba(239,210,151,0.98); }"
+        "QPushButton:pressed { background:rgba(207,166,96,0.98); }";
+    const QString selectedStyle =
+        "QPushButton {"
+        " color:#2f1f13; background:rgba(243,210,145,0.99);"
+        " border:4px solid rgba(84,51,25,0.96); border-radius:5px;"
+        " font-family:'Microsoft YaHei UI','PingFang SC',sans-serif;"
+        " font-size:17px; font-weight:950;"
+        "}"
+        "QPushButton:hover { background:rgba(249,222,161,1.0); }"
+        "QPushButton:pressed { background:rgba(218,176,101,1.0); }";
+    for (int i = 0; i < m_squadButtons.size(); ++i) {
+        m_squadButtons[i]->setStyleSheet(i == m_currentSquadIndex ? selectedStyle : baseStyle);
+        m_squadButtons[i]->raise();
     }
 }

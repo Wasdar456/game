@@ -29,10 +29,10 @@ struct MenuHotspotSpec {
 
 const QVector<MenuHotspotSpec> kMenuHotspots = {
     {{806, 288, 490, 126}, "单人 PVE"},
-    {{801, 412, 498, 126}, "多人 PVP"},
-    {{742, 548, 345, 124}, "图鉴与卡组"},
+    {{786, 411, 534, 129}, "多人 PVP"},
+    {{725, 547, 355, 127}, "图鉴与卡组"},
     {{1110, 548, 332, 124}, "设置"},
-    {{899, 675, 333, 123}, "退出游戏"},
+    {{879, 681, 360, 117}, "退出游戏"},
 };
 
 void drawCover(QPainter &painter, const QPixmap &pixmap, const QRect &target)
@@ -305,19 +305,6 @@ void StartPage::paintEvent(QPaintEvent *event)
     vignette.setColorAt(1.0, QColor(22, 26, 18, 30));
     painter.fillRect(m_canvasRect, vignette);
 
-    if (m_menuRevealProgress < 1.0) {
-        const qreal titleAlpha = qBound<qreal>(0.0, (1.0 - m_menuRevealProgress) * 1.35, 1.0);
-        painter.save();
-        painter.setOpacity(titleAlpha);
-        QFont titleFont("Microsoft YaHei UI", qMax(24, height() / 18), QFont::Black);
-        painter.setFont(titleFont);
-        painter.setPen(QColor(255, 239, 190));
-        painter.drawText(QRectF(0, height() * 0.105 - reveal * height() * 0.025,
-                                width(), height() * 0.09),
-                         Qt::AlignCenter, "Crazy Fruity Fight");
-        painter.restore();
-    }
-
 }
 
 void StartPage::keyPressEvent(QKeyEvent *event)
@@ -406,12 +393,11 @@ void StartPage::initUI()
     m_fadeOverlay->setGeometry(rect());
     m_fadeOverlay->hide();
 
-    const QString artwork = ":/images/artwork/main_menu.jpg";
     for (int i = 0; i < kMenuHotspots.size(); ++i) {
         const auto &spec = kMenuHotspots[i];
-        auto *button = new ArtHotspot(artwork, spec.rect, m_menuLayer);
+        auto *button = new ArtHotspot(QString(), spec.rect, m_menuLayer);
         button->setToolTip(QString::fromUtf8(spec.tooltip));
-        button->setGlowColor(QColor(255, 222, 132));
+        button->setGlowColor(QColor(0, 0, 0, 0));
         button->setSwayEnabled(true);
         m_buttons.append(button);
     }
