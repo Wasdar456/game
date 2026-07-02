@@ -67,6 +67,7 @@ private:
     QPushButton *m_btnDrawTen;
     QPushButton *m_btnCloseDraw;
     QPushButton *m_btnUpgradeCard;
+    QLabel      *m_presetTitleLabel;
     QComboBox   *m_presetSelector;
     QPushButton *m_btnSavePreset;
     QPushButton *m_btnLoadPreset;

@@ -63,7 +63,7 @@ DeckPreset PresetManager::defaultPreset() const
 {
     DeckPreset preset;
     preset.id = "default";
-    preset.displayName = "Default Squad";
+    preset.displayName = "默认卡组";
     preset.cards = {
         game::core::CardKind::Produce,
         game::core::CardKind::Attack,

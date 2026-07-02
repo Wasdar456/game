@@ -146,6 +146,7 @@ DeckPage::DeckPage(QWidget *parent)
     , m_btnDrawTen(nullptr)
     , m_btnCloseDraw(nullptr)
     , m_btnUpgradeCard(nullptr)
+    , m_presetTitleLabel(nullptr)
     , m_presetSelector(nullptr)
     , m_btnSavePreset(nullptr)
     , m_btnLoadPreset(nullptr)
@@ -499,6 +500,13 @@ void DeckPage::initUI()
         "QPushButton:hover { background:#ffe4a0; border-color:#d4a047; }"
         "QPushButton:pressed { background:#c99653; }"
         "QPushButton:disabled { color:#8f7352; background:rgba(210,188,145,0.72); border-color:#8a7354; }";
+    m_presetTitleLabel = new QLabel("卡组预设", this);
+    m_presetTitleLabel->setAlignment(Qt::AlignCenter);
+    m_presetTitleLabel->setStyleSheet(
+        "QLabel { color:#352314; background:rgba(244,224,174,0.96);"
+        " border:2px solid rgba(92,64,36,0.78); border-radius:7px;"
+        " font-size:14px; font-weight:900; padding:3px 8px; }");
+
     m_presetSelector = new QComboBox(this);
     m_presetSelector->setCursor(Qt::PointingHandCursor);
     m_presetSelector->setStyleSheet(
@@ -508,14 +516,16 @@ void DeckPage::initUI()
         "QComboBox::drop-down { width:24px; border:none; }"
         "QComboBox QAbstractItemView { color:#352314; background:#f1dca9;"
         " selection-background-color:#d4a047; selection-color:#24170d; }");
-    m_btnSavePreset = new QPushButton("Save", this);
-    m_btnLoadPreset = new QPushButton("Load", this);
-    m_btnDeletePreset = new QPushButton("Delete", this);
+    m_btnSavePreset = new QPushButton("保存当前", this);
+    m_btnLoadPreset = new QPushButton("套用", this);
+    m_btnDeletePreset = new QPushButton("删除", this);
     for (QPushButton *button : {m_btnSavePreset, m_btnLoadPreset, m_btnDeletePreset}) {
         button->setCursor(Qt::PointingHandCursor);
         button->setStyleSheet(presetButtonStyle);
     }
-    m_btnDeletePreset->setToolTip("Delete the selected saved preset");
+    m_btnSavePreset->setToolTip("把下方当前出战卡组保存为一个新预设");
+    m_btnLoadPreset->setToolTip("把上方选中的预设套用到下方出战卡槽");
+    m_btnDeletePreset->setToolTip("删除上方选中的自定义预设");
     connect(m_btnSavePreset, &QPushButton::clicked, this, &DeckPage::saveCurrentDeckAsPreset);
     connect(m_btnLoadPreset, &QPushButton::clicked, this, &DeckPage::loadSelectedPreset);
     connect(m_btnDeletePreset, &QPushButton::clicked, this, &DeckPage::deleteSelectedPreset);
@@ -554,10 +564,11 @@ void DeckPage::updateArtworkLayout()
     m_ticketLabel->setGeometry(scaledRect(QRect(1214, 688, 280, 42), m_canvasRect).toRect());
     m_btnDrawPanel->setGeometry(scaledRect(QRect(1214, 738, 132, 52), m_canvasRect).toRect());
     m_btnUpgradeCard->setGeometry(scaledRect(QRect(1362, 738, 132, 52), m_canvasRect).toRect());
-    m_presetSelector->setGeometry(scaledRect(QRect(1214, 168, 280, 34), m_canvasRect).toRect());
-    m_btnSavePreset->setGeometry(scaledRect(QRect(1214, 210, 84, 38), m_canvasRect).toRect());
-    m_btnLoadPreset->setGeometry(scaledRect(QRect(1312, 210, 84, 38), m_canvasRect).toRect());
-    m_btnDeletePreset->setGeometry(scaledRect(QRect(1410, 210, 84, 38), m_canvasRect).toRect());
+    m_presetTitleLabel->setGeometry(scaledRect(QRect(1214, 130, 280, 30), m_canvasRect).toRect());
+    m_presetSelector->setGeometry(scaledRect(QRect(1214, 166, 280, 34), m_canvasRect).toRect());
+    m_btnSavePreset->setGeometry(scaledRect(QRect(1214, 210, 104, 38), m_canvasRect).toRect());
+    m_btnLoadPreset->setGeometry(scaledRect(QRect(1330, 210, 72, 38), m_canvasRect).toRect());
+    m_btnDeletePreset->setGeometry(scaledRect(QRect(1414, 210, 80, 38), m_canvasRect).toRect());
     m_backHotspot->setCanvasRect(scaledRect(kBackRect, m_canvasRect));
     m_startHotspot->setCanvasRect(scaledRect(kStartRect, m_canvasRect));
 
@@ -572,6 +583,7 @@ void DeckPage::updateArtworkLayout()
     m_ticketLabel->raise();
     m_btnDrawPanel->raise();
     m_btnUpgradeCard->raise();
+    m_presetTitleLabel->raise();
     m_presetSelector->raise();
     m_btnSavePreset->raise();
     m_btnLoadPreset->raise();
@@ -1165,7 +1177,7 @@ void DeckPage::refreshPresetControls(const QString& selectedId)
     for (int i = 0; i < m_presets.size(); ++i) {
         const auto& preset = m_presets[i];
         const QString suffix = preset.id == "default"
-                                   ? QString("built-in")
+                                   ? QString("内置")
                                    : preset.updatedAt.toLocalTime().toString("MM-dd hh:mm");
         m_presetSelector->addItem(QString("%1  (%2)").arg(preset.displayName, suffix), preset.id);
         if (preset.id == currentId) {
@@ -1177,9 +1189,9 @@ void DeckPage::refreshPresetControls(const QString& selectedId)
     const bool savedPreset = m_presetSelector->currentData().toString() != "default";
     m_btnDeletePreset->setEnabled(savedPreset);
     m_btnDeletePreset->setToolTip(savedPreset
-                                      ? "Delete selected saved preset"
-                                      : "The built-in default preset cannot be deleted");
-    m_presetSelector->setToolTip(QString("Presets stored at %1").arg(m_presetManager.storagePath()));
+                                      ? "删除上方选中的自定义预设"
+                                      : "内置默认卡组不能删除");
+    m_presetSelector->setToolTip(QString("选择一个已保存的卡组预设。文件位置：%1").arg(m_presetManager.storagePath()));
 }
 
 bool DeckPage::applyDeckKinds(const QVector<game::core::CardKind>& kinds)
@@ -1207,23 +1219,23 @@ void DeckPage::saveCurrentDeckAsPreset()
     const QVector<game::core::CardKind> deck = getSelectedKinds();
     if (deck.isEmpty()) {
         QToolTip::showText(mapToGlobal(m_canvasRect.center().toPoint()),
-                           "Select at least one owned card before saving.", this);
+                           "请先在下方选择至少一张已拥有的卡牌。", this);
         return;
     }
 
     bool ok = false;
     const QString name = QInputDialog::getText(this,
-                                               "Save Deck Preset",
-                                               "Preset name:",
+                                               "保存卡组预设",
+                                               "预设名称：",
                                                QLineEdit::Normal,
-                                               QString("Squad %1").arg(m_presets.size()),
+                                               QString("卡组 %1").arg(m_presets.size()),
                                                &ok).trimmed();
     if (!ok) return;
 
     QString id;
     QString error;
     if (!m_presetManager.savePreset(name, deck, &id, &error)) {
-        QMessageBox::warning(this, "Preset Not Saved", error);
+        QMessageBox::warning(this, "预设保存失败", error);
         return;
     }
     refreshPresetControls(id);
@@ -1234,18 +1246,18 @@ void DeckPage::loadSelectedPreset()
     if (!m_presetSelector) return;
     DeckPreset preset;
     if (!m_presetManager.loadPreset(m_presetSelector->currentData().toString(), preset)) {
-        QMessageBox::warning(this, "Preset Not Loaded", "The selected preset could not be loaded.");
+        QMessageBox::warning(this, "预设读取失败", "无法读取当前选中的卡组预设。");
         refreshPresetControls();
         return;
     }
     if (!applyDeckKinds(preset.cards)) {
         QMessageBox::information(this,
-                                 "Preset Needs Cards",
-                                 "None of the cards in this preset are currently unlocked.");
+                                 "预设无法套用",
+                                 "这个预设里的卡牌目前都还没有解锁。");
         return;
     }
     QToolTip::showText(mapToGlobal(m_canvasRect.center().toPoint()),
-                       QString("Loaded %1").arg(preset.displayName), this);
+                       QString("已套用：%1").arg(preset.displayName), this);
 }
 
 void DeckPage::deleteSelectedPreset()
@@ -1254,19 +1266,19 @@ void DeckPage::deleteSelectedPreset()
     const QString id = m_presetSelector->currentData().toString();
     if (id == "default") {
         QToolTip::showText(mapToGlobal(m_canvasRect.center().toPoint()),
-                           "The built-in default preset cannot be deleted.", this);
+                           "内置默认卡组不能删除。", this);
         return;
     }
     const QString name = m_presetSelector->currentText();
     if (QMessageBox::question(this,
-                              "Delete Preset",
-                              QString("Delete %1?").arg(name))
+                              "删除卡组预设",
+                              QString("确定删除 %1 吗？").arg(name))
         != QMessageBox::Yes) {
         return;
     }
     QString error;
     if (!m_presetManager.deletePreset(id, &error)) {
-        QMessageBox::warning(this, "Preset Not Deleted", error);
+        QMessageBox::warning(this, "预设删除失败", error);
     }
     refreshPresetControls();
 }
