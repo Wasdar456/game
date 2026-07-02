@@ -393,11 +393,12 @@ void StartPage::initUI()
     m_fadeOverlay->setGeometry(rect());
     m_fadeOverlay->hide();
 
+    const QString artwork = ":/images/artwork/main_menu.jpg";
     for (int i = 0; i < kMenuHotspots.size(); ++i) {
         const auto &spec = kMenuHotspots[i];
-        auto *button = new ArtHotspot(QString(), spec.rect, m_menuLayer);
+        auto *button = new ArtHotspot(artwork, spec.rect, m_menuLayer);
         button->setToolTip(QString::fromUtf8(spec.tooltip));
-        button->setGlowColor(QColor(0, 0, 0, 0));
+        button->setGlowColor(QColor(255, 222, 132));
         button->setSwayEnabled(true);
         m_buttons.append(button);
     }
