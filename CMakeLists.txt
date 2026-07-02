@@ -36,7 +36,7 @@ find_package(Qt6 REQUIRED COMPONENTS
 # GLOB_RECURSE 会递归扫描 src/ 下的 .cpp 和 .h
 # 注意：新增文件后需要重新运行 cmake .. 才能被识别
 # ─────────────────────────────────────────────
-file(GLOB_RECURSE SOURCES
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
     "src/*.cpp"
     "src/*.h"
 )
