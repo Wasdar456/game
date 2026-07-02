@@ -264,6 +264,7 @@ private:
     double m_waveTimer;             ///< 波次间隔计时器（秒）
     static constexpr double WAVE_INTERVAL = 15.0;  ///< 每波间隔 15 秒
     bool m_resultEmitted = false;
+    bool m_pveEndlessMode = false;
     int m_renderTick = 0;
     BattleReplayData m_replayData;
     game::core::BattleSnapshot m_lastReplaySnapshot;

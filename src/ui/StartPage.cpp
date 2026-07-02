@@ -12,6 +12,7 @@
 #include <QRadialGradient>
 #include <QResizeEvent>
 #include <QShowEvent>
+#include <QStringList>
 #include <QtMath>
 
 #include <cmath>
@@ -113,43 +114,86 @@ void StartPage::paintEvent(QPaintEvent *event)
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
     if (m_introActive) {
-        painter.fillRect(rect(), QColor(0, 0, 0));
         const qreal fadeIn = easeOutCubic(m_introElapsed / 0.80);
         const qreal fadeOut = qBound<qreal>(0.0, (2.55 - m_introElapsed) / 0.62, 1.0);
         const qreal alpha = qMin(fadeIn, easeInOutCubic(fadeOut));
         const qreal lift = (1.0 - fadeIn) * 22.0;
         const qreal shine = qBound<qreal>(0.0, (m_introElapsed - 0.55) / 0.85, 1.0);
 
+        QLinearGradient bg(0, 0, width(), height());
+        bg.setColorAt(0.0, QColor(23, 35, 31));
+        bg.setColorAt(0.45, QColor(55, 40, 28));
+        bg.setColorAt(1.0, QColor(13, 18, 20));
+        painter.fillRect(rect(), bg);
+
+        QRadialGradient fruitGlow(QPointF(width() * 0.52, height() * 0.40), width() * 0.42);
+        fruitGlow.setColorAt(0.0, QColor(255, 206, 92, qRound(alpha * 58)));
+        fruitGlow.setColorAt(0.44, QColor(101, 194, 127, qRound(alpha * 34)));
+        fruitGlow.setColorAt(1.0, QColor(0, 0, 0, 0));
+        painter.fillRect(rect(), fruitGlow);
+
         painter.save();
         painter.setOpacity(alpha);
-        QFont titleFont("Microsoft YaHei UI", qMax(28, height() / 15), QFont::Black);
+        QFont titleFont("Impact", qMax(54, height() / 9), QFont::Black);
+        titleFont.setStyleStrategy(QFont::PreferAntialias);
         painter.setFont(titleFont);
-        QRectF titleRect(0, height() * 0.40 - lift, width(), height() * 0.12);
-        painter.setPen(QColor(44, 25, 13, qRound(alpha * 155)));
-        painter.drawText(titleRect.translated(0, 3), Qt::AlignCenter, "Crazy Fruity Fight");
-        painter.setPen(QColor(255, 238, 178));
-        painter.drawText(titleRect, Qt::AlignCenter, "Crazy Fruity Fight");
+        const QStringList titleLines = {"CRAZY", "FRUITY", "FIGHT"};
+        const qreal lineHeight = qMax<qreal>(62.0, height() * 0.105);
+        const qreal titleTop = height() * 0.18 - lift;
+        for (int i = 0; i < titleLines.size(); ++i) {
+            QRectF lineRect(width() * 0.18,
+                            titleTop + i * lineHeight,
+                            width() * 0.64,
+                            lineHeight);
+            QPainterPath textPath;
+            textPath.addText(QPointF(0, 0), titleFont, titleLines[i]);
+            const QRectF bounds = textPath.boundingRect();
+            const qreal x = lineRect.center().x() - bounds.width() * 0.5 - bounds.left();
+            const qreal y = lineRect.center().y() + bounds.height() * 0.5 - bounds.bottom();
+            QPainterPath centeredPath;
+            centeredPath.addText(QPointF(x, y), titleFont, titleLines[i]);
 
+            QColor shadow(35, 20, 12, qRound(alpha * 220));
+            painter.setPen(QPen(shadow, qMax<qreal>(6.0, height() * 0.010), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawPath(centeredPath.translated(0, 5));
+
+            QColor outline(77, 45, 23, qRound(alpha * 245));
+            painter.setPen(QPen(outline, qMax<qreal>(4.0, height() * 0.007), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            painter.drawPath(centeredPath);
+
+            QLinearGradient fill(lineRect.left(), lineRect.top(), lineRect.right(), lineRect.bottom());
+            fill.setColorAt(0.0, i == 0 ? QColor(255, 219, 79) : (i == 1 ? QColor(239, 103, 48) : QColor(108, 185, 77)));
+            fill.setColorAt(0.52, QColor(255, 244, 194));
+            fill.setColorAt(1.0, i == 0 ? QColor(255, 139, 49) : (i == 1 ? QColor(182, 72, 43) : QColor(46, 124, 55)));
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(fill);
+            painter.drawPath(centeredPath);
+        }
+
+        const QRectF titleRect(0, titleTop, width(), lineHeight * titleLines.size());
         QLinearGradient slash(titleRect.left(), 0, titleRect.right(), 0);
         slash.setColorAt(0.0, QColor(255, 255, 255, 0));
         slash.setColorAt(qBound<qreal>(0.0, shine - 0.12, 1.0), QColor(255, 255, 255, 0));
         slash.setColorAt(qBound<qreal>(0.0, shine, 1.0), QColor(255, 252, 204, qRound(alpha * 155)));
         slash.setColorAt(qBound<qreal>(0.0, shine + 0.12, 1.0), QColor(255, 255, 255, 0));
-        painter.setPen(QPen(QBrush(slash), 3.0));
-        painter.drawLine(QPointF(titleRect.left() + width() * 0.24, titleRect.bottom() - 4),
-                         QPointF(titleRect.right() - width() * 0.24, titleRect.bottom() - 4));
+        painter.setPen(QPen(QBrush(slash), qMax<qreal>(3.0, height() * 0.006)));
+        painter.drawLine(QPointF(width() * 0.22, titleTop + lineHeight * 1.15),
+                         QPointF(width() * 0.78, titleTop + lineHeight * 0.72));
 
-        QFont subFont("Microsoft YaHei UI", qMax(12, height() / 42), QFont::DemiBold);
+        QFont subFont("Microsoft YaHei UI", qMax(18, height() / 34), QFont::Black);
         painter.setFont(subFont);
-        painter.setPen(QColor(162, 229, 196, 215));
-        painter.drawText(QRectF(0, titleRect.bottom() + 8, width(), 38),
-                         Qt::AlignCenter, "Tropical Tower Mayhem");
+        painter.setPen(QColor(255, 240, 188, 235));
+        painter.drawText(QRectF(0, titleRect.bottom() + height() * 0.035, width(), 44),
+                         Qt::AlignCenter, "A Game By");
 
-        QRadialGradient glow(QPointF(width() * 0.5, height() * 0.50), width() * 0.32);
-        glow.setColorAt(0.0, QColor(255, 210, 116, qRound(alpha * 58)));
-        glow.setColorAt(0.55, QColor(92, 206, 170, qRound(alpha * 22)));
-        glow.setColorAt(1.0, QColor(0, 0, 0, 0));
-        painter.fillRect(rect(), glow);
+        QFont nameFont("Microsoft YaHei UI", qMax(15, height() / 46), QFont::DemiBold);
+        painter.setFont(nameFont);
+        painter.setPen(QColor(238, 255, 214, 226));
+        painter.drawText(QRectF(width() * 0.08, titleRect.bottom() + height() * 0.095,
+                                width() * 0.84, 72),
+                         Qt::AlignCenter | Qt::TextWordWrap,
+                         "王梓涵   曹杰帅   朱志文   白杨   吕尚莹   马意轩");
         painter.restore();
         return;
     }

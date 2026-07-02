@@ -20,11 +20,16 @@ public:
     PresetManager();
 
     QVector<DeckPreset> listPresets() const;
+    QVector<DeckPreset> listSquads() const;
     DeckPreset defaultPreset() const;
     bool savePreset(const QString& displayName,
                     const QVector<game::core::CardKind>& cards,
                     QString* presetId = nullptr,
                     QString* error = nullptr);
+    bool saveSquad(int squadIndex,
+                   const QVector<game::core::CardKind>& cards,
+                   QString* error = nullptr);
+    bool loadSquad(int squadIndex, DeckPreset& preset) const;
     bool renamePreset(const QString& id, const QString& displayName, QString* error = nullptr);
     bool deletePreset(const QString& id, QString* error = nullptr);
     bool loadPreset(const QString& id, DeckPreset& preset) const;

@@ -51,6 +51,13 @@ const QVector<QRect> kSlotRects = {
     {1020, 704, 165, 171},
 };
 
+const QVector<QRect> kSquadRects = {
+    {195, 633, 165, 58},
+    {374, 633, 165, 58},
+    {553, 633, 165, 58},
+    {732, 633, 165, 58},
+};
+
 const QRect kBackRect(42, 845, 196, 85);
 const QRect kStartRect(1360, 844, 260, 86);
 const QRect kDetailRect(1196, 257, 320, 426);
@@ -156,6 +163,7 @@ DeckPage::DeckPage(QWidget *parent)
     , m_backHotspot(nullptr)
     , m_startHotspot(nullptr)
     , m_lastDrawResultCount(0)
+    , m_currentSquadIndex(0)
     , m_drawOverlayVisible(false)
 {
     CardCollection::initializeDefaults();
@@ -164,9 +172,11 @@ DeckPage::DeckPage(QWidget *parent)
     m_selectedSlots = {0, 4, -1, -1, -1};
     initUI();
     connectSignals();
+    loadSquadToDeck(m_currentSquadIndex);
     refreshDetailPanel(m_selectedCardIndex);
     refreshDeckSlotsDisplay();
     updateStartBattleButton();
+    refreshSquadVisuals();
 }
 
 void DeckPage::paintEvent(QPaintEvent *event)
@@ -197,6 +207,9 @@ void DeckPage::showEvent(QShowEvent *event)
     for (ArtHotspot *hotspot : m_cardHotspots) {
         hotspot->refreshVisual();
     }
+    for (ArtHotspot *hotspot : m_squadHotspots) {
+        hotspot->refreshVisual();
+    }
     if (m_backHotspot) {
         m_backHotspot->refreshVisual();
     }
@@ -207,6 +220,7 @@ void DeckPage::showEvent(QShowEvent *event)
     updateStartBattleButton();
     refreshCollectionDisplay();
     refreshPresetControls();
+    refreshSquadVisuals();
     update();
 }
 
@@ -373,6 +387,7 @@ void DeckPage::initUI()
                     m_selectedSlots[slot] = i;
                     animateCardToSlot(i, slot);
                     updateStartBattleButton();
+                    saveCurrentSquad();
                     return;
                 }
             }
@@ -412,9 +427,20 @@ void DeckPage::initUI()
                 m_selectedSlots[i] = -1;
                 refreshDeckSlotsDisplay();
                 updateStartBattleButton();
+                saveCurrentSquad();
             }
         });
         m_slotButtons.append(slotButton);
+    }
+
+    for (int i = 0; i < kSquadRects.size(); ++i) {
+        auto *hotspot = new ArtHotspot(artwork, kSquadRects[i], this);
+        hotspot->setGlowColor(QColor(255, 223, 117));
+        hotspot->setToolTip(QString("切换到 Squad %1").arg(i + 1));
+        hotspot->setClickHandler([this, i]() {
+            switchSquad(i);
+        });
+        m_squadHotspots.append(hotspot);
     }
 
     m_backHotspot = new ArtHotspot(artwork, kBackRect, this);
@@ -526,6 +552,11 @@ void DeckPage::initUI()
     m_btnSavePreset->setToolTip("把下方当前出战卡组保存为一个新预设");
     m_btnLoadPreset->setToolTip("把上方选中的预设套用到下方出战卡槽");
     m_btnDeletePreset->setToolTip("删除上方选中的自定义预设");
+    m_presetTitleLabel->hide();
+    m_presetSelector->hide();
+    m_btnSavePreset->hide();
+    m_btnLoadPreset->hide();
+    m_btnDeletePreset->hide();
     connect(m_btnSavePreset, &QPushButton::clicked, this, &DeckPage::saveCurrentDeckAsPreset);
     connect(m_btnLoadPreset, &QPushButton::clicked, this, &DeckPage::loadSelectedPreset);
     connect(m_btnDeletePreset, &QPushButton::clicked, this, &DeckPage::deleteSelectedPreset);
@@ -558,6 +589,10 @@ void DeckPage::updateArtworkLayout()
                                              qMax(6, m_slotButtons[i]->height() / 18)));
         m_slotButtons[i]->raise();
     }
+    for (int i = 0; i < m_squadHotspots.size(); ++i) {
+        m_squadHotspots[i]->setCanvasRect(scaledRect(kSquadRects[i], m_canvasRect));
+        m_squadHotspots[i]->raise();
+    }
 
     m_detailPanel->setGeometry(scaledRect(kDetailRect, m_canvasRect).toRect());
     m_detailPanel->raise();
@@ -583,11 +618,11 @@ void DeckPage::updateArtworkLayout()
     m_ticketLabel->raise();
     m_btnDrawPanel->raise();
     m_btnUpgradeCard->raise();
-    m_presetTitleLabel->raise();
-    m_presetSelector->raise();
-    m_btnSavePreset->raise();
-    m_btnLoadPreset->raise();
-    m_btnDeletePreset->raise();
+    if (m_presetTitleLabel->isVisible()) m_presetTitleLabel->raise();
+    if (m_presetSelector->isVisible()) m_presetSelector->raise();
+    if (m_btnSavePreset->isVisible()) m_btnSavePreset->raise();
+    if (m_btnLoadPreset->isVisible()) m_btnLoadPreset->raise();
+    if (m_btnDeletePreset->isVisible()) m_btnDeletePreset->raise();
     m_backHotspot->raise();
     m_startHotspot->raise();
     updateLockLabelVisibilityForOverlay();
@@ -1256,6 +1291,7 @@ void DeckPage::loadSelectedPreset()
                                  "这个预设里的卡牌目前都还没有解锁。");
         return;
     }
+    saveCurrentSquad();
     QToolTip::showText(mapToGlobal(m_canvasRect.center().toPoint()),
                        QString("已套用：%1").arg(preset.displayName), this);
 }
@@ -1281,4 +1317,64 @@ void DeckPage::deleteSelectedPreset()
         QMessageBox::warning(this, "预设删除失败", error);
     }
     refreshPresetControls();
+}
+
+void DeckPage::switchSquad(int squadIndex)
+{
+    if (squadIndex < 0 || squadIndex >= m_squadHotspots.size()) {
+        return;
+    }
+    if (squadIndex == m_currentSquadIndex) {
+        QToolTip::showText(mapToGlobal(scaledRect(kSquadRects[squadIndex], m_canvasRect).center().toPoint()),
+                           QString("正在编辑 Squad %1").arg(squadIndex + 1), this);
+        return;
+    }
+
+    saveCurrentSquad();
+    loadSquadToDeck(squadIndex);
+    QToolTip::showText(mapToGlobal(scaledRect(kSquadRects[squadIndex], m_canvasRect).center().toPoint()),
+                       QString("已切换到 Squad %1").arg(squadIndex + 1), this);
+}
+
+void DeckPage::saveCurrentSquad()
+{
+    QString error;
+    if (!m_presetManager.saveSquad(m_currentSquadIndex, getSelectedKinds(), &error)) {
+        QToolTip::showText(mapToGlobal(m_canvasRect.center().toPoint()),
+                           QString("Squad 保存失败：%1").arg(error), this);
+    }
+}
+
+void DeckPage::loadSquadToDeck(int squadIndex)
+{
+    DeckPreset preset;
+    if (!m_presetManager.loadSquad(squadIndex, preset)) {
+        return;
+    }
+
+    QVector<int> squadSlots(MAX_DECK_SLOTS, -1);
+    int slotIndex = 0;
+    for (game::core::CardKind kind : preset.cards) {
+        if (slotIndex >= MAX_DECK_SLOTS) break;
+        const int index = indexForKind(kind);
+        if (index < 0 || !CardCollection::isOwned(kind)) {
+            continue;
+        }
+        squadSlots[slotIndex++] = index;
+    }
+    m_currentSquadIndex = squadIndex;
+    m_selectedSlots = squadSlots;
+    refreshDeckSlotsDisplay();
+    updateStartBattleButton();
+    refreshSquadVisuals();
+}
+
+void DeckPage::refreshSquadVisuals()
+{
+    for (int i = 0; i < m_squadHotspots.size(); ++i) {
+        m_squadHotspots[i]->setSelected(i == m_currentSquadIndex);
+        m_squadHotspots[i]->setToolTip(QString("Squad %1%2")
+                                           .arg(i + 1)
+                                           .arg(i == m_currentSquadIndex ? "（当前）" : " - 点击切换"));
+    }
 }

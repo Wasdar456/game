@@ -3,13 +3,16 @@
 #include <QAbstractButton>
 #include <QApplication>
 #include <QAudioDevice>
+#include <QAudioOutput>
 #include <QAudioSink>
 #include <QDateTime>
 #include <QEvent>
+#include <QMediaPlayer>
 #include <QMediaDevices>
 #include <QMouseEvent>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QUrl>
 #include <QVector>
 
 #include <algorithm>
@@ -173,7 +176,11 @@ public:
                 ++voice.frame;
             }
 
-            const double ambient = (ocean + music + pulse) * bgmVolume * 0.55;
+            Q_UNUSED(ocean);
+            Q_UNUSED(music);
+            Q_UNUSED(pulse);
+            Q_UNUSED(bgmVolume);
+            const double ambient = 0.0;
             const double mixed = std::clamp(ambient + effects * sfxVolume * 0.48,
                                             -0.92, 0.92);
             for (int channel = 0; channel < channels; ++channel) {
@@ -249,6 +256,9 @@ AudioManager::AudioManager(QObject *parent)
     : QObject(parent)
     , m_ambientSink(nullptr)
     , m_ambientDevice(nullptr)
+    , m_bgmPlayer(nullptr)
+    , m_bgmOutput(nullptr)
+    , m_bgmTrackId("dossoles_holiday")
     , m_bgmVolume(0.70)
     , m_sfxVolume(0.85)
     , m_scene(Scene::Menu)
@@ -258,6 +268,13 @@ AudioManager::AudioManager(QObject *parent)
     , m_lastDeployMs(0)
     , m_lastHitMs(0)
 {
+}
+
+QVector<AudioManager::BgmTrack> AudioManager::availableBgmTracks()
+{
+    return {
+        {"dossoles_holiday", "多索雷斯假日", "qrc:/audio/bgm/dossoles_holiday.mp3"}
+    };
 }
 
 void AudioManager::initialize()
@@ -284,6 +301,13 @@ void AudioManager::initialize()
     m_ambientSink->setVolume(1.0);
     m_ambientSink->start(device);
 
+    m_bgmOutput = new QAudioOutput(this);
+    m_bgmOutput->setVolume(m_bgmVolume);
+    m_bgmPlayer = new QMediaPlayer(this);
+    m_bgmPlayer->setAudioOutput(m_bgmOutput);
+    m_bgmPlayer->setLoops(QMediaPlayer::Infinite);
+    setBgmTrack(m_bgmTrackId);
+
     if (qApp) {
         qApp->installEventFilter(this);
     }
@@ -293,8 +317,43 @@ void AudioManager::setVolumes(int bgmPercent, int sfxPercent)
 {
     m_bgmVolume = std::clamp(bgmPercent / 100.0, 0.0, 1.0);
     m_sfxVolume = std::clamp(sfxPercent / 100.0, 0.0, 1.0);
+    if (m_bgmOutput) {
+        m_bgmOutput->setVolume(m_bgmVolume);
+    }
+    if (m_bgmPlayer) {
+        if (m_bgmVolume > 0.001 && m_bgmPlayer->playbackState() != QMediaPlayer::PlayingState) {
+            m_bgmPlayer->play();
+        } else if (m_bgmVolume <= 0.001 && m_bgmPlayer->playbackState() == QMediaPlayer::PlayingState) {
+            m_bgmPlayer->pause();
+        }
+    }
     if (auto *device = dynamic_cast<MixedAudioDevice *>(m_ambientDevice)) {
         device->setVolumes(m_bgmVolume, m_sfxVolume);
+    }
+}
+
+void AudioManager::setBgmTrack(const QString& trackId)
+{
+    const auto tracks = availableBgmTracks();
+    BgmTrack selected = tracks.first();
+    for (const auto& track : tracks) {
+        if (track.id == trackId) {
+            selected = track;
+            break;
+        }
+    }
+    m_bgmTrackId = selected.id;
+
+    if (!m_bgmPlayer) {
+        return;
+    }
+
+    const QUrl source(selected.sourceUrl);
+    if (m_bgmPlayer->source() != source) {
+        m_bgmPlayer->setSource(source);
+    }
+    if (m_bgmVolume > 0.001) {
+        m_bgmPlayer->play();
     }
 }
 

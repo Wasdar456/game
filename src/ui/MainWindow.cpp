@@ -91,6 +91,7 @@ MainWindow::MainWindow(QWidget *parent)
     QSettings settings;
     AudioManager::instance().setVolumes(settings.value("audio/bgm", 70).toInt(),
                                         settings.value("audio/sfx", 85).toInt());
+    AudioManager::instance().setBgmTrack(settings.value("audio/bgmTrack", "dossoles_holiday").toString());
     const bool showGrid = settings.value("game/showGrid", true).toBool();
     m_battlePage->setShowGrid(showGrid);
     m_deployPage->setShowGrid(showGrid);
@@ -409,6 +410,11 @@ void MainWindow::connectSignals()
     connect(m_settingsPage, &SettingsPage::signalVolumeChanged,
             this, [](int bgm, int sfx) {
                 AudioManager::instance().setVolumes(bgm, sfx);
+            });
+
+    connect(m_settingsPage, &SettingsPage::signalBgmTrackChanged,
+            this, [](const QString& trackId) {
+                AudioManager::instance().setBgmTrack(trackId);
             });
 
     connect(m_settingsPage, &SettingsPage::signalShowGridChanged,

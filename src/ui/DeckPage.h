@@ -84,6 +84,7 @@ private:
     QRectF m_canvasRect;
     QVector<ArtHotspot*> m_cardHotspots;
     QVector<QLabel*> m_cardLockLabels;
+    QVector<ArtHotspot*> m_squadHotspots;
     ArtHotspot *m_backHotspot;
     ArtHotspot *m_startHotspot;
     QVector<QWidget*> m_drawCardFrames;
@@ -91,6 +92,7 @@ private:
     QVector<QLabel*> m_drawCardNameLabels;
     QVector<QLabel*> m_drawCardBadgeLabels;
     int m_lastDrawResultCount;
+    int m_currentSquadIndex;
     bool m_drawOverlayVisible;
 
     void initUI();
@@ -119,6 +121,10 @@ private:
     void loadSelectedPreset();
     void deleteSelectedPreset();
     bool applyDeckKinds(const QVector<game::core::CardKind>& kinds);
+    void switchSquad(int squadIndex);
+    void saveCurrentSquad();
+    void loadSquadToDeck(int squadIndex);
+    void refreshSquadVisuals();
 };
 
 #endif // DECKPAGE_H

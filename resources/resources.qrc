@@ -67,5 +67,6 @@
         <file alias="images/lobby_demo/deck.png">../assets/lobby_demo/deck.png</file>
         <file alias="images/lobby_demo/atlas.png">../assets/lobby_demo/atlas.png</file>
         <file alias="images/lobby_demo/back.png">../assets/lobby_demo/back.png</file>
+        <file alias="audio/bgm/dossoles_holiday.mp3">../assets/audio/bgm/dossoles_holiday.mp3</file>
     </qresource>
 </RCC>

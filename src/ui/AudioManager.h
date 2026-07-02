@@ -3,15 +3,25 @@
 
 #include <QAudioFormat>
 #include <QObject>
+#include <QString>
+#include <QVector>
 
+class QAudioOutput;
 class QAudioSink;
 class QIODevice;
+class QMediaPlayer;
 
 class AudioManager final : public QObject
 {
     Q_OBJECT
 
 public:
+    struct BgmTrack {
+        QString id;
+        QString displayName;
+        QString sourceUrl;
+    };
+
     enum class Scene {
         Menu,
         Battle
@@ -22,6 +32,9 @@ public:
     void initialize();
     void setVolumes(int bgmPercent, int sfxPercent);
     void setScene(Scene scene);
+    void setBgmTrack(const QString& trackId);
+    QString currentBgmTrack() const { return m_bgmTrackId; }
+    static QVector<BgmTrack> availableBgmTracks();
 
     void playWoodClick();
     void playCardSelect();
@@ -40,6 +53,9 @@ private:
     QAudioFormat m_format;
     QAudioSink *m_ambientSink;
     QIODevice *m_ambientDevice;
+    QMediaPlayer *m_bgmPlayer;
+    QAudioOutput *m_bgmOutput;
+    QString m_bgmTrackId;
     qreal m_bgmVolume;
     qreal m_sfxVolume;
     Scene m_scene;

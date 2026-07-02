@@ -51,6 +51,21 @@ QVector<game::core::CardKind> normalizedDeck(const QVector<game::core::CardKind>
     return result;
 }
 
+QString squadId(int squadIndex)
+{
+    return QString("squad-%1").arg(squadIndex + 1);
+}
+
+QString squadName(int squadIndex)
+{
+    return QString("Squad %1").arg(squadIndex + 1);
+}
+
+bool isSquadId(const QString& id)
+{
+    return id.startsWith("squad-");
+}
+
 } // namespace
 
 PresetManager::PresetManager()
@@ -81,9 +96,25 @@ QVector<DeckPreset> PresetManager::listPresets() const
     result.reserve(m_presets.size() + 1);
     result.append(defaultPreset());
     for (const auto& preset : m_presets) {
+        if (isSquadId(preset.id)) {
+            continue;
+        }
         result.append(preset);
     }
     return result;
+}
+
+QVector<DeckPreset> PresetManager::listSquads() const
+{
+    QVector<DeckPreset> squads;
+    squads.reserve(4);
+    for (int i = 0; i < 4; ++i) {
+        DeckPreset preset;
+        if (loadSquad(i, preset)) {
+            squads.append(preset);
+        }
+    }
+    return squads;
 }
 
 bool PresetManager::savePreset(const QString& displayName,
@@ -112,9 +143,54 @@ bool PresetManager::savePreset(const QString& displayName,
     return save(error);
 }
 
+bool PresetManager::saveSquad(int squadIndex,
+                              const QVector<game::core::CardKind>& cards,
+                              QString* error)
+{
+    if (squadIndex < 0 || squadIndex >= 4) {
+        if (error) *error = "Invalid squad index.";
+        return false;
+    }
+
+    DeckPreset preset;
+    preset.id = squadId(squadIndex);
+    preset.displayName = squadName(squadIndex);
+    preset.cards = normalizedDeck(cards);
+    preset.updatedAt = QDateTime::currentDateTimeUtc();
+
+    const int index = indexForId(preset.id);
+    if (index >= 0) {
+        m_presets[index] = preset;
+    } else {
+        m_presets.append(preset);
+    }
+    return save(error);
+}
+
+bool PresetManager::loadSquad(int squadIndex, DeckPreset& preset) const
+{
+    if (squadIndex < 0 || squadIndex >= 4) {
+        return false;
+    }
+
+    const int index = indexForId(squadId(squadIndex));
+    if (index >= 0) {
+        preset = m_presets[index];
+        return true;
+    }
+
+    preset.id = squadId(squadIndex);
+    preset.displayName = squadName(squadIndex);
+    preset.updatedAt = QDateTime::currentDateTimeUtc();
+    if (squadIndex == 0) {
+        preset.cards = defaultPreset().cards;
+    }
+    return true;
+}
+
 bool PresetManager::renamePreset(const QString& id, const QString& displayName, QString* error)
 {
-    if (id == "default") {
+    if (id == "default" || isSquadId(id)) {
         if (error) *error = "The built-in preset cannot be renamed.";
         return false;
     }
@@ -135,7 +211,7 @@ bool PresetManager::renamePreset(const QString& id, const QString& displayName, 
 
 bool PresetManager::deletePreset(const QString& id, QString* error)
 {
-    if (id == "default") {
+    if (id == "default" || isSquadId(id)) {
         if (error) *error = "The built-in preset cannot be deleted.";
         return false;
     }
@@ -187,7 +263,9 @@ void PresetManager::load()
                 preset.cards.append(kind);
             }
         }
-        if (!preset.id.isEmpty() && !preset.displayName.isEmpty() && !preset.cards.isEmpty()) {
+        if (!preset.id.isEmpty()
+            && !preset.displayName.isEmpty()
+            && (!preset.cards.isEmpty() || isSquadId(preset.id))) {
             m_presets.append(preset);
         }
     }

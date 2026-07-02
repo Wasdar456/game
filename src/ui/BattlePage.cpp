@@ -2469,6 +2469,7 @@ void BattlePage::startBattle()
         m_battleManager->setPvpMode(true);
         m_battleManager->setPveDifficulty(0);
         m_pveFinalWave = 10;
+        m_pveEndlessMode = false;
 
         // 应用同步的随机种子
         m_battleManager->setRandomSeed(m_netCtx.seed);
@@ -2499,9 +2500,18 @@ void BattlePage::startBattle()
         m_battleManager->setPvpMode(false);
         m_battleManager->setPveDifficulty(m_netCtx.pveDifficulty);
         switch (std::clamp(m_netCtx.pveDifficulty, 0, 2)) {
-        case 1: m_pveFinalWave = 13; break;
-        case 2: m_pveFinalWave = 15; break;
-        default: m_pveFinalWave = 10; break;
+        case 1:
+            m_pveFinalWave = 13;
+            m_pveEndlessMode = false;
+            break;
+        case 2:
+            m_pveFinalWave = 0;
+            m_pveEndlessMode = true;
+            break;
+        default:
+            m_pveFinalWave = 10;
+            m_pveEndlessMode = false;
+            break;
         }
 
         // 隐藏对手信息
@@ -2679,7 +2689,7 @@ void BattlePage::onGameTick()
 
     // PVE: 自动下一波
     if (!m_isPvp && !snap.waveActive) {
-        if (m_currentWaveId >= m_pveFinalWave) {
+        if (!m_pveEndlessMode && m_currentWaveId >= m_pveFinalWave) {
             recordReplaySnapshot(snap, 0.0, true);
             m_battleView->updateFromSnapshot(snap);
             updateStatusBar(snap);
@@ -3149,7 +3159,9 @@ void BattlePage::updateStatusBar(const game::core::BattleSnapshot &snapshot)
     m_displayResources = snapshot.resources;
 
     if (!m_isPvp) {
-        m_waveLabel->setText(QString("Wave %1/%2").arg(snapshot.currentWave).arg(m_pveFinalWave));
+        m_waveLabel->setText(m_pveEndlessMode
+                                 ? QString("无尽 Wave %1").arg(snapshot.currentWave)
+                                 : QString("Wave %1/%2").arg(snapshot.currentWave).arg(m_pveFinalWave));
     } else {
         m_waveLabel->setText(QString("Wave %1").arg(snapshot.currentWave));
     }

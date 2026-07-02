@@ -1,5 +1,6 @@
 #include "ui/SettingsPage.h"
 
+#include "ui/AudioManager.h"
 #include "ui/CardCollection.h"
 
 #include <QCheckBox>
@@ -157,6 +158,7 @@ SettingsPage::SettingsPage(QWidget *parent)
     : QWidget(parent)
     , m_btnBack(nullptr)
     , m_titleLabel(nullptr)
+    , m_bgmTrackCombo(nullptr)
     , m_bgmSlider(nullptr)
     , m_bgmValueLabel(nullptr)
     , m_sfxSlider(nullptr)
@@ -174,6 +176,9 @@ SettingsPage::SettingsPage(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
 
     QSettings settings;
+    const QString savedTrack = settings.value("audio/bgmTrack", "dossoles_holiday").toString();
+    const int trackIndex = m_bgmTrackCombo->findData(savedTrack);
+    m_bgmTrackCombo->setCurrentIndex(trackIndex >= 0 ? trackIndex : 0);
     m_bgmSlider->setValue(settings.value("audio/bgm", 70).toInt());
     m_sfxSlider->setValue(settings.value("audio/sfx", 85).toInt());
     const QSize savedSize = settings.value("display/resolution", QSize(1280, 720)).toSize();
@@ -257,6 +262,14 @@ void SettingsPage::initUI()
     audioLayout->setSpacing(5);
     audioLayout->setContentsMargins(22, 14, 22, 10);
     audioLayout->addWidget(makeHint("拖动滑块会立即改变音量；点击保存后下次启动继续使用。", audioGroup));
+
+    m_bgmTrackCombo = new QComboBox(this);
+    for (const auto& track : AudioManager::availableBgmTracks()) {
+        m_bgmTrackCombo->addItem(track.displayName, track.id);
+    }
+    m_bgmTrackCombo->setFixedSize(320, 34);
+    m_bgmTrackCombo->setStyleSheet(comboStyle());
+    audioLayout->addWidget(makeSettingRow("BGM 曲目:", m_bgmTrackCombo, audioGroup));
 
     m_bgmSlider = new QSlider(Qt::Horizontal, this);
     m_bgmSlider->setRange(0, 100);
@@ -387,6 +400,7 @@ void SettingsPage::initUI()
 
     for (QObject *target : {
              static_cast<QObject*>(m_btnBack),
+             static_cast<QObject*>(m_bgmTrackCombo),
              static_cast<QObject*>(m_bgmSlider),
              static_cast<QObject*>(m_sfxSlider),
              static_cast<QObject*>(m_resolutionCombo),
@@ -404,6 +418,12 @@ void SettingsPage::connectSignals()
 {
     connect(m_btnBack, &QPushButton::clicked, this, [this]() {
         emit signalBack();
+    });
+
+    connect(m_bgmTrackCombo, &QComboBox::currentIndexChanged, this, [this]() {
+        const QString trackId = m_bgmTrackCombo->currentData().toString();
+        emit signalBgmTrackChanged(trackId);
+        showStatusMessage("背景音乐曲目已即时切换，点击保存后持久生效。");
     });
 
     connect(m_bgmSlider, &QSlider::valueChanged, this, [this](int value) {
@@ -463,6 +483,7 @@ void SettingsPage::connectSignals()
 
     connect(m_btnSave, &QPushButton::clicked, this, [this]() {
         QSettings settings;
+        settings.setValue("audio/bgmTrack", m_bgmTrackCombo->currentData().toString());
         settings.setValue("audio/bgm", m_bgmSlider->value());
         settings.setValue("audio/sfx", m_sfxSlider->value());
         const QSize requestedSize = m_resolutionCombo->currentData().toSize();
@@ -474,6 +495,7 @@ void SettingsPage::connectSignals()
         settings.sync();
 
         emit signalVolumeChanged(m_bgmSlider->value(), m_sfxSlider->value());
+        emit signalBgmTrackChanged(m_bgmTrackCombo->currentData().toString());
         emit signalShowGridChanged(m_gridCheck->isChecked());
 
         QWidget *top = window();

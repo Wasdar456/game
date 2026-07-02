@@ -40,6 +40,7 @@ signals:
     // 当用户修改设置时发出，其他页面可监听这些信号
     void signalShowGridChanged(bool show);    ///< 网格显示开关变更
     void signalVolumeChanged(int bgm, int sfx); ///< 音量变更
+    void signalBgmTrackChanged(const QString& trackId); ///< 背景音乐曲目变更
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -52,6 +53,7 @@ private:
     QLabel      *m_titleLabel;
 
     // 音量设置
+    QComboBox *m_bgmTrackCombo;
     QSlider *m_bgmSlider;
     QLabel  *m_bgmValueLabel;
     QSlider *m_sfxSlider;
