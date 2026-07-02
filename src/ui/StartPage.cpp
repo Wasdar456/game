@@ -30,9 +30,9 @@ struct MenuHotspotSpec {
 const QVector<MenuHotspotSpec> kMenuHotspots = {
     {{806, 288, 490, 126}, "单人 PVE"},
     {{786, 411, 534, 129}, "多人 PVP"},
-    {{738, 560, 322, 101}, "图鉴与卡组"},
+    {{740, 542, 346, 120}, "图鉴与卡组"},
     {{1110, 548, 332, 124}, "设置"},
-    {{906, 696, 314, 91}, "退出游戏"},
+    {{887, 674, 358, 117}, "退出游戏"},
 };
 
 void drawCover(QPainter &painter, const QPixmap &pixmap, const QRect &target)
