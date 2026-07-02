@@ -17,6 +17,18 @@
     "width": 1672,
     "height": 604
   },
+  "battleViewRect": {
+    "x": 0,
+    "y": 96,
+    "width": 1672,
+    "height": 604
+  },
+  "deployViewRect": {
+    "x": 0,
+    "y": 96,
+    "width": 1672,
+    "height": 604
+  },
   "points": {
     "SPAWN_A": [
       {

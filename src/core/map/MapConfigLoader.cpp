@@ -98,6 +98,23 @@ bool MapConfigLoader::loadFromJson(const std::string& path, LoadedMapConfig& con
         loaded.imageOffset.y = imageOffsetObj.value("y").toInt();
     }
 
+    auto readViewRect = [](const QJsonObject& object) {
+        MapViewRect rect;
+        rect.x = object.value("x").toInt();
+        rect.y = object.value("y").toInt();
+        rect.width = object.value("width").toInt();
+        rect.height = object.value("height").toInt();
+        return rect;
+    };
+    const QJsonObject battleViewRectObj = root.value("battleViewRect").toObject();
+    if (!battleViewRectObj.isEmpty()) {
+        loaded.battleViewRect = readViewRect(battleViewRectObj);
+    }
+    const QJsonObject deployViewRectObj = root.value("deployViewRect").toObject();
+    if (!deployViewRectObj.isEmpty()) {
+        loaded.deployViewRect = readViewRect(deployViewRectObj);
+    }
+
     const QJsonArray tiles = root.value("tiles").toArray();
     loaded.tiles.reserve(static_cast<std::size_t>(tiles.size()));
     for (const QJsonValue& value : tiles) {

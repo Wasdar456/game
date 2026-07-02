@@ -195,8 +195,16 @@ inline PvpMapLayout makePvpMapLayoutFromConfig(const game::core::LoadedMapConfig
                                           ? QRectF(0, 120, 1672, 604)
                                           : QRectF(0, 96, 1672, 604);
     }
-    layout.battleViewRect = QRectF(174, 126, 1324, 552);
-    layout.deployViewRect = layout.battleViewRect;
+    auto rectFromConfig = [](const game::core::MapViewRect& rect,
+                             const QRectF& fallback) {
+        if (rect.width > 0 && rect.height > 0) {
+            return QRectF(rect.x, rect.y, rect.width, rect.height);
+        }
+        return fallback;
+    };
+    const QRectF fullMapRect(0, 96, 1672, 604);
+    layout.battleViewRect = rectFromConfig(config.battleViewRect, fullMapRect);
+    layout.deployViewRect = rectFromConfig(config.deployViewRect, layout.battleViewRect);
     layout.unitVisualScale = layout.id == "pvp_office_panic" ? 1.12 : 1.0;
 
     if (!config.spawnA.empty()) layout.spawnA = config.spawnA.front();

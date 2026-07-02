@@ -25,6 +25,13 @@ struct ImageOffset {
     int y = 0;
 };
 
+struct MapViewRect {
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+};
+
 struct LoadedMapConfig {
     std::string name;
     std::string mode = "PVE";
@@ -36,6 +43,8 @@ struct LoadedMapConfig {
     int cellSizeY = 0;
     ImageCrop imageCrop;
     ImageOffset imageOffset;
+    MapViewRect battleViewRect;
+    MapViewRect deployViewRect;
     std::vector<LoadedMapTile> tiles;
     std::vector<std::vector<MapPosition>> routesA;
     std::vector<std::vector<MapPosition>> routesB;

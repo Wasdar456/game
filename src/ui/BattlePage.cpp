@@ -2009,7 +2009,7 @@ void BattlePage::layoutArtworkUi()
         m_waveLabel->setGeometry(mapped(QRectF(210, 36, 52, 50)));
         m_phaseLabel->setGeometry(mapped(QRectF(416, 36, 104, 50)));
         m_coreHpLabel->setGeometry(mapped(QRectF(736, 30, 104, 44)));
-        m_opponentLabel->setGeometry(mapped(QRectF(1048, 30, 96, 44)));
+        m_opponentLabel->setGeometry(mapped(QRectF(1048, 30, 72, 44)));
         m_resourceLabel->setGeometry(mapped(QRectF(1288, 36, 54, 50)));
         m_syncLabel->setGeometry(mapped(QRectF(1462, 36, 68, 50)));
         m_phaseLabel->show();
