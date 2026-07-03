@@ -64,6 +64,11 @@ bool Map::canDeployAt(MapPosition position) const {
     return grid && grid->isDeployable();
 }
 
+bool Map::canMoveTo(MapPosition position) const {
+    const MapGrid* grid = gridAt(position);
+    return grid && grid->isDeployable();
+}
+
 bool Map::canWalkAt(MapPosition position) const {
     const MapGrid* grid = gridAt(position);
     return grid && grid->isWalkable();

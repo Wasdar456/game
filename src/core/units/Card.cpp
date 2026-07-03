@@ -73,8 +73,8 @@ bool Card::tryTeleport(MapPosition target, Map& map, ResourceManager& resources)
     int distance = position_.manhattanDistanceTo(target);
     if (distance > moveLimit_) return false;
 
-    // 目标必须是可部署且未占用格。
-    if (!map.canDeployAt(target)) return false;
+    // 移动不受初始部署半区限制，但目标仍必须是可站立且未占用的战术格。
+    if (!map.canMoveTo(target)) return false;
 
     // 移动费用 = 基础费用 + 距离 * 系数。
     int cost = constants::TeleportBaseCost +

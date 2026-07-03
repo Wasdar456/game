@@ -1108,19 +1108,20 @@ void DeployPage::connectSignals()
 
     // 开战按钮
     connect(m_btnStartBattle, &QPushButton::clicked, this, [this]() {
+        if (m_battleStartEmitted) {
+            qDebug() << "[DeployPage] ignoring Ready click after battle start emitted";
+            return;
+        }
         m_localReady = true;
         m_btnStartBattle->setEnabled(false);
         m_btnStartBattle->setText("Waiting...");
 
         if (m_isPvp) {
+            qInfo() << "[DeployPage] local deployment ready"
+                    << "host=" << m_isHost
+                    << "opponentReady=" << m_opponentReady;
             sendDeploymentEnd();
-            // Host 检查是否双方都准备好了
-            if (m_isHost && m_opponentReady) {
-                applyPendingOpponentDeploys();
-                applyPendingOpponentOps();
-                m_netCtx.server->sendPacket(game::network::MsgType::GAME_START);
-                emit signalBattleStart();
-            }
+            tryStartPvpBattle("local ready clicked");
         } else {
             emit signalBattleStart();
         }
@@ -1144,6 +1145,7 @@ void DeployPage::initDeployment()
     m_selectedUnitId = -1;
     m_localReady = false;
     m_opponentReady = false;
+    m_battleStartEmitted = false;
     m_pendingOpponentDeploys.clear();
     m_pendingOpponentOps.clear();
 
@@ -1249,6 +1251,7 @@ void DeployPage::reEnter()
     // 不用 clearBattle，保留现有单位
     m_localReady = false;
     m_opponentReady = false;
+    m_battleStartEmitted = false;
     m_btnStartBattle->setEnabled(true);
     m_btnStartBattle->setText("Ready");
     m_opponentLabel->setText("...");
@@ -1363,6 +1366,56 @@ void DeployPage::applyPendingOpponentOps()
     m_pendingOpponentOps.clear();
 }
 
+void DeployPage::tryStartPvpBattle(const char* reason)
+{
+    if (!m_isPvp) {
+        if (!m_battleStartEmitted) {
+            m_battleStartEmitted = true;
+            emit signalBattleStart();
+        }
+        return;
+    }
+
+    if (m_battleStartEmitted) {
+        qDebug() << "[DeployPage] ignoring duplicate battle start"
+                 << "reason=" << reason
+                 << "host=" << m_isHost;
+        return;
+    }
+
+    if (m_isHost) {
+        if (!m_localReady || !m_opponentReady) {
+            qDebug() << "[DeployPage][Host] deployment battle not ready"
+                     << "reason=" << reason
+                     << "localReady=" << m_localReady
+                     << "opponentReady=" << m_opponentReady;
+            return;
+        }
+
+        applyPendingOpponentDeploys();
+        applyPendingOpponentOps();
+        if (m_netCtx.server) {
+            qInfo() << "[DeployPage][Host] broadcasting deployment GAME_START"
+                    << "reason=" << reason;
+            m_netCtx.server->sendPacket(game::network::MsgType::GAME_START);
+        } else {
+            qDebug() << "[DeployPage][Host] cannot broadcast GAME_START: server missing";
+        }
+        m_battleStartEmitted = true;
+        emit signalBattleStart();
+        return;
+    }
+
+    qInfo() << "[DeployPage][Client] starting battle from host GAME_START"
+            << "reason=" << reason
+            << "localReady=" << m_localReady
+            << "opponentReady=" << m_opponentReady;
+    applyPendingOpponentDeploys();
+    applyPendingOpponentOps();
+    m_battleStartEmitted = true;
+    emit signalBattleStart();
+}
+
 void DeployPage::sendDeploymentEnd()
 {
     if (m_isHost && m_netCtx.server) {
@@ -1394,23 +1447,16 @@ void DeployPage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
         m_opponentReady = true;
         m_opponentLabel->setText("OK");
         m_opponentLabel->update();
-
-        // Host 检查双方是否都准备好了
-        if (m_isHost && m_localReady && m_opponentReady) {
-            applyPendingOpponentDeploys();
-            applyPendingOpponentOps();
-            m_netCtx.server->sendPacket(game::network::MsgType::GAME_START);
-            emit signalBattleStart();
-        }
+        qInfo() << "[DeployPage] opponent deployment ready"
+                << "host=" << m_isHost
+                << "localReady=" << m_localReady;
+        tryStartPvpBattle("opponent deployment end");
         break;
     }
     case game::network::MsgType::GAME_START: {
-        // Client 收到开战信号
-        if (!m_isHost) {
-            applyPendingOpponentDeploys();
-            applyPendingOpponentOps();
-            emit signalBattleStart();
-        }
+        qInfo() << "[DeployPage] received deployment GAME_START"
+                << "host=" << m_isHost;
+        if (!m_isHost) tryStartPvpBattle("received GAME_START");
         break;
     }
     case game::network::MsgType::UPGRADE_UNIT: {

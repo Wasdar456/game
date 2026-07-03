@@ -37,8 +37,9 @@ public:
     bool clearOccupant(MapPosition position);
     void clearOccupancy();
 
-    // 部署合法性和行走合法性的统一入口。
+    // 部署、移动和行走合法性的统一入口。
     bool canDeployAt(MapPosition position) const;
+    bool canMoveTo(MapPosition position) const;
     bool canWalkAt(MapPosition position) const;
 
     // A* 寻路使用的四方向邻居。

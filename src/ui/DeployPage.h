@@ -207,6 +207,7 @@ private:
     // ========== 开战同步 ==========
     bool m_localReady = false;       // 本地是否点击了开战
     bool m_opponentReady = false;    // 对方是否点击了开战
+    bool m_battleStartEmitted = false;
     QLabel *m_opponentLabel;
     QPixmap m_pvpArtwork;
     QPixmap m_pvpOfficeMapArtwork;
@@ -221,6 +222,7 @@ private:
     void setupCardButtonConnections();  ///< 设置卡牌按钮连接（只一次）
     void applyPendingOpponentDeploys();
     void applyPendingOpponentOps();
+    void tryStartPvpBattle(const char* reason);
     void layoutArtworkUi();
     QRect artworkRect() const;
 
