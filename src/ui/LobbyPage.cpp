@@ -178,6 +178,8 @@ void LobbyPage::setMode(Mode mode)
 {
     if (m_currentMode == Mode::PVP && mode != Mode::PVP) {
         resetPvpSession();
+    } else if (m_currentMode == Mode::PVP && mode == Mode::PVP) {
+        resetPvpSession();
     }
     m_currentMode = mode;
     m_pvePanel->setVisible(mode == Mode::PVE);
@@ -482,32 +484,64 @@ QString LobbyPage::getLocalIPAddress() const
 // ========== initNetwork() 鈥斺€?鍒濆鍖?PVP 缃戠粶妯″潡 ==========
 void LobbyPage::initNetwork()
 {
+    bool createdServer = false;
+    bool createdClient = false;
     if (!m_server) {
         m_server = new game::network::GameServer(this);
+        createdServer = true;
     }
     if (!m_client) {
         m_client = new game::network::GameClient(this);
+        createdClient = true;
     }
 
-    // 杩炴帴 GameServer 鐨勪俊鍙峰埌鐘舵€佹棩蹇?
-    connect(m_server, &game::network::GameServer::clientConnected,
-            this, [this]() {
-                m_statusLog->append(">> 对方已连接");
-            });
-    connect(m_server, &game::network::GameServer::errorOccurred,
-            this, [this](const QString &msg) {
-                m_statusLog->append(">> 服务器错误: " + msg);
-            });
+    if (createdServer) {
+        connect(m_server, &game::network::GameServer::clientConnected,
+                this, [this]() {
+                    m_statusLog->append(">> 对方已连接，等待大厅握手...");
+                });
+        connect(m_server, &game::network::GameServer::clientDisconnected,
+                this, [this]() {
+                    m_statusLog->append(">> 对方已断开，准备状态已重置。");
+                    if (m_lobbyManager) {
+                        delete m_lobbyManager;
+                        m_lobbyManager = nullptr;
+                    }
+                    m_btnReady->setEnabled(false);
+                    m_btnReady->setText("Ready");
+                    m_readyStatusLabel->setText("连接已断开");
+                    m_readyStatusLabel->setStyleSheet(readyStatusStyle("#8a2f24"));
+                    m_readyStatusLabel->update();
+                });
+        connect(m_server, &game::network::GameServer::errorOccurred,
+                this, [this](const QString &msg) {
+                    m_statusLog->append(">> 服务器错误: " + msg);
+                });
+    }
 
-    // 杩炴帴 GameClient 鐨勪俊鍙峰埌鐘舵€佹棩蹇?
-    connect(m_client, &game::network::GameClient::connected,
-            this, [this]() {
-                m_statusLog->append(">> 已连接到 Host");
-            });
-    connect(m_client, &game::network::GameClient::errorOccurred,
-            this, [this](const QString &msg) {
-                m_statusLog->append(">> 连接错误: " + msg);
-            });
+    if (createdClient) {
+        connect(m_client, &game::network::GameClient::connected,
+                this, [this]() {
+                    m_statusLog->append(">> 已连接到 Host，等待大厅握手...");
+                });
+        connect(m_client, &game::network::GameClient::disconnected,
+                this, [this]() {
+                    m_statusLog->append(">> 已断开连接，准备状态已重置。");
+                    if (m_lobbyManager) {
+                        delete m_lobbyManager;
+                        m_lobbyManager = nullptr;
+                    }
+                    m_btnReady->setEnabled(false);
+                    m_btnReady->setText("Ready");
+                    m_readyStatusLabel->setText("连接已断开");
+                    m_readyStatusLabel->setStyleSheet(readyStatusStyle("#8a2f24"));
+                    m_readyStatusLabel->update();
+                });
+        connect(m_client, &game::network::GameClient::errorOccurred,
+                this, [this](const QString &msg) {
+                    m_statusLog->append(">> 连接错误: " + msg);
+                });
+    }
 }
 
 // ========== connectSignals() 鈥斺€?杩炴帴淇″彿妲?==========
@@ -571,6 +605,14 @@ void LobbyPage::connectSignals()
                         m_selectedPvpMap = pvpMapIndexForId(mapId);
                         refreshSelectionVisuals();
                     });
+            connect(m_lobbyManager, &game::network::LobbyManager::peerJoined,
+                    this, [this](const QString& peerName) {
+                        m_statusLog->append(QString(">> %1 已进入房间，请点击准备").arg(peerName));
+                        m_btnReady->setEnabled(true);
+                        m_readyStatusLabel->setText("对方已进入房间，请点击准备");
+                        m_readyStatusLabel->setStyleSheet(readyStatusStyle("#287a43"));
+                        m_readyStatusLabel->update();
+                    });
 
             // 杩炴帴 LobbyManager 鐨勫彂鍖呰姹傚埌 GameServer
             connect(m_lobbyManager, &game::network::LobbyManager::sendPacketRequested,
@@ -583,9 +625,9 @@ void LobbyPage::connectSignals()
             // 杩炴帴瀹㈡埛绔姞鍏ヤ俊鍙?
             connect(m_server, &game::network::GameServer::clientConnected,
                     this, [this]() {
-                        m_statusLog->append(">> 对方已进入房间，请点击准备");
-                        m_btnReady->setEnabled(true);
-                        m_readyStatusLabel->setText("对方已连接，请点击准备");
+                        m_statusLog->append(">> 对方已连接，等待 JOIN_ROOM...");
+                        m_btnReady->setEnabled(false);
+                        m_readyStatusLabel->setText("等待对方加入房间...");
                         m_readyStatusLabel->setStyleSheet(readyStatusStyle("#287a43"));
                         m_readyStatusLabel->update();
                     });
@@ -634,9 +676,9 @@ void LobbyPage::connectSignals()
         // 杩炴帴杩炴帴鎴愬姛淇″彿 鈫?鍚敤鍑嗗鎸夐挳
         connect(m_client, &game::network::GameClient::connected,
                 this, [this]() {
-                    m_statusLog->append(">> 已连接到房间，点击准备按钮");
-                    m_btnReady->setEnabled(true);
-                    m_readyStatusLabel->setText("已连接，请点击准备");
+                    m_statusLog->append(">> 已连接到房间，等待 JOIN_ACK...");
+                    m_btnReady->setEnabled(false);
+                    m_readyStatusLabel->setText("等待房主确认...");
                     m_readyStatusLabel->setStyleSheet(readyStatusStyle("#287a43"));
                     m_readyStatusLabel->update();
                 });
@@ -655,6 +697,14 @@ void LobbyPage::connectSignals()
                     m_statusLog->append(QString(">> 房主已切换地图为 %1")
                                             .arg(m_selectedPvpMap == 2 ? "Office Panic"
                                                                       : "Sunny Beach"));
+                });
+        connect(m_lobbyManager, &game::network::LobbyManager::peerJoined,
+                this, [this](const QString& peerName) {
+                    m_statusLog->append(QString(">> 已加入 %1 的房间，请点击准备").arg(peerName));
+                    m_btnReady->setEnabled(true);
+                    m_readyStatusLabel->setText("已进入房间，请点击准备");
+                    m_readyStatusLabel->setStyleSheet(readyStatusStyle("#287a43"));
+                    m_readyStatusLabel->update();
                 });
 
         // 杩炴帴 LobbyManager 鐨?gameStarted 淇″彿 鈫?杩涘叆閫夊崱椤?
@@ -680,6 +730,10 @@ void LobbyPage::connectSignals()
     connect(m_btnReady, &QPushButton::clicked, this, [this]() {
         if (m_lobbyManager) {
             m_lobbyManager->setReady();
+            if (!m_lobbyManager->isReady()) {
+                m_statusLog->append(">> 当前房间尚未完成握手，暂不能准备。");
+                return;
+            }
             m_btnReady->setEnabled(false);
             m_btnReady->setText("已准备");
             m_readyStatusLabel->setText("你已准备，等待对方准备...");

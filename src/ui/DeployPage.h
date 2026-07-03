@@ -33,6 +33,7 @@
 #include "ui/LobbyPage.h"  // NetworkContext
 #include "network/protocol/ProtocolDef.h"
 #include "network/sync/DeploymentSync.h"
+#include "ui/PvpMapLayout.h"
 
 /**
  * @class DeployView
@@ -52,6 +53,7 @@ public:
     void setArtworkOverlayMode(bool enabled);
     void setShowGrid(bool show);
     void setPvpDeploymentSide(bool enabled, bool isHost);
+    void setPvpMapLayout(const game::ui::PvpMapLayout& layout);
     void setUnitVisualScale(double scale);
 
     // 交互状态
@@ -100,6 +102,7 @@ private:
     bool m_showGrid;
     bool m_restrictPvpDeployment;
     bool m_localIsHost;
+    game::ui::PvpMapLayout m_pvpLayout;
     double m_unitVisualScale;
     int m_animFrame;
     QPushButton *m_btnUpgrade;
@@ -149,6 +152,7 @@ public:
      * @brief 初始化部署阶段（首次进入）
      */
     void initDeployment();
+    void resumeDeployment();
 
     /**
      * @brief 重新进入部署阶段（战斗结束后）
@@ -207,7 +211,9 @@ private:
     // ========== 开战同步 ==========
     bool m_localReady = false;       // 本地是否点击了开战
     bool m_opponentReady = false;    // 对方是否点击了开战
+    bool m_pendingHostStart = false;
     bool m_battleStartEmitted = false;
+    int m_deploymentRound = 1;
     QLabel *m_opponentLabel;
     QPixmap m_pvpArtwork;
     QPixmap m_pvpOfficeMapArtwork;
@@ -233,6 +239,7 @@ private:
     void sendUpgradeToNetwork(int unitId);
     void sendMoveToNetwork(int unitId, game::core::MapPosition pos);
     void sendRecallToNetwork(int unitId);
+    void handleNetworkDisconnected();
 };
 
 #endif // DEPLOYPAGE_H

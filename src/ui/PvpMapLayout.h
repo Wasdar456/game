@@ -13,6 +13,7 @@
 
 #include <string>
 #include <vector>
+#include <algorithm>
 
 namespace game::ui {
 
@@ -33,6 +34,9 @@ struct PvpMapLayout {
     std::vector<core::MapPosition> pathToB;
     std::vector<core::MapPosition> highGround;
     std::vector<core::MapPosition> blocked;
+    std::vector<core::MapPosition> deployA;
+    std::vector<core::MapPosition> deployB;
+    std::vector<core::MapPosition> deployNeutral;
 };
 
 inline PvpMapLayout makeSunnyBeachPvpMapLayout()
@@ -79,6 +83,22 @@ inline PvpMapLayout makeSunnyBeachPvpMapLayout()
         {9, 0}, {9, 1}, {9, 2}, {9, 3}, {9, 4},
         {9, 23}, {9, 24}, {9, 25}, {9, 26}, {9, 27}
     };
+    for (int row = 0; row < layout.rows; ++row) {
+        for (int col = 0; col < layout.cols; ++col) {
+            const core::MapPosition pos(row, col);
+            const auto isListed = [&pos](const std::vector<core::MapPosition>& cells) {
+                return std::find(cells.begin(), cells.end(), pos) != cells.end();
+            };
+            if (isListed(layout.blocked) || isListed(layout.highGround)
+                || isListed(layout.pathToA) || isListed(layout.pathToB)
+                || pos == layout.spawnA || pos == layout.spawnB
+                || pos == layout.coreA || pos == layout.coreB) {
+                continue;
+            }
+            if (col <= 14) layout.deployA.push_back(pos);
+            if (col >= 13) layout.deployB.push_back(pos);
+        }
+    }
     return layout;
 }
 
@@ -129,6 +149,22 @@ inline PvpMapLayout makeOfficePanicPvpMapLayout()
         {9, 0}, {9, 1}, {9, 2}, {9, 3}, {9, 4},
         {9, 23}, {9, 24}, {9, 25}, {9, 26}, {9, 27}
     };
+    for (int row = 0; row < layout.rows; ++row) {
+        for (int col = 0; col < layout.cols; ++col) {
+            const core::MapPosition pos(row, col);
+            const auto isListed = [&pos](const std::vector<core::MapPosition>& cells) {
+                return std::find(cells.begin(), cells.end(), pos) != cells.end();
+            };
+            if (isListed(layout.blocked) || isListed(layout.highGround)
+                || isListed(layout.pathToA) || isListed(layout.pathToB)
+                || pos == layout.spawnA || pos == layout.spawnB
+                || pos == layout.coreA || pos == layout.coreB) {
+                continue;
+            }
+            if (col <= 14) layout.deployA.push_back(pos);
+            if (col >= 13) layout.deployB.push_back(pos);
+        }
+    }
     return layout;
 }
 
@@ -222,6 +258,13 @@ inline PvpMapLayout makePvpMapLayoutFromConfig(const game::core::LoadedMapConfig
         } else if (terrain == game::core::TerrainType::HighGround) {
             layout.highGround.push_back(position);
         }
+        if (tile.type == "DEPLOY_A") {
+            layout.deployA.push_back(position);
+        } else if (tile.type == "DEPLOY_B") {
+            layout.deployB.push_back(position);
+        } else if (tile.type == "DEPLOY_NEUTRAL") {
+            layout.deployNeutral.push_back(position);
+        }
     }
 
     return layout;
@@ -251,12 +294,39 @@ inline PvpMapLayout makePvpMapLayout(const std::string& mapId = "pvp_sunny_beach
                : makeSunnyBeachPvpMapLayout();
 }
 
-inline bool isPvpDeploymentCellForHost(bool isHost, core::MapPosition position)
+inline bool isPvpDeploymentCellForHost(const PvpMapLayout& layout,
+                                       bool isHost,
+                                       core::MapPosition position)
 {
     constexpr int SharedLeftCol = 13;
     constexpr int SharedRightCol = 14;
-    return isHost ? position.col <= SharedRightCol
-                  : position.col >= SharedLeftCol;
+    const auto defaultSideAllows = [isHost, position]() {
+        return isHost ? position.col <= SharedRightCol
+                      : position.col >= SharedLeftCol;
+    };
+    const auto contains = [&position](const std::vector<core::MapPosition>& cells) {
+        return std::find(cells.begin(), cells.end(), position) != cells.end();
+    };
+
+    if (layout.deployA.empty() && layout.deployB.empty() && !layout.deployNeutral.empty()) {
+        return contains(layout.deployNeutral) && defaultSideAllows();
+    }
+
+    if (contains(layout.deployNeutral)) return true;
+    if (isHost && contains(layout.deployA)) return true;
+    if (!isHost && contains(layout.deployB)) return true;
+
+    if (!layout.deployA.empty() || !layout.deployB.empty() || !layout.deployNeutral.empty()) {
+        return false;
+    }
+
+    return defaultSideAllows();
+}
+
+inline bool isPvpDeploymentCellForHost(bool isHost, core::MapPosition position)
+{
+    const auto layout = makePvpMapLayout();
+    return isPvpDeploymentCellForHost(layout, isHost, position);
 }
 
 inline void applyPvpMapLayout(core::Map& map, const PvpMapLayout& layout)

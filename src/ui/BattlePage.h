@@ -58,6 +58,7 @@
 #include "ui/LobbyPage.h"                   // NetworkContext 结构体
 #include "network/protocol/ProtocolDef.h"   // MsgType 枚举
 #include "ui/BattleResult.h"
+#include "ui/PvpMapLayout.h"
 
 class PauseOverlay;
 class TutorialOverlay;
@@ -86,6 +87,7 @@ public:
     void setArtworkOverlayMode(bool enabled);
     void setShowGrid(bool show);
     void setPvpDeploymentSide(bool enabled, bool isHost);
+    void setPvpMapLayout(const game::ui::PvpMapLayout& layout);
     void setUnitVisualScale(double scale);
     void hideRadialMenu();
     void clearEffects();
@@ -161,6 +163,7 @@ private:
     bool m_artworkOverlayMode;
     bool m_showGrid;
     bool m_restrictPvpDeployment;
+    game::ui::PvpMapLayout m_pvpLayout;
     double m_unitVisualScale;
 
     void showRadialMenu(int unitId, int pixelX, int pixelY);
@@ -358,6 +361,7 @@ private:
     void completePvpWave();
     void sendBattleState(const game::core::BattleSnapshot& snapshot);
     void handleRemoteBattleState(const game::core::BattleSnapshot& snapshot);
+    void handleNetworkDisconnected();
 
     // ========== 网络包处理 ==========
     void onNetworkPacket(game::network::MsgType type, const QByteArray& body);

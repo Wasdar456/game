@@ -54,6 +54,10 @@ void LobbyManager::onPacketReceived(MsgType type, const QByteArray& body) {
 void LobbyManager::setReady() {
     if (m_localReady) return;
     if (m_state == LobbyState::InGame) return;
+    if (m_state != LobbyState::Connected) {
+        qDebug() << "[Lobby] 忽略准备：当前状态不可准备" << static_cast<int>(m_state);
+        return;
+    }
 
     m_localReady = true;
     setState(LobbyState::LocalReady);
@@ -134,6 +138,10 @@ void LobbyManager::handleJoinAck(const QByteArray& body) {
 // 收到对方 PLAYER_READY
 // ─────────────────────────────────────────────────────────────
 void LobbyManager::handlePlayerReady(const QByteArray& /*body*/) {
+    if (m_state != LobbyState::Connected && m_state != LobbyState::LocalReady) {
+        qDebug() << "[Lobby] 忽略对方准备：当前状态不可准备" << static_cast<int>(m_state);
+        return;
+    }
     m_peerReady = true;
     qInfo() << "[Lobby] 对方" << m_peerNickname << "已准备";
 

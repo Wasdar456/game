@@ -315,7 +315,7 @@ void MainWindow::connectSignals()
     // 鎬墿娓呯┖ 鈫?鍥炲埌閮ㄧ讲闃舵
     connect(m_battlePage, &BattlePage::signalBackToDeploy,
             this, [this]() {
-                m_deployPage->reEnter();
+                m_deployPage->resumeDeployment();
                 fadeToPage(m_deployPage);
             });
 

@@ -259,7 +259,8 @@ BattleStateDecodeResult BattleStateCodec::decodeHostSnapshot(const QByteArray& b
 
 QByteArray BattleStateCodec::encodeDeployAction(game::core::CardKind kind,
                                                 game::core::MapPosition position,
-                                                int unitId)
+                                                int unitId,
+                                                int roundId)
 {
     QByteArray body;
     QDataStream out(&body, QIODevice::WriteOnly);
@@ -267,7 +268,8 @@ QByteArray BattleStateCodec::encodeDeployAction(game::core::CardKind kind,
     out << static_cast<quint8>(kind)
         << static_cast<qint16>(position.row)
         << static_cast<qint16>(position.col)
-        << static_cast<quint16>(unitId);
+        << static_cast<quint16>(unitId)
+        << static_cast<quint16>(roundId);
     return body;
 }
 
@@ -284,16 +286,23 @@ bool BattleStateCodec::decodeDeployAction(const QByteArray& body, DeployAction& 
     action.cardKind = static_cast<game::core::CardKind>(kind);
     action.position = {row, col};
     action.unitId = unitId;
+    if (!in.atEnd()) {
+        quint16 roundId = 0;
+        in >> roundId;
+        if (in.status() != QDataStream::Ok) return false;
+        action.roundId = roundId;
+    }
     return true;
 }
 
-QByteArray BattleStateCodec::encodeUpgradeAction(int unitId, int targetLevel)
+QByteArray BattleStateCodec::encodeUpgradeAction(int unitId, int targetLevel, int roundId)
 {
     QByteArray body;
     QDataStream out(&body, QIODevice::WriteOnly);
     out.setByteOrder(QDataStream::BigEndian);
     out << static_cast<quint16>(unitId)
-        << static_cast<quint8>(targetLevel);
+        << static_cast<quint8>(targetLevel)
+        << static_cast<quint16>(roundId);
     return body;
 }
 
@@ -307,17 +316,24 @@ bool BattleStateCodec::decodeUpgradeAction(const QByteArray& body, UnitAction& a
     if (in.status() != QDataStream::Ok) return false;
     action.unitId = unitId;
     action.targetLevel = targetLevel;
+    if (!in.atEnd()) {
+        quint16 roundId = 0;
+        in >> roundId;
+        if (in.status() != QDataStream::Ok) return false;
+        action.roundId = roundId;
+    }
     return true;
 }
 
-QByteArray BattleStateCodec::encodeMoveAction(int unitId, game::core::MapPosition position)
+QByteArray BattleStateCodec::encodeMoveAction(int unitId, game::core::MapPosition position, int roundId)
 {
     QByteArray body;
     QDataStream out(&body, QIODevice::WriteOnly);
     out.setByteOrder(QDataStream::BigEndian);
     out << static_cast<quint16>(unitId)
         << static_cast<qint16>(position.row)
-        << static_cast<qint16>(position.col);
+        << static_cast<qint16>(position.col)
+        << static_cast<quint16>(roundId);
     return body;
 }
 
@@ -332,15 +348,22 @@ bool BattleStateCodec::decodeMoveAction(const QByteArray& body, UnitAction& acti
     if (in.status() != QDataStream::Ok) return false;
     action.unitId = unitId;
     action.position = {row, col};
+    if (!in.atEnd()) {
+        quint16 roundId = 0;
+        in >> roundId;
+        if (in.status() != QDataStream::Ok) return false;
+        action.roundId = roundId;
+    }
     return true;
 }
 
-QByteArray BattleStateCodec::encodeRecallAction(int unitId)
+QByteArray BattleStateCodec::encodeRecallAction(int unitId, int roundId)
 {
     QByteArray body;
     QDataStream out(&body, QIODevice::WriteOnly);
     out.setByteOrder(QDataStream::BigEndian);
-    out << static_cast<quint16>(unitId);
+    out << static_cast<quint16>(unitId)
+        << static_cast<quint16>(roundId);
     return body;
 }
 
@@ -352,6 +375,12 @@ bool BattleStateCodec::decodeRecallAction(const QByteArray& body, UnitAction& ac
     in >> unitId;
     if (in.status() != QDataStream::Ok) return false;
     action.unitId = unitId;
+    if (!in.atEnd()) {
+        quint16 roundId = 0;
+        in >> roundId;
+        if (in.status() != QDataStream::Ok) return false;
+        action.roundId = roundId;
+    }
     return true;
 }
 
@@ -372,6 +401,26 @@ bool BattleStateCodec::decodeWaveId(const QByteArray& body, int& waveId)
     in >> value;
     if (in.status() != QDataStream::Ok) return false;
     waveId = value;
+    return true;
+}
+
+QByteArray BattleStateCodec::encodeDeploymentRound(int roundId)
+{
+    QByteArray body;
+    QDataStream out(&body, QIODevice::WriteOnly);
+    out.setByteOrder(QDataStream::BigEndian);
+    out << static_cast<quint16>(roundId);
+    return body;
+}
+
+bool BattleStateCodec::decodeDeploymentRound(const QByteArray& body, int& roundId)
+{
+    QDataStream in(body);
+    in.setByteOrder(QDataStream::BigEndian);
+    quint16 value = 0;
+    in >> value;
+    if (in.status() != QDataStream::Ok) return false;
+    roundId = value;
     return true;
 }
 

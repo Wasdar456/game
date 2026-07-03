@@ -430,6 +430,12 @@ void BattleView::setPvpDeploymentSide(bool enabled, bool isHost)
     update();
 }
 
+void BattleView::setPvpMapLayout(const game::ui::PvpMapLayout& layout)
+{
+    m_pvpLayout = layout;
+    update();
+}
+
 void BattleView::setUnitVisualScale(double scale)
 {
     m_unitVisualScale = std::max(0.5, scale);
@@ -1318,7 +1324,7 @@ void BattleView::mousePressEvent(QMouseEvent *event)
                 (grid.terrain == game::core::TerrainType::FlatLand ||
                  grid.terrain == game::core::TerrainType::HighGround)) {
                 if (m_restrictPvpDeployment &&
-                    !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {row, col})) {
+                    !game::ui::isPvpDeploymentCellForHost(m_pvpLayout, m_localIsHost, {row, col})) {
                     break;
                 }
                 canDeploy = true;
@@ -1444,7 +1450,7 @@ QVector<game::core::MapPosition> BattleView::getDeployableCells() const
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
             if (m_restrictPvpDeployment &&
-                !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {grid.row, grid.col})) {
+                !game::ui::isPvpDeploymentCellForHost(m_pvpLayout, m_localIsHost, {grid.row, grid.col})) {
                 continue;
             }
             result.append(game::core::MapPosition(grid.row, grid.col));
@@ -2087,6 +2093,7 @@ void BattlePage::setNetworkContext(const NetworkContext& ctx)
     }
     if (m_battleView) {
         m_battleView->setPvpDeploymentSide(m_isPvp, !m_isPvp || m_isHost);
+        m_battleView->setPvpMapLayout(game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString()));
     }
     layoutArtworkUi();
     update();
@@ -2187,6 +2194,7 @@ void BattlePage::setupPvpMap()
     m_battleManager->rebuildMapOccupancy();
     m_battleManager->setPaths({layout.pathToA, layout.pathToB});
     m_battleView->setMapSize(map.rows(), map.cols());
+    m_battleView->setPvpMapLayout(layout);
     m_battleView->setUnitVisualScale(layout.unitVisualScale);
     m_battleView->m_spawnPos = layout.spawnA;
     m_battleView->m_corePos = m_isHost ? layout.coreA : layout.coreB;
@@ -2200,7 +2208,8 @@ void BattlePage::sendDeployAction(game::core::CardKind kind, game::core::MapPosi
     // 本地执行
     bool deployed = false;
     if (m_battleManager) {
-        if (m_isPvp && !game::ui::isPvpDeploymentCellForHost(m_isHost, pos)) {
+        const auto layout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
+        if (m_isPvp && !game::ui::isPvpDeploymentCellForHost(layout, m_isHost, pos)) {
             return;
         }
         deployed = static_cast<bool>(m_battleManager->deployCard(kind, pos));
@@ -2337,6 +2346,14 @@ void BattlePage::handleRemoteBattleState(const game::core::BattleSnapshot& snaps
                                         game::network::BattleStateCodec::encodeWaveId(m_currentWaveId));
         }
     }
+}
+
+void BattlePage::handleNetworkDisconnected()
+{
+    if (m_gameTimer) m_gameTimer->stop();
+    m_inBattlePhase = false;
+    m_waveStarted = false;
+    if (m_syncLabel) m_syncLabel->setText("Disconnected");
 }
 
 // ========== onNetworkPacket() —— 处理网络包 ==========
@@ -2495,9 +2512,13 @@ void BattlePage::startBattle()
         if (m_isHost && m_netCtx.server) {
             connect(m_netCtx.server, &game::network::GameServer::packetReceived,
                     this, &BattlePage::onNetworkPacket, Qt::UniqueConnection);
+            connect(m_netCtx.server, &game::network::GameServer::clientDisconnected,
+                    this, &BattlePage::handleNetworkDisconnected, Qt::UniqueConnection);
         } else if (!m_isHost && m_netCtx.client) {
             connect(m_netCtx.client, &game::network::GameClient::packetReceived,
                     this, &BattlePage::onNetworkPacket, Qt::UniqueConnection);
+            connect(m_netCtx.client, &game::network::GameClient::disconnected,
+                    this, &BattlePage::handleNetworkDisconnected, Qt::UniqueConnection);
         }
 
         // 显示对手信息
@@ -3241,7 +3262,16 @@ void BattlePage::connectSignals()
                 m_gameTimer->stop();
                 m_inBattlePhase = false;
                 m_waveStarted = false;
-                emit signalBattleRestartRequested();
+                if (m_isPvp) {
+                    m_localWaveClear = false;
+                    m_peerWaveClear = false;
+                    if (m_battleManager) {
+                        m_battleManager->clearMonsters();
+                    }
+                    emit signalBackToDeploy();
+                } else {
+                    emit signalBattleRestartRequested();
+                }
             });
     connect(m_pauseOverlay, &PauseOverlay::signalExitToLobby,
             this, [this]() {

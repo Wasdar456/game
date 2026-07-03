@@ -209,6 +209,12 @@ void DeployView::setPvpDeploymentSide(bool enabled, bool isHost)
     update();
 }
 
+void DeployView::setPvpMapLayout(const game::ui::PvpMapLayout& layout)
+{
+    m_pvpLayout = layout;
+    update();
+}
+
 void DeployView::setUnitVisualScale(double scale)
 {
     m_unitVisualScale = std::max(0.5, scale);
@@ -423,7 +429,7 @@ void DeployView::drawDeployable(QPainter &painter)
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
             if (m_restrictPvpDeployment &&
-                !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {grid.row, grid.col})) {
+                !game::ui::isPvpDeploymentCellForHost(m_pvpLayout, m_localIsHost, {grid.row, grid.col})) {
                 continue;
             }
             QRectF cell = cellRect(grid.row, grid.col);
@@ -620,7 +626,7 @@ void DeployView::mousePressEvent(QMouseEvent *event)
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
             if (m_restrictPvpDeployment &&
-                !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {row, col})) {
+                !game::ui::isPvpDeploymentCellForHost(m_pvpLayout, m_localIsHost, {row, col})) {
                 break;
             }
             canDeploy = true;
@@ -643,7 +649,7 @@ QVector<game::core::MapPosition> DeployView::getDeployableCells() const
             (grid.terrain == game::core::TerrainType::FlatLand ||
              grid.terrain == game::core::TerrainType::HighGround)) {
             if (m_restrictPvpDeployment &&
-                !game::ui::isPvpDeploymentCellForHost(m_localIsHost, {grid.row, grid.col})) {
+                !game::ui::isPvpDeploymentCellForHost(m_pvpLayout, m_localIsHost, {grid.row, grid.col})) {
                 continue;
             }
             result.append(game::core::MapPosition(grid.row, grid.col));
@@ -746,6 +752,9 @@ DeployPage::DeployPage(QWidget *parent)
     , m_selectedUnitId(-1)
     , m_localReady(false)
     , m_opponentReady(false)
+    , m_pendingHostStart(false)
+    , m_battleStartEmitted(false)
+    , m_deploymentRound(1)
     , m_opponentLabel(nullptr)
     , m_pvpArtwork(":/images/artwork/battle_pvp.png")
     , m_pvpOfficeMapArtwork(":/images/artwork/battle_pvp_office_map.png")
@@ -831,6 +840,7 @@ void DeployPage::setNetworkContext(const NetworkContext& ctx)
     m_isHost = ctx.isHost;
     if (m_deployView) {
         m_deployView->setPvpDeploymentSide(m_isPvp, m_isHost);
+        m_deployView->setPvpMapLayout(game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString()));
     }
     layoutArtworkUi();
     update();
@@ -1058,7 +1068,8 @@ void DeployPage::connectSignals()
     connect(m_deployView, &DeployView::signalDeployCard,
             this, [this](game::core::CardKind kind, game::core::MapPosition pos) {
         if (m_battleManager) {
-            if (m_isPvp && !game::ui::isPvpDeploymentCellForHost(m_isHost, pos)) {
+            const auto layout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
+            if (m_isPvp && !game::ui::isPvpDeploymentCellForHost(layout, m_isHost, pos)) {
                 return;
             }
             auto result = m_battleManager->deployCard(kind, pos);
@@ -1145,7 +1156,9 @@ void DeployPage::initDeployment()
     m_selectedUnitId = -1;
     m_localReady = false;
     m_opponentReady = false;
+    m_pendingHostStart = false;
     m_battleStartEmitted = false;
+    m_deploymentRound = qMax(1, m_battleManager->currentWave() + 1);
     m_pendingOpponentDeploys.clear();
     m_pendingOpponentOps.clear();
 
@@ -1159,9 +1172,13 @@ void DeployPage::initDeployment()
         if (m_isHost && m_netCtx.server) {
             connect(m_netCtx.server, &game::network::GameServer::packetReceived,
                     this, &DeployPage::onNetworkPacket, Qt::UniqueConnection);
+            connect(m_netCtx.server, &game::network::GameServer::clientDisconnected,
+                    this, &DeployPage::handleNetworkDisconnected, Qt::UniqueConnection);
         } else if (!m_isHost && m_netCtx.client) {
             connect(m_netCtx.client, &game::network::GameClient::packetReceived,
                     this, &DeployPage::onNetworkPacket, Qt::UniqueConnection);
+            connect(m_netCtx.client, &game::network::GameClient::disconnected,
+                    this, &DeployPage::handleNetworkDisconnected, Qt::UniqueConnection);
         }
     }
 
@@ -1215,6 +1232,7 @@ void DeployPage::setupMap()
     m_battleManager->rebuildMapOccupancy();
     m_battleManager->setPaths({layout.pathToA, layout.pathToB});
     m_deployView->setMapSize(map.rows(), map.cols());
+    m_deployView->setPvpMapLayout(layout);
     m_deployView->setUnitVisualScale(layout.unitVisualScale);
     m_deployView->m_spawnPos = layout.spawnA;
     m_deployView->m_corePos = m_isHost ? layout.coreA : layout.coreB;
@@ -1251,7 +1269,9 @@ void DeployPage::reEnter()
     // 不用 clearBattle，保留现有单位
     m_localReady = false;
     m_opponentReady = false;
+    m_pendingHostStart = false;
     m_battleStartEmitted = false;
+    m_deploymentRound = qMax(1, m_battleManager ? m_battleManager->currentWave() + 1 : m_deploymentRound + 1);
     m_btnStartBattle->setEnabled(true);
     m_btnStartBattle->setText("Ready");
     m_opponentLabel->setText("...");
@@ -1279,6 +1299,11 @@ void DeployPage::reEnter()
     m_deployView->updateFromSnapshot(snap);
 }
 
+void DeployPage::resumeDeployment()
+{
+    reEnter();
+}
+
 void DeployPage::setShowGrid(bool show)
 {
     if (m_deployView) m_deployView->setShowGrid(show);
@@ -1286,7 +1311,8 @@ void DeployPage::setShowGrid(bool show)
 
 void DeployPage::sendDeployToNetwork(game::core::CardKind kind, game::core::MapPosition pos)
 {
-    QByteArray body = game::network::BattleStateCodec::encodeDeployAction(kind, pos);
+    QByteArray body = game::network::BattleStateCodec::encodeDeployAction(
+        kind, pos, 0, m_deploymentRound);
 
     if (m_isHost && m_netCtx.server) {
         m_netCtx.server->sendPacket(game::network::MsgType::DEPLOY, body);
@@ -1297,7 +1323,8 @@ void DeployPage::sendDeployToNetwork(game::core::CardKind kind, game::core::MapP
 
 void DeployPage::sendUpgradeToNetwork(int unitId)
 {
-    QByteArray body = game::network::BattleStateCodec::encodeUpgradeAction(unitId);
+    QByteArray body = game::network::BattleStateCodec::encodeUpgradeAction(
+        unitId, 0, m_deploymentRound);
 
     if (m_isHost && m_netCtx.server) {
         m_netCtx.server->sendPacket(game::network::MsgType::UPGRADE_UNIT, body);
@@ -1308,7 +1335,8 @@ void DeployPage::sendUpgradeToNetwork(int unitId)
 
 void DeployPage::sendMoveToNetwork(int unitId, game::core::MapPosition pos)
 {
-    QByteArray body = game::network::BattleStateCodec::encodeMoveAction(unitId, pos);
+    QByteArray body = game::network::BattleStateCodec::encodeMoveAction(
+        unitId, pos, m_deploymentRound);
 
     if (m_isHost && m_netCtx.server) {
         m_netCtx.server->sendPacket(game::network::MsgType::MOVE_UNIT, body);
@@ -1319,13 +1347,23 @@ void DeployPage::sendMoveToNetwork(int unitId, game::core::MapPosition pos)
 
 void DeployPage::sendRecallToNetwork(int unitId)
 {
-    QByteArray body = game::network::BattleStateCodec::encodeRecallAction(unitId);
+    QByteArray body = game::network::BattleStateCodec::encodeRecallAction(
+        unitId, m_deploymentRound);
 
     if (m_isHost && m_netCtx.server) {
         m_netCtx.server->sendPacket(game::network::MsgType::RECALL_UNIT, body);
     } else if (!m_isHost && m_netCtx.client) {
         m_netCtx.client->sendPacket(game::network::MsgType::RECALL_UNIT, body);
     }
+}
+
+void DeployPage::handleNetworkDisconnected()
+{
+    m_btnStartBattle->setEnabled(false);
+    m_btnStartBattle->setText("Disconnected");
+    m_localReady = false;
+    m_opponentReady = false;
+    m_pendingHostStart = false;
 }
 
 void DeployPage::applyPendingOpponentDeploys()
@@ -1395,18 +1433,28 @@ void DeployPage::tryStartPvpBattle(const char* reason)
         applyPendingOpponentDeploys();
         applyPendingOpponentOps();
         if (m_netCtx.server) {
-            qInfo() << "[DeployPage][Host] broadcasting deployment GAME_START"
+            qInfo() << "[DeployPage][Host] broadcasting deployment DEPLOYMENT_START"
                     << "reason=" << reason;
-            m_netCtx.server->sendPacket(game::network::MsgType::GAME_START);
+            m_netCtx.server->sendPacket(
+                game::network::MsgType::DEPLOYMENT_START,
+                game::network::BattleStateCodec::encodeDeploymentRound(m_deploymentRound));
         } else {
-            qDebug() << "[DeployPage][Host] cannot broadcast GAME_START: server missing";
+            qDebug() << "[DeployPage][Host] cannot broadcast DEPLOYMENT_START: server missing";
         }
         m_battleStartEmitted = true;
         emit signalBattleStart();
         return;
     }
 
-    qInfo() << "[DeployPage][Client] starting battle from host GAME_START"
+    if (!m_localReady || !m_pendingHostStart) {
+        qDebug() << "[DeployPage][Client] deployment battle not ready"
+                 << "reason=" << reason
+                 << "localReady=" << m_localReady
+                 << "pendingHostStart=" << m_pendingHostStart;
+        return;
+    }
+
+    qInfo() << "[DeployPage][Client] starting battle from host DEPLOYMENT_START"
             << "reason=" << reason
             << "localReady=" << m_localReady
             << "opponentReady=" << m_opponentReady;
@@ -1419,9 +1467,13 @@ void DeployPage::tryStartPvpBattle(const char* reason)
 void DeployPage::sendDeploymentEnd()
 {
     if (m_isHost && m_netCtx.server) {
-        m_netCtx.server->sendPacket(game::network::MsgType::DEPLOYMENT_END);
+        m_netCtx.server->sendPacket(
+            game::network::MsgType::DEPLOYMENT_END,
+            game::network::BattleStateCodec::encodeDeploymentRound(m_deploymentRound));
     } else if (!m_isHost && m_netCtx.client) {
-        m_netCtx.client->sendPacket(game::network::MsgType::DEPLOYMENT_END);
+        m_netCtx.client->sendPacket(
+            game::network::MsgType::DEPLOYMENT_END,
+            game::network::BattleStateCodec::encodeDeploymentRound(m_deploymentRound));
     }
 
     m_opponentLabel->setText("OK");
@@ -1432,10 +1484,17 @@ void DeployPage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
 {
     switch (type) {
     case game::network::MsgType::DEPLOY: {
+        if (m_battleStartEmitted) break;
         // 迷雾部署阶段只缓存对方本轮新部署，不立即写入 BattleManager。
         // 这样部署阶段只能看到上一轮战斗已经暴露过的单位；本轮新部署到开战时再揭示。
         game::network::BattleStateCodec::DeployAction action;
         if (game::network::BattleStateCodec::decodeDeployAction(body, action)) {
+            if (action.roundId != m_deploymentRound) {
+                qDebug() << "[DeployPage] ignored stale DEPLOY"
+                         << "round=" << action.roundId
+                         << "current=" << m_deploymentRound;
+                break;
+            }
             m_pendingOpponentDeploys.append({action.cardKind, action.position});
             qDebug() << "[DeployPage] cached hidden opponent DEPLOY:"
                      << static_cast<int>(action.cardKind)
@@ -1444,6 +1503,14 @@ void DeployPage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
         break;
     }
     case game::network::MsgType::DEPLOYMENT_END: {
+        int roundId = 0;
+        if (!game::network::BattleStateCodec::decodeDeploymentRound(body, roundId)
+            || roundId != m_deploymentRound) {
+            qDebug() << "[DeployPage] ignored stale DEPLOYMENT_END"
+                     << "round=" << roundId
+                     << "current=" << m_deploymentRound;
+            break;
+        }
         m_opponentReady = true;
         m_opponentLabel->setText("OK");
         m_opponentLabel->update();
@@ -1453,23 +1520,50 @@ void DeployPage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
         tryStartPvpBattle("opponent deployment end");
         break;
     }
-    case game::network::MsgType::GAME_START: {
-        qInfo() << "[DeployPage] received deployment GAME_START"
-                << "host=" << m_isHost;
-        if (!m_isHost) tryStartPvpBattle("received GAME_START");
+    case game::network::MsgType::DEPLOYMENT_START: {
+        int roundId = 0;
+        if (!game::network::BattleStateCodec::decodeDeploymentRound(body, roundId)
+            || roundId != m_deploymentRound) {
+            qDebug() << "[DeployPage] ignored stale DEPLOYMENT_START"
+                     << "round=" << roundId
+                     << "current=" << m_deploymentRound;
+            break;
+        }
+        qInfo() << "[DeployPage] received deployment DEPLOYMENT_START"
+                << "host=" << m_isHost
+                << "localReady=" << m_localReady;
+        if (!m_isHost) {
+            m_pendingHostStart = true;
+            m_opponentReady = true;
+            tryStartPvpBattle("received DEPLOYMENT_START");
+        }
         break;
     }
     case game::network::MsgType::UPGRADE_UNIT: {
+        if (m_battleStartEmitted) break;
         game::network::BattleStateCodec::UnitAction action;
         if (game::network::BattleStateCodec::decodeUpgradeAction(body, action)) {
+            if (action.roundId != m_deploymentRound) {
+                qDebug() << "[DeployPage] ignored stale UPGRADE"
+                         << "round=" << action.roundId
+                         << "current=" << m_deploymentRound;
+                break;
+            }
             m_pendingOpponentOps.append({type, action.unitId, {}});
             qDebug() << "[DeployPage] cached hidden opponent UPGRADE:" << action.unitId;
         }
         break;
     }
     case game::network::MsgType::MOVE_UNIT: {
+        if (m_battleStartEmitted) break;
         game::network::BattleStateCodec::UnitAction action;
         if (game::network::BattleStateCodec::decodeMoveAction(body, action)) {
+            if (action.roundId != m_deploymentRound) {
+                qDebug() << "[DeployPage] ignored stale MOVE"
+                         << "round=" << action.roundId
+                         << "current=" << m_deploymentRound;
+                break;
+            }
             m_pendingOpponentOps.append({type, action.unitId, action.position});
             qDebug() << "[DeployPage] cached hidden opponent MOVE:" << action.unitId
                      << action.position.row << action.position.col;
@@ -1477,8 +1571,15 @@ void DeployPage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
         break;
     }
     case game::network::MsgType::RECALL_UNIT: {
+        if (m_battleStartEmitted) break;
         game::network::BattleStateCodec::UnitAction action;
         if (game::network::BattleStateCodec::decodeRecallAction(body, action)) {
+            if (action.roundId != m_deploymentRound) {
+                qDebug() << "[DeployPage] ignored stale RECALL"
+                         << "round=" << action.roundId
+                         << "current=" << m_deploymentRound;
+                break;
+            }
             m_pendingOpponentOps.append({type, action.unitId, {}});
             qDebug() << "[DeployPage] cached hidden opponent RECALL:" << action.unitId;
         }
