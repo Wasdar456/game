@@ -1814,9 +1814,7 @@ void BattlePage::advanceTutorial()
         finishTutorial(false);
         break;
     case TutorialStage::CoreWarning:
-        m_tutorialOverlay->closeOverlay();
-        m_tutorialPaused = false;
-        m_tutorialStage = TutorialStage::Inactive;
+        resumeFromTutorialPause(false);
         break;
     case TutorialStage::WaitCard:
     case TutorialStage::WaitDeploy:
@@ -1827,19 +1825,30 @@ void BattlePage::advanceTutorial()
 
 void BattlePage::finishTutorial(bool skipped)
 {
-    if (!m_tutorialOverlay) return;
-
-    m_tutorialOverlay->closeOverlay();
-    m_tutorialPaused = false;
-    m_tutorialStage = TutorialStage::Inactive;
-    m_selectedCardIndex = -1;
-    updateCardVisualState(m_displayResources);
+    resumeFromTutorialPause(true);
 
     QSettings settings;
     settings.setValue("tutorial/storyGuideV1Complete", true);
     settings.setValue("tutorial/fieldManualUnlocked", true);
     if (!skipped) {
         settings.setValue("tutorial/lastCompletedMap", m_activePveMapId);
+    }
+}
+
+void BattlePage::resumeFromTutorialPause(bool clearSelection)
+{
+    if (m_tutorialOverlay) {
+        m_tutorialOverlay->closeOverlay();
+    }
+    m_tutorialPaused = false;
+    m_tutorialStage = TutorialStage::Inactive;
+    if (clearSelection) {
+        m_selectedCardIndex = -1;
+    }
+    updateCardVisualState(m_displayResources);
+
+    if (m_gameTimer && m_inBattlePhase && !m_isPaused) {
+        m_gameTimer->start(16);
     }
 }
 
@@ -1858,6 +1867,23 @@ void BattlePage::updateTutorialTargets()
         cards,
         m_battleView ? m_battleView->geometry() : QRect(),
         m_coreHpLabel ? m_coreHpLabel->geometry() : QRect());
+}
+
+game::core::BattleSnapshot BattlePage::refreshBattleStateAfterPlayerAction(bool forceReplaySnapshot)
+{
+    if (!m_battleManager) {
+        return {};
+    }
+
+    game::core::BattleSnapshot snapshot = m_battleManager->snapshot();
+    if (forceReplaySnapshot) {
+        recordReplaySnapshot(snapshot, 0.0, true);
+    }
+    if (m_battleView) {
+        m_battleView->updateFromSnapshot(snapshot);
+    }
+    updateStatusBar(snapshot);
+    return snapshot;
 }
 
 QRect BattlePage::artworkRect() const
@@ -2209,36 +2235,41 @@ void BattlePage::setupPvpMap()
 // ========== sendDeployAction() —— 发送部署操作 ==========
 void BattlePage::sendDeployAction(game::core::CardKind kind, game::core::MapPosition pos)
 {
-    // 本地执行
-    bool deployed = false;
-    int deployedUnitId = 0;
-    if (m_battleManager) {
-        const auto layout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
-        if (m_isPvp && !game::ui::isPvpDeploymentCellForHost(layout, m_isHost, pos)) {
-            return;
-        }
-        auto card = m_battleManager->deployCard(kind, pos);
-        deployed = static_cast<bool>(card);
-        deployedUnitId = card ? card->id() : 0;
+    if (!m_battleManager) {
+        return;
     }
-    if (deployed) {
-        m_selectedCardIndex = -1;
+
+    const auto layout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
+    if (m_isPvp && !game::ui::isPvpDeploymentCellForHost(layout, m_isHost, pos)) {
+        return;
+    }
+
+    auto card = m_battleManager->deployCard(kind, pos);
+    if (!card) {
+        return;
+    }
+
+    const int deployedUnitId = card->id();
+    m_selectedCardIndex = -1;
+    if (m_battleView) {
         m_battleView->m_mode = BattleView::InteractionMode::NONE;
-        updateStatusBar(m_battleManager->snapshot());
-        if (m_tutorialStage == TutorialStage::WaitDeploy) {
-            m_tutorialStage = TutorialStage::Tactics;
-            m_tutorialPaused = true;
-            updateTutorialTargets();
-            m_tutorialOverlay->showStep(
-                "Captain Pine",
-                "Our first guardian is in position. Click any deployed ally to open its command ring: Upgrade strengthens it, Move repositions it, and Recall returns part of its cost.",
-                TutorialOverlay::Focus::Battlefield,
-                "Understood");
-        }
+    }
+
+    refreshBattleStateAfterPlayerAction(m_tutorialPaused || m_isPaused);
+
+    if (m_tutorialStage == TutorialStage::WaitDeploy && m_tutorialOverlay) {
+        m_tutorialStage = TutorialStage::Final;
+        m_tutorialPaused = true;
+        updateTutorialTargets();
+        m_tutorialOverlay->showStep(
+            "Captain Pine",
+            "Our first guardian is in position. Click any deployed ally later to open its command ring. The core is our final line; use ? to replay this guide.",
+            TutorialOverlay::Focus::Core,
+            "Begin the defense");
     }
 
     // 网络发送
-    if (m_isPvp && deployed) {
+    if (m_isPvp) {
         QByteArray body = game::network::BattleStateCodec::encodeDeployAction(kind, pos,
                                                                               deployedUnitId);
 
@@ -2253,9 +2284,15 @@ void BattlePage::sendDeployAction(game::core::CardKind kind, game::core::MapPosi
 // ========== sendUpgradeAction() —— 发送升级操作 ==========
 void BattlePage::sendUpgradeAction(int unitId)
 {
-    if (m_battleManager) {
-        m_battleManager->upgradeCard(unitId);
+    if (!m_battleManager) {
+        return;
     }
+
+    if (!m_battleManager->upgradeCard(unitId)) {
+        return;
+    }
+
+    refreshBattleStateAfterPlayerAction(m_tutorialPaused || m_isPaused);
 
     if (m_isPvp) {
         QByteArray body = game::network::BattleStateCodec::encodeUpgradeAction(unitId);
@@ -2271,9 +2308,15 @@ void BattlePage::sendUpgradeAction(int unitId)
 // ========== sendMoveAction() —— 发送移动操作 ==========
 void BattlePage::sendMoveAction(int unitId, game::core::MapPosition target)
 {
-    if (m_battleManager) {
-        m_battleManager->moveCard(unitId, target);
+    if (!m_battleManager) {
+        return;
     }
+
+    if (!m_battleManager->moveCard(unitId, target)) {
+        return;
+    }
+
+    refreshBattleStateAfterPlayerAction(m_tutorialPaused || m_isPaused);
 
     if (m_isPvp) {
         QByteArray body = game::network::BattleStateCodec::encodeMoveAction(unitId, target);
@@ -2289,9 +2332,15 @@ void BattlePage::sendMoveAction(int unitId, game::core::MapPosition target)
 // ========== sendRecallAction() —— 发送撤回操作 ==========
 void BattlePage::sendRecallAction(int unitId)
 {
-    if (m_battleManager) {
-        m_battleManager->recallCard(unitId);
+    if (!m_battleManager) {
+        return;
     }
+
+    if (!m_battleManager->recallCard(unitId)) {
+        return;
+    }
+
+    refreshBattleStateAfterPlayerAction(m_tutorialPaused || m_isPaused);
 
     if (m_isPvp) {
         QByteArray body = game::network::BattleStateCodec::encodeRecallAction(unitId);
@@ -2715,7 +2764,18 @@ void BattlePage::pauseForFocusLoss()
 
 void BattlePage::onGameTick()
 {
-    if (!m_battleManager || m_isPaused || m_tutorialPaused) return;
+    if (!m_battleManager || m_isPaused) return;
+    if (m_tutorialPaused) {
+        const bool waitingForPlayerAction =
+            m_tutorialStage == TutorialStage::WaitCard ||
+            m_tutorialStage == TutorialStage::WaitDeploy;
+        const bool tutorialOverlayVisible =
+            m_tutorialOverlay && m_tutorialOverlay->isVisible();
+        if (waitingForPlayerAction || tutorialOverlayVisible) {
+            return;
+        }
+        resumeFromTutorialPause(false);
+    }
 
     double deltaSeconds = game::core::constants::DefaultFrameSeconds * m_speedMultiplier;
 

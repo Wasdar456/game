@@ -92,13 +92,18 @@ std::shared_ptr<Card> CardSystem::deployWithId(CardKind kind, MapPosition positi
     if (findCard(unitId)) return nullptr;
     if (!map.canDeployAt(position)) return nullptr;
     const CardSpec& spec = cardSpec(kind);
-    int cost = spec.deployCost;
-    if (!resources.consumeResource(cost)) return nullptr;
-
     auto card = createCardInstance(unitId, kind, position);
     if (!card) return nullptr;
+
+    const int cost = spec.deployCost;
+    if (!resources.consumeResource(cost)) return nullptr;
+
+    if (!map.setOccupied(position, true, card->id())) {
+        resources.addResource(cost);
+        return nullptr;
+    }
+
     cards_.push_back(card);
-    map.setOccupied(position, true, card->id());
     reserveUnitId(unitId);
     return card;
 }

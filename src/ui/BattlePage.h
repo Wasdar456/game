@@ -336,6 +336,7 @@ private:
     void initUI();
     void connectSignals();
     void updateStatusBar(const game::core::BattleSnapshot &snapshot);
+    game::core::BattleSnapshot refreshBattleStateAfterPlayerAction(bool forceReplaySnapshot = false);
     void finishBattle(const game::core::BattleSnapshot &snapshot, bool pveVictory = false);
     void resetReplayRecorder();
     void recordReplaySnapshot(const game::core::BattleSnapshot &snapshot,
@@ -348,6 +349,7 @@ private:
     void beginTutorial(bool replay);
     void advanceTutorial();
     void finishTutorial(bool skipped);
+    void resumeFromTutorialPause(bool clearSelection);
     void updateTutorialTargets();
     void layoutArtworkUi();
     QRect artworkRect() const;
