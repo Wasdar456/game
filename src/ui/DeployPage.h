@@ -173,6 +173,7 @@ private:
     struct PendingDeploy {
         game::core::CardKind kind;
         game::core::MapPosition position;
+        int unitId = 0;
     };
 
     struct PendingUnitOp {
@@ -213,6 +214,7 @@ private:
     bool m_opponentReady = false;    // 对方是否点击了开战
     bool m_pendingHostStart = false;
     bool m_battleStartEmitted = false;
+    bool m_deploymentCancelled = false;
     int m_deploymentRound = 1;
     QLabel *m_opponentLabel;
     QPixmap m_pvpArtwork;
@@ -229,13 +231,17 @@ private:
     void applyPendingOpponentDeploys();
     void applyPendingOpponentOps();
     void tryStartPvpBattle(const char* reason);
+    void resetDeploymentSyncState();
+    void handleBackClicked();
+    void sendDeploymentCancel();
+    void handleDeploymentCancel();
     void layoutArtworkUi();
     QRect artworkRect() const;
 
     // 网络处理
     void onNetworkPacket(game::network::MsgType type, const QByteArray& body);
     void sendDeploymentEnd();
-    void sendDeployToNetwork(game::core::CardKind kind, game::core::MapPosition pos);
+    void sendDeployToNetwork(game::core::CardKind kind, game::core::MapPosition pos, int unitId);
     void sendUpgradeToNetwork(int unitId);
     void sendMoveToNetwork(int unitId, game::core::MapPosition pos);
     void sendRecallToNetwork(int unitId);

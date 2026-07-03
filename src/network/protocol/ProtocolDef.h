@@ -25,6 +25,7 @@ enum class MsgType : uint8_t {
     RECALL_UNIT    = 0x11,   // 撤回单位
     DEPLOYMENT_END = 0x12,   // 部署阶段结束
     DEPLOYMENT_START = 0x13, // 双方部署结束，Host 通知进入战斗
+    DEPLOYMENT_CANCEL = 0x14, // 一方离开部署阶段，双方退回选卡/房间状态
 
     // ─── 战斗阶段 ───
     MOVE_UNIT      = 0x20,   // 移动单位
@@ -72,6 +73,7 @@ inline const char* msgTypeName(MsgType type) {
         case MsgType::RECALL_UNIT:    return "RECALL_UNIT";
         case MsgType::DEPLOYMENT_END: return "DEPLOYMENT_END";
         case MsgType::DEPLOYMENT_START: return "DEPLOYMENT_START";
+        case MsgType::DEPLOYMENT_CANCEL: return "DEPLOYMENT_CANCEL";
         case MsgType::MOVE_UNIT:      return "MOVE_UNIT";
         case MsgType::UPGRADE_UNIT:   return "UPGRADE_UNIT";
         case MsgType::WAVE_START:     return "WAVE_START";

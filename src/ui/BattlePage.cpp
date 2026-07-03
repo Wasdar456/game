@@ -67,6 +67,8 @@ namespace {
 
 constexpr int MaxBattleImageWidth = 1180;
 constexpr int MaxBattleImageHeight = 560;
+constexpr int PvpFinalWave = 5;
+constexpr double PvpStateSyncIntervalSeconds = 0.16;
 
 QString findProjectFile(const QString& relativePath)
 {
@@ -1522,6 +1524,8 @@ BattlePage::BattlePage(QWidget *parent)
     , m_localWaveClear(false)
     , m_peerWaveClear(false)
     , m_stateSyncTimer(0.0)
+    , m_hasPendingRemoteSnapshot(false)
+    , m_remoteChecksumMismatchCount(0)
     , m_displayCoreHealth(game::core::constants::InitialBaseHealth)
     , m_displayOpponentCoreHealth(game::core::constants::InitialBaseHealth)
     , m_opponentLabel(nullptr)
@@ -2207,12 +2211,15 @@ void BattlePage::sendDeployAction(game::core::CardKind kind, game::core::MapPosi
 {
     // 本地执行
     bool deployed = false;
+    int deployedUnitId = 0;
     if (m_battleManager) {
         const auto layout = game::ui::makePvpMapLayout(m_netCtx.pvpMapId.toStdString());
         if (m_isPvp && !game::ui::isPvpDeploymentCellForHost(layout, m_isHost, pos)) {
             return;
         }
-        deployed = static_cast<bool>(m_battleManager->deployCard(kind, pos));
+        auto card = m_battleManager->deployCard(kind, pos);
+        deployed = static_cast<bool>(card);
+        deployedUnitId = card ? card->id() : 0;
     }
     if (deployed) {
         m_selectedCardIndex = -1;
@@ -2231,8 +2238,9 @@ void BattlePage::sendDeployAction(game::core::CardKind kind, game::core::MapPosi
     }
 
     // 网络发送
-    if (m_isPvp) {
-        QByteArray body = game::network::BattleStateCodec::encodeDeployAction(kind, pos);
+    if (m_isPvp && deployed) {
+        QByteArray body = game::network::BattleStateCodec::encodeDeployAction(kind, pos,
+                                                                              deployedUnitId);
 
         if (m_isHost && m_netCtx.server) {
             m_netCtx.server->sendPacket(game::network::MsgType::DEPLOY, body);
@@ -2319,6 +2327,20 @@ void BattlePage::sendBattleState(const game::core::BattleSnapshot& snapshot)
                                 game::network::BattleStateCodec::encodeHostSnapshot(snapshot));
 }
 
+void BattlePage::queueRemoteBattleState(const game::core::BattleSnapshot& snapshot)
+{
+    m_pendingRemoteSnapshot = snapshot;
+    m_hasPendingRemoteSnapshot = true;
+}
+
+void BattlePage::applyPendingRemoteBattleState()
+{
+    if (!m_hasPendingRemoteSnapshot) return;
+    const game::core::BattleSnapshot snapshot = m_pendingRemoteSnapshot;
+    m_hasPendingRemoteSnapshot = false;
+    handleRemoteBattleState(snapshot);
+}
+
 void BattlePage::handleRemoteBattleState(const game::core::BattleSnapshot& snapshot)
 {
     if (m_battleManager) {
@@ -2351,9 +2373,13 @@ void BattlePage::handleRemoteBattleState(const game::core::BattleSnapshot& snaps
 void BattlePage::handleNetworkDisconnected()
 {
     if (m_gameTimer) m_gameTimer->stop();
+    const bool wasInBattle = m_inBattlePhase;
     m_inBattlePhase = false;
     m_waveStarted = false;
     if (m_syncLabel) m_syncLabel->setText("Disconnected");
+    if (wasInBattle && !m_resultEmitted) {
+        emit signalBattleCancelled();
+    }
 }
 
 // ========== onNetworkPacket() —— 处理网络包 ==========
@@ -2367,7 +2393,7 @@ void BattlePage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
         game::network::BattleStateCodec::DeployAction action;
         if (game::network::BattleStateCodec::decodeDeployAction(body, action)) {
             // 对方部署，使用 deployOpponentCard
-            m_battleManager->deployOpponentCard(action.cardKind, action.position);
+            m_battleManager->deployOpponentCard(action.cardKind, action.position, action.unitId);
             qDebug() << "[BattlePage] received opponent DEPLOY:" << static_cast<int>(action.cardKind)
                      << "at" << action.position.row << action.position.col;
         }
@@ -2420,12 +2446,28 @@ void BattlePage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
     }
     case game::network::MsgType::WAVE_COMPLETE: {
         if (!m_inBattlePhase) break;
+        int waveId = 0;
+        if (!game::network::BattleStateCodec::decodeWaveId(body, waveId)
+            || waveId != m_currentWaveId) {
+            qDebug() << "[BattlePage] ignored stale WAVE_COMPLETE"
+                     << "wave=" << waveId
+                     << "current=" << m_currentWaveId;
+            break;
+        }
         qDebug() << "[BattlePage] received WAVE_COMPLETE, back to deploy";
         completePvpWave();
         break;
     }
     case game::network::MsgType::WAVE_CLEAR: {
         if (!m_inBattlePhase || !m_isHost) break;
+        int waveId = 0;
+        if (!game::network::BattleStateCodec::decodeWaveId(body, waveId)
+            || waveId != m_currentWaveId) {
+            qDebug() << "[BattlePage] ignored stale WAVE_CLEAR"
+                     << "wave=" << waveId
+                     << "current=" << m_currentWaveId;
+            break;
+        }
         m_peerWaveClear = true;
         qDebug() << "[BattlePage] received peer WAVE_CLEAR for wave" << m_currentWaveId;
         if (m_localWaveClear) {
@@ -2459,15 +2501,34 @@ void BattlePage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
         auto decode = game::network::BattleStateCodec::decodeHostSnapshot(body, map);
         if (decode.ok) {
             if (decode.checksumPresent && !decode.checksumValid) {
-                qDebug() << "[BattlePage] BATTLE_STATE checksum mismatch, remote:"
-                         << decode.remoteChecksum << "local:" << decode.localChecksum;
+                if (m_remoteChecksumMismatchCount < 3) {
+                    qDebug() << "[BattlePage] BATTLE_STATE checksum mismatch, remote:"
+                             << decode.remoteChecksum << "local:" << decode.localChecksum;
+                }
+                ++m_remoteChecksumMismatchCount;
             }
-            handleRemoteBattleState(decode.snapshot);
+            queueRemoteBattleState(decode.snapshot);
         } else {
             qDebug() << "[BattlePage] failed to parse BATTLE_STATE, size:" << body.size();
         }
         break;
     }
+    case game::network::MsgType::GAME_OVER: {
+        if (!m_inBattlePhase || m_isHost) break;
+        const game::core::MapSnapshot map = m_battleManager
+                                                ? m_battleManager->snapshot().map
+                                                : game::core::MapSnapshot();
+        auto decode = game::network::BattleStateCodec::decodeHostSnapshot(body, map);
+        if (decode.ok) {
+            handleRemoteBattleState(decode.snapshot);
+            finishBattle(decode.snapshot);
+        }
+        break;
+    }
+    case game::network::MsgType::DISCONNECT:
+    case game::network::MsgType::DEPLOYMENT_CANCEL:
+        handleNetworkDisconnected();
+        break;
     default:
         break;
     }
@@ -2571,6 +2632,9 @@ void BattlePage::startBattle()
     m_localWaveClear = false;
     m_peerWaveClear = false;
     m_resultEmitted = false;
+    m_hasPendingRemoteSnapshot = false;
+    m_pendingRemoteSnapshot = game::core::BattleSnapshot();
+    m_remoteChecksumMismatchCount = 0;
     m_selectedCardIndex = -1;
     m_displayResources = -1;
     m_tutorialPaused = false;
@@ -2657,6 +2721,10 @@ void BattlePage::onGameTick()
 
     // Client: 还没收到 WAVE_START 时不做逻辑
     if (m_isPvp && !m_waveStarted) {
+        if (m_hasPendingRemoteSnapshot) {
+            applyPendingRemoteBattleState();
+            return;
+        }
         // 还没收到波次，只渲染
         game::core::BattleSnapshot snap = m_battleManager->snapshot();
         m_battleView->updateFromSnapshot(snap);
@@ -2667,6 +2735,7 @@ void BattlePage::onGameTick()
     // PVP Client 不再本地推进战斗，避免血量/死亡状态和 Host 分叉。
     // 战斗画面完全由 Host 的 BATTLE_STATE 快照驱动。
     if (m_isPvp && !m_isHost) {
+        applyPendingRemoteBattleState();
         return;
     }
 
@@ -2676,7 +2745,7 @@ void BattlePage::onGameTick()
 
     if (m_isPvp && m_isHost) {
         m_stateSyncTimer += deltaSeconds;
-        if (m_stateSyncTimer >= 0.10) {
+        if (m_stateSyncTimer >= PvpStateSyncIntervalSeconds) {
             m_stateSyncTimer = 0.0;
             sendBattleState(snap);
         }
@@ -2685,6 +2754,18 @@ void BattlePage::onGameTick()
     if (snap.gameOver) {
         if (m_isPvp && m_isHost) {
             sendBattleState(snap);
+        }
+        recordReplaySnapshot(snap, 0.0, true);
+        m_battleView->updateFromSnapshot(snap);
+        updateStatusBar(snap);
+        finishBattle(snap);
+        return;
+    }
+
+    if (m_isPvp && m_isHost && !snap.waveActive && m_currentWaveId >= PvpFinalWave) {
+        if (m_netCtx.server) {
+            m_netCtx.server->sendPacket(game::network::MsgType::GAME_OVER,
+                                        game::network::BattleStateCodec::encodeHostSnapshot(snap));
         }
         recordReplaySnapshot(snap, 0.0, true);
         m_battleView->updateFromSnapshot(snap);
@@ -3169,8 +3250,22 @@ void BattlePage::finishBattle(const game::core::BattleSnapshot &snapshot, bool p
         result.outcome = pveVictory ? BattleOutcome::Victory : BattleOutcome::Defeat;
     } else if (snapshot.baseHealth <= 0 && snapshot.opponentBaseHealth <= 0) {
         result.outcome = BattleOutcome::Draw;
+    } else if (snapshot.baseHealth <= 0) {
+        result.outcome = BattleOutcome::Defeat;
     } else if (snapshot.opponentBaseHealth <= 0) {
         result.outcome = BattleOutcome::Victory;
+    } else if (snapshot.currentWave >= PvpFinalWave && !snapshot.waveActive) {
+        if (snapshot.baseHealth != snapshot.opponentBaseHealth) {
+            result.outcome = snapshot.baseHealth > snapshot.opponentBaseHealth
+                                 ? BattleOutcome::Victory
+                                 : BattleOutcome::Defeat;
+        } else if (snapshot.resources != snapshot.opponentResources) {
+            result.outcome = snapshot.resources > snapshot.opponentResources
+                                 ? BattleOutcome::Victory
+                                 : BattleOutcome::Defeat;
+        } else {
+            result.outcome = BattleOutcome::Draw;
+        }
     } else {
         result.outcome = BattleOutcome::Defeat;
     }
@@ -3276,6 +3371,13 @@ void BattlePage::connectSignals()
     connect(m_pauseOverlay, &PauseOverlay::signalExitToLobby,
             this, [this]() {
                 setPaused(false);
+                if (m_isPvp) {
+                    if (m_isHost && m_netCtx.server) {
+                        m_netCtx.server->sendPacket(game::network::MsgType::DISCONNECT, QByteArray());
+                    } else if (!m_isHost && m_netCtx.client) {
+                        m_netCtx.client->sendPacket(game::network::MsgType::DISCONNECT, QByteArray());
+                    }
+                }
                 m_gameTimer->stop();
                 m_inBattlePhase = false;
                 m_waveStarted = false;

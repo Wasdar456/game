@@ -15,6 +15,22 @@
 
 namespace game::core {
 
+enum class OpponentDeployRevealOutcome {
+    Placed,
+    LocalWon,
+    OpponentWon,
+    Draw,
+    Failed
+};
+
+struct OpponentDeployRevealResult {
+    OpponentDeployRevealOutcome outcome = OpponentDeployRevealOutcome::Failed;
+    int localUnitId = 0;
+    int opponentUnitId = 0;
+    int localHp = 0;
+    int opponentHp = 0;
+};
+
 // 战斗总管理器。
 //
 // BattleManager 是 core 层对 app/UI 暴露的主要入口。
@@ -55,7 +71,9 @@ public:
     bool recallCard(int unitId);
 
     // 对方操作入口（PVP 模式）
-    std::shared_ptr<Card> deployOpponentCard(CardKind kind, MapPosition position);
+    std::shared_ptr<Card> deployOpponentCard(CardKind kind, MapPosition position, int unitId = 0);
+    OpponentDeployRevealResult revealOpponentDeploy(CardKind kind, MapPosition position,
+                                                    int unitId = 0);
     bool upgradeOpponentCard(int unitId);
     bool moveOpponentCard(int unitId, MapPosition target);
     bool recallOpponentCard(int unitId);

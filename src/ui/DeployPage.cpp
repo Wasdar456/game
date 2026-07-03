@@ -13,6 +13,8 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QDebug>
+#include <QLinearGradient>
+#include <QMessageBox>
 #include <QResizeEvent>
 #include <QPixmapCache>
 #include <QtEndian>
@@ -97,6 +99,37 @@ QRect commandButtonRect(const QRectF& ring, const QRectF& normalized)
                   ring.top() + ring.height() * normalized.y(),
                   ring.width() * normalized.width(),
                   ring.height() * normalized.height()).toRect();
+}
+
+void drawHealthBar(QPainter& painter,
+                   const QRectF& rect,
+                   int currentHealth,
+                   int maxHealth,
+                   const QColor& healthyColor)
+{
+    const qreal ratio = std::clamp(currentHealth / qreal(qMax(1, maxHealth)), 0.0, 1.0);
+    const QColor fillColor = ratio <= 0.3
+                                 ? QColor(206, 63, 45)
+                                 : (ratio <= 0.6 ? QColor(226, 160, 48) : healthyColor);
+
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(QPen(QColor(75, 50, 31, 220), 2));
+    painter.setBrush(QColor(64, 47, 34, 225));
+    painter.drawRoundedRect(rect, rect.height() / 2.0, rect.height() / 2.0);
+
+    QRectF fillRect = rect.adjusted(2, 2, -2, -2);
+    fillRect.setWidth(fillRect.width() * ratio);
+    if (fillRect.width() > 0.5) {
+        QLinearGradient fill(fillRect.topLeft(), fillRect.bottomLeft());
+        fill.setColorAt(0.0, fillColor.lighter(135));
+        fill.setColorAt(0.48, fillColor);
+        fill.setColorAt(1.0, fillColor.darker(125));
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(fill);
+        painter.drawRoundedRect(fillRect, fillRect.height() / 2.0, fillRect.height() / 2.0);
+    }
+    painter.restore();
 }
 
 }
@@ -540,6 +573,37 @@ void DeployView::drawUnits(QPainter &painter)
             painter.setFont(font);
             painter.drawText(innerRect, Qt::AlignCenter, label);
         }
+
+        const int barWidth = std::max(1, static_cast<int>(innerRect.width()) - 2);
+        const int barHeight = qMax(3, static_cast<int>(cellExtent() * 0.08));
+        const int barX = static_cast<int>(innerRect.x()) + 1;
+        const int barY = static_cast<int>(innerRect.bottom()) - barHeight - 2;
+        const double hpRatio = unit.maxHp > 0
+                                   ? std::clamp(static_cast<double>(unit.hp) / unit.maxHp,
+                                                0.0, 1.0)
+                                   : 0.0;
+
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(30, 30, 30, 180));
+        painter.drawRoundedRect(barX, barY, barWidth, barHeight, barHeight / 2.0,
+                                barHeight / 2.0);
+        const int hpWidth = static_cast<int>(barWidth * hpRatio);
+        if (hpWidth > 0) {
+            QLinearGradient hpGrad(barX, barY, barX + hpWidth, barY);
+            if (hpRatio > 0.5) {
+                hpGrad.setColorAt(0, QColor(80, 220, 80));
+                hpGrad.setColorAt(1, QColor(50, 180, 50));
+            } else if (hpRatio > 0.25) {
+                hpGrad.setColorAt(0, QColor(255, 200, 50));
+                hpGrad.setColorAt(1, QColor(220, 160, 30));
+            } else {
+                hpGrad.setColorAt(0, QColor(255, 80, 80));
+                hpGrad.setColorAt(1, QColor(200, 40, 40));
+            }
+            painter.setBrush(hpGrad);
+            painter.drawRoundedRect(barX, barY, hpWidth, barHeight, barHeight / 2.0,
+                                    barHeight / 2.0);
+        }
     }
 }
 
@@ -754,6 +818,7 @@ DeployPage::DeployPage(QWidget *parent)
     , m_opponentReady(false)
     , m_pendingHostStart(false)
     , m_battleStartEmitted(false)
+    , m_deploymentCancelled(false)
     , m_deploymentRound(1)
     , m_opponentLabel(nullptr)
     , m_pvpArtwork(":/images/artwork/battle_pvp.png")
@@ -816,6 +881,21 @@ void DeployPage::paintEvent(QPaintEvent *event)
         const QPixmap& hudArtwork = pvpHud.isNull() ? m_pvpArtwork : pvpHud;
         painter.drawPixmap(mapped(QRectF(0, 0, 1672, 126)),
                            hudArtwork, QRectF(0, 0, 1672, 126));
+        int localCoreHealth = game::core::constants::InitialBaseHealth;
+        int opponentCoreHealth = game::core::constants::InitialBaseHealth;
+        if (m_battleManager) {
+            const auto snapshot = m_battleManager->snapshot();
+            localCoreHealth = snapshot.baseHealth;
+            opponentCoreHealth = snapshot.opponentBaseHealth;
+        }
+        drawHealthBar(painter, mapped(QRectF(615, 72, 194, 12)),
+                      localCoreHealth,
+                      game::core::constants::InitialBaseHealth,
+                      QColor(62, 157, 203));
+        drawHealthBar(painter, mapped(QRectF(918, 72, 194, 12)),
+                      opponentCoreHealth,
+                      game::core::constants::InitialBaseHealth,
+                      QColor(205, 83, 61));
         painter.drawPixmap(mapped(QRectF(0, 690, 1672, 251)),
                            m_pvpArtwork, QRectF(0, 690, 1672, 251));
 
@@ -1062,7 +1142,7 @@ void DeployPage::refreshCardDisplay()
 void DeployPage::connectSignals()
 {
     // 返回按钮
-    connect(m_btnBack, &QPushButton::clicked, this, &DeployPage::signalBack);
+    connect(m_btnBack, &QPushButton::clicked, this, &DeployPage::handleBackClicked);
 
     // 部署信号
     connect(m_deployView, &DeployView::signalDeployCard,
@@ -1077,7 +1157,7 @@ void DeployPage::connectSignals()
                 m_deployedCount++;
 
                 if (m_isPvp) {
-                    sendDeployToNetwork(kind, pos);
+                    sendDeployToNetwork(kind, pos, result->id());
                 }
 
                 game::core::BattleSnapshot snap = m_battleManager->snapshot();
@@ -1154,10 +1234,7 @@ void DeployPage::initDeployment()
     m_pendingOpponentOps.clear();
     m_deployedCount = 0;
     m_selectedUnitId = -1;
-    m_localReady = false;
-    m_opponentReady = false;
-    m_pendingHostStart = false;
-    m_battleStartEmitted = false;
+    resetDeploymentSyncState();
     m_deploymentRound = qMax(1, m_battleManager->currentWave() + 1);
     m_pendingOpponentDeploys.clear();
     m_pendingOpponentOps.clear();
@@ -1241,7 +1318,7 @@ void DeployPage::setupMap()
 void DeployPage::updateDeployCount()
 {
     int resources = m_battleManager ? m_battleManager->resources().resources() : 0;
-    m_titleLabel->setText("0");
+    m_titleLabel->setText(QString::number(qMax(1, m_deploymentRound)));
     m_phaseLabel->setText("Resource");
     m_deployCountLabel->setText(QString::number(resources));
     if (m_battleManager) {
@@ -1267,10 +1344,7 @@ void DeployPage::refreshSnapshot()
 void DeployPage::reEnter()
 {
     // 不用 clearBattle，保留现有单位
-    m_localReady = false;
-    m_opponentReady = false;
-    m_pendingHostStart = false;
-    m_battleStartEmitted = false;
+    resetDeploymentSyncState();
     m_deploymentRound = qMax(1, m_battleManager ? m_battleManager->currentWave() + 1 : m_deploymentRound + 1);
     m_btnStartBattle->setEnabled(true);
     m_btnStartBattle->setText("Ready");
@@ -1309,10 +1383,68 @@ void DeployPage::setShowGrid(bool show)
     if (m_deployView) m_deployView->setShowGrid(show);
 }
 
-void DeployPage::sendDeployToNetwork(game::core::CardKind kind, game::core::MapPosition pos)
+void DeployPage::resetDeploymentSyncState()
+{
+    m_localReady = false;
+    m_opponentReady = false;
+    m_pendingHostStart = false;
+    m_battleStartEmitted = false;
+    m_deploymentCancelled = false;
+}
+
+void DeployPage::handleBackClicked()
+{
+    if (!m_isPvp) {
+        emit signalBack();
+        return;
+    }
+
+    const auto reply = QMessageBox::question(
+        this,
+        tr("Leave deployment?"),
+        tr("Leave this PVP deployment round? Both players will return to card selection."),
+        QMessageBox::Yes | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+    if (reply != QMessageBox::Yes) {
+        return;
+    }
+
+    sendDeploymentCancel();
+    handleDeploymentCancel();
+}
+
+void DeployPage::sendDeploymentCancel()
+{
+    const QByteArray body = game::network::BattleStateCodec::encodeDeploymentRound(m_deploymentRound);
+    if (m_isHost && m_netCtx.server) {
+        m_netCtx.server->sendPacket(game::network::MsgType::DEPLOYMENT_CANCEL, body);
+    } else if (!m_isHost && m_netCtx.client) {
+        m_netCtx.client->sendPacket(game::network::MsgType::DEPLOYMENT_CANCEL, body);
+    }
+}
+
+void DeployPage::handleDeploymentCancel()
+{
+    if (m_deploymentCancelled) return;
+    m_deploymentCancelled = true;
+    m_pendingOpponentDeploys.clear();
+    m_pendingOpponentOps.clear();
+    m_localReady = false;
+    m_opponentReady = false;
+    m_pendingHostStart = false;
+    m_battleStartEmitted = false;
+    if (m_btnStartBattle) {
+        m_btnStartBattle->setEnabled(false);
+        m_btnStartBattle->setText("Cancelled");
+    }
+    emit signalBack();
+}
+
+void DeployPage::sendDeployToNetwork(game::core::CardKind kind, game::core::MapPosition pos,
+                                     int unitId)
 {
     QByteArray body = game::network::BattleStateCodec::encodeDeployAction(
-        kind, pos, 0, m_deploymentRound);
+        kind, pos, unitId, m_deploymentRound);
 
     if (m_isHost && m_netCtx.server) {
         m_netCtx.server->sendPacket(game::network::MsgType::DEPLOY, body);
@@ -1364,6 +1496,9 @@ void DeployPage::handleNetworkDisconnected()
     m_localReady = false;
     m_opponentReady = false;
     m_pendingHostStart = false;
+    if (m_isPvp && !m_deploymentCancelled) {
+        handleDeploymentCancel();
+    }
 }
 
 void DeployPage::applyPendingOpponentDeploys()
@@ -1371,10 +1506,20 @@ void DeployPage::applyPendingOpponentDeploys()
     if (!m_battleManager || m_pendingOpponentDeploys.isEmpty()) return;
 
     for (const auto& pending : m_pendingOpponentDeploys) {
-        auto deployed = m_battleManager->deployOpponentCard(pending.kind, pending.position);
-        if (!deployed) {
-            qDebug() << "[DeployPage] failed to reveal opponent DEPLOY at"
-                     << pending.position.row << pending.position.col;
+        const auto result = m_battleManager->revealOpponentDeploy(
+            pending.kind, pending.position, pending.unitId);
+        if (result.outcome == game::core::OpponentDeployRevealOutcome::Failed) {
+            qDebug() << "[DeployPage] failed to reveal opponent DEPLOY"
+                     << "unit=" << pending.unitId
+                     << "at" << pending.position.row << pending.position.col;
+        } else if (result.outcome == game::core::OpponentDeployRevealOutcome::LocalWon
+                   || result.outcome == game::core::OpponentDeployRevealOutcome::OpponentWon
+                   || result.outcome == game::core::OpponentDeployRevealOutcome::Draw) {
+            qDebug() << "[DeployPage] resolved hidden deployment clash"
+                     << "outcome=" << static_cast<int>(result.outcome)
+                     << "localUnit=" << result.localUnitId
+                     << "opponentUnit=" << pending.unitId
+                     << "at" << pending.position.row << pending.position.col;
         }
     }
     qDebug() << "[DeployPage] revealed opponent deploys:" << m_pendingOpponentDeploys.size();
@@ -1495,9 +1640,10 @@ void DeployPage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
                          << "current=" << m_deploymentRound;
                 break;
             }
-            m_pendingOpponentDeploys.append({action.cardKind, action.position});
+            m_pendingOpponentDeploys.append({action.cardKind, action.position, action.unitId});
             qDebug() << "[DeployPage] cached hidden opponent DEPLOY:"
                      << static_cast<int>(action.cardKind)
+                     << "unit=" << action.unitId
                      << "at" << action.position.row << action.position.col;
         }
         break;
@@ -1537,6 +1683,21 @@ void DeployPage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
             m_opponentReady = true;
             tryStartPvpBattle("received DEPLOYMENT_START");
         }
+        break;
+    }
+    case game::network::MsgType::DEPLOYMENT_CANCEL: {
+        int roundId = 0;
+        if (!game::network::BattleStateCodec::decodeDeploymentRound(body, roundId)
+            || roundId != m_deploymentRound) {
+            qDebug() << "[DeployPage] ignored stale DEPLOYMENT_CANCEL"
+                     << "round=" << roundId
+                     << "current=" << m_deploymentRound;
+            break;
+        }
+        QMessageBox::information(this,
+                                 tr("PVP deployment cancelled"),
+                                 tr("The other player left deployment. Returning to card selection."));
+        handleDeploymentCancel();
         break;
     }
     case game::network::MsgType::UPGRADE_UNIT: {
@@ -1585,6 +1746,10 @@ void DeployPage::onNetworkPacket(game::network::MsgType type, const QByteArray& 
         }
         break;
     }
+    case game::network::MsgType::DISCONNECT:
+        handleNetworkDisconnected();
+        handleDeploymentCancel();
+        break;
     default:
         break;
     }

@@ -20,11 +20,16 @@ public:
 
     std::shared_ptr<Card> deploy(CardKind kind, MapPosition position,
                                  Map& map, ResourceManager& resources);
+    std::shared_ptr<Card> deployWithId(CardKind kind, MapPosition position,
+                                       Map& map, ResourceManager& resources,
+                                       int unitId);
 
     // 单位操作入口，返回 false 表示资源不足、目标非法或 id 不存在。
     bool upgrade(int unitId, ResourceManager& resources);
     bool move(int unitId, MapPosition target, Map& map, ResourceManager& resources);
     bool recall(int unitId, Map& map, ResourceManager& resources);
+    bool destroy(int unitId, Map& map);
+    void reserveUnitId(int unitId);
 
     // 清空所有卡牌并释放地图占用，切换关卡或重开时使用。
     void clear(Map& map);
@@ -44,6 +49,7 @@ public:
 private:
     // 下一个可分配单位 id。
     int nextUnitId_;
+    int firstUnitId_;
     // 当前场上所有卡牌。
     std::vector<std::shared_ptr<Card>> cards_;
 };

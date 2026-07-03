@@ -298,6 +298,9 @@ private:
     bool m_localWaveClear = false;      ///< 本端本波怪物是否已清空
     bool m_peerWaveClear = false;       ///< 对端本波怪物是否已清空
     double m_stateSyncTimer = 0.0;      ///< Host 权威快照同步计时
+    bool m_hasPendingRemoteSnapshot = false;
+    game::core::BattleSnapshot m_pendingRemoteSnapshot;
+    int m_remoteChecksumMismatchCount = 0;
     int m_displayCoreHealth = game::core::constants::InitialBaseHealth;
     int m_displayOpponentCoreHealth = game::core::constants::InitialBaseHealth;
     int m_displayResources = -1;
@@ -361,6 +364,8 @@ private:
     void completePvpWave();
     void sendBattleState(const game::core::BattleSnapshot& snapshot);
     void handleRemoteBattleState(const game::core::BattleSnapshot& snapshot);
+    void queueRemoteBattleState(const game::core::BattleSnapshot& snapshot);
+    void applyPendingRemoteBattleState();
     void handleNetworkDisconnected();
 
     // ========== 网络包处理 ==========

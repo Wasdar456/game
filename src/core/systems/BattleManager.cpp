@@ -1,10 +1,82 @@
 #include "core/systems/BattleManager.h"
+#include "core/data/CardSpecs.h"
 #include <QDebug>
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <set>
 #include <utility>
 
 namespace game::core {
+
+namespace {
+
+struct DeploymentDuelResult {
+    OpponentDeployRevealOutcome outcome = OpponentDeployRevealOutcome::Draw;
+    int localHp = 0;
+    int opponentHp = 0;
+};
+
+double attackIntervalForKind(CardKind kind)
+{
+    return std::max(0.05, cardSpec(kind).skillCooldownSeconds);
+}
+
+DeploymentDuelResult resolveDeploymentDuel(const Card& localCard, CardKind opponentKind)
+{
+    const CardSpec& opponentSpec = cardSpec(opponentKind);
+    int localHp = localCard.hp();
+    int opponentHp = std::max(1, opponentSpec.maxHp);
+    const int localAttack = std::max(0, localCard.attack());
+    const int opponentAttack = std::max(0, opponentSpec.attack);
+
+    if (localAttack <= 0 && opponentAttack <= 0) {
+        if (localHp == opponentHp) {
+            return {OpponentDeployRevealOutcome::Draw, 0, 0};
+        }
+        if (localHp > opponentHp) {
+            return {OpponentDeployRevealOutcome::LocalWon, localHp, 0};
+        }
+        return {OpponentDeployRevealOutcome::OpponentWon, 0, opponentHp};
+    }
+
+    const double inf = std::numeric_limits<double>::infinity();
+    double localNext = localAttack > 0 ? attackIntervalForKind(localCard.kind()) : inf;
+    double opponentNext = opponentAttack > 0 ? attackIntervalForKind(opponentKind) : inf;
+    constexpr double Epsilon = 1e-6;
+
+    for (int guard = 0; guard < 10000 && localHp > 0 && opponentHp > 0; ++guard) {
+        const double nextTime = std::min(localNext, opponentNext);
+        if (!std::isfinite(nextTime)) break;
+
+        const bool localActs = localNext <= nextTime + Epsilon;
+        const bool opponentActs = opponentNext <= nextTime + Epsilon;
+        if (localActs) opponentHp -= localAttack;
+        if (opponentActs) localHp -= opponentAttack;
+        if (localActs) localNext += attackIntervalForKind(localCard.kind());
+        if (opponentActs) opponentNext += attackIntervalForKind(opponentKind);
+    }
+
+    if (localHp <= 0 && opponentHp <= 0) {
+        return {OpponentDeployRevealOutcome::Draw, 0, 0};
+    }
+    if (opponentHp <= 0) {
+        return {OpponentDeployRevealOutcome::LocalWon, std::max(0, localHp), 0};
+    }
+    if (localHp <= 0) {
+        return {OpponentDeployRevealOutcome::OpponentWon, 0, std::max(0, opponentHp)};
+    }
+
+    if (localHp == opponentHp) {
+        return {OpponentDeployRevealOutcome::Draw, 0, 0};
+    }
+    if (localHp > opponentHp) {
+        return {OpponentDeployRevealOutcome::LocalWon, localHp, 0};
+    }
+    return {OpponentDeployRevealOutcome::OpponentWon, 0, opponentHp};
+}
+
+} // namespace
 
 BattleManager::BattleManager()
     : map_(),
@@ -83,13 +155,83 @@ bool BattleManager::recallCard(int unitId) {
     return recalled;
 }
 
-std::shared_ptr<Card> BattleManager::deployOpponentCard(CardKind kind, MapPosition position) {
-    auto card = opponentCardSystem_.deploy(kind, position, map_, opponentResources_);
+std::shared_ptr<Card> BattleManager::deployOpponentCard(CardKind kind, MapPosition position,
+                                                        int unitId) {
+    const int cost = CardSystem::deployCost(kind);
+    if (opponentResources_.resources() < cost) {
+        opponentResources_.setResources(cost);
+    }
+    auto card = opponentCardSystem_.deployWithId(kind, position, map_, opponentResources_, unitId);
     if (card) {
         recordEvent(BattleEventType::Deploy, card->id() + 1000, card->id() + 1000,
                     card->deployCost(), position, kind);
     }
     return card;
+}
+
+OpponentDeployRevealResult BattleManager::revealOpponentDeploy(CardKind kind,
+                                                               MapPosition position,
+                                                               int unitId) {
+    OpponentDeployRevealResult result;
+    result.opponentUnitId = unitId;
+
+    std::shared_ptr<Card> localCard;
+    for (const auto& card : cardSystem_.cards()) {
+        if (card && !card->isDead() && card->position() == position) {
+            localCard = card;
+            break;
+        }
+    }
+
+    if (!localCard) {
+        auto deployed = deployOpponentCard(kind, position, unitId);
+        result.outcome = deployed ? OpponentDeployRevealOutcome::Placed
+                                  : OpponentDeployRevealOutcome::Failed;
+        result.opponentUnitId = deployed ? deployed->id() : unitId;
+        result.opponentHp = deployed ? deployed->hp() : 0;
+        return result;
+    }
+
+    result.localUnitId = localCard->id();
+    const auto duel = resolveDeploymentDuel(*localCard, kind);
+    result.outcome = duel.outcome;
+    result.localHp = duel.localHp;
+    result.opponentHp = duel.opponentHp;
+
+    const int cost = CardSystem::deployCost(kind);
+    auto spendOpponentDeployCost = [&]() {
+        opponentResources_.setResources(std::max(0, opponentResources_.resources() - cost));
+        opponentCardSystem_.reserveUnitId(unitId);
+    };
+
+    switch (duel.outcome) {
+    case OpponentDeployRevealOutcome::LocalWon:
+        localCard->setHp(duel.localHp);
+        spendOpponentDeployCost();
+        break;
+    case OpponentDeployRevealOutcome::OpponentWon: {
+        cardSystem_.destroy(localCard->id(), map_);
+        auto deployed = deployOpponentCard(kind, position, unitId);
+        if (deployed) {
+            deployed->setHp(std::min(deployed->maxHp(), duel.opponentHp));
+            result.opponentUnitId = deployed->id();
+            result.opponentHp = deployed->hp();
+        } else {
+            result.outcome = OpponentDeployRevealOutcome::Failed;
+        }
+        break;
+    }
+    case OpponentDeployRevealOutcome::Draw:
+        cardSystem_.destroy(localCard->id(), map_);
+        spendOpponentDeployCost();
+        break;
+    case OpponentDeployRevealOutcome::Placed:
+    case OpponentDeployRevealOutcome::Failed:
+        break;
+    }
+
+    rebuildMapOccupancy();
+    return result;
 }
 
 bool BattleManager::upgradeOpponentCard(int unitId) {

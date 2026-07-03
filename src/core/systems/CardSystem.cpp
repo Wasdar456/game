@@ -40,22 +40,10 @@ void applyCollectionBonus(const std::shared_ptr<Card>& card, CardKind kind)
     }
 }
 
-} // namespace
-
-CardSystem::CardSystem(int firstUnitId)
-    : nextUnitId_(firstUnitId) {}
-
-std::shared_ptr<Card> CardSystem::deploy(CardKind kind, MapPosition position,
-                                         Map& map, ResourceManager& resources) {
-    // 先检查地图，再扣资源，最后创建实体，避免失败时留下半完成状态。
-    if (!map.canDeployAt(position)) return nullptr;
+std::shared_ptr<Card> createCardInstance(int id, CardKind kind, MapPosition position)
+{
     const CardSpec& spec = cardSpec(kind);
-    int cost = spec.deployCost;
-    if (!resources.consumeResource(cost)) return nullptr;
-
-    // 根据 CardKind 创建具体卡牌。
     std::shared_ptr<Card> card;
-    int id = nextUnitId_++;
     switch (kind) {
         case CardKind::Attack:
         case CardKind::Sniper:
@@ -82,12 +70,36 @@ std::shared_ptr<Card> CardSystem::deploy(CardKind kind, MapPosition position,
                                               spec.deployCost, spec.kind, spec.healAmount);
             break;
     }
-
-    // 部署成功后同时更新卡牌列表和地图占用。
-    if (!card) return nullptr;
     applyCollectionBonus(card, kind);
+    return card;
+}
+
+} // namespace
+
+CardSystem::CardSystem(int firstUnitId)
+    : nextUnitId_(firstUnitId),
+      firstUnitId_(firstUnitId) {}
+
+std::shared_ptr<Card> CardSystem::deploy(CardKind kind, MapPosition position,
+                                         Map& map, ResourceManager& resources) {
+    return deployWithId(kind, position, map, resources, nextUnitId_);
+}
+
+std::shared_ptr<Card> CardSystem::deployWithId(CardKind kind, MapPosition position,
+                                               Map& map, ResourceManager& resources,
+                                               int unitId) {
+    if (unitId <= 0) unitId = nextUnitId_;
+    if (findCard(unitId)) return nullptr;
+    if (!map.canDeployAt(position)) return nullptr;
+    const CardSpec& spec = cardSpec(kind);
+    int cost = spec.deployCost;
+    if (!resources.consumeResource(cost)) return nullptr;
+
+    auto card = createCardInstance(unitId, kind, position);
+    if (!card) return nullptr;
     cards_.push_back(card);
     map.setOccupied(position, true, card->id());
+    reserveUnitId(unitId);
     return card;
 }
 
@@ -114,11 +126,28 @@ bool CardSystem::recall(int unitId, Map& map, ResourceManager& resources) {
     return true;
 }
 
+bool CardSystem::destroy(int unitId, Map& map) {
+    auto it = std::find_if(cards_.begin(), cards_.end(),
+                           [unitId](const auto& card) { return card->id() == unitId; });
+    if (it == cards_.end()) return false;
+
+    map.clearOccupant((*it)->position());
+    cards_.erase(it);
+    return true;
+}
+
+void CardSystem::reserveUnitId(int unitId) {
+    if (unitId >= nextUnitId_) {
+        nextUnitId_ = unitId + 1;
+    }
+}
+
 void CardSystem::clear(Map& map) {
     for (const auto& card : cards_) {
         if (card) map.clearOccupant(card->position());
     }
     cards_.clear();
+    nextUnitId_ = firstUnitId_;
 }
 
 void CardSystem::removeDead(Map& map) {
