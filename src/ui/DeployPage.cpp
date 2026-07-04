@@ -590,15 +590,12 @@ void DeployView::drawUnits(QPainter &painter)
         const int hpWidth = static_cast<int>(barWidth * hpRatio);
         if (hpWidth > 0) {
             QLinearGradient hpGrad(barX, barY, barX + hpWidth, barY);
-            if (hpRatio > 0.5) {
-                hpGrad.setColorAt(0, QColor(80, 220, 80));
-                hpGrad.setColorAt(1, QColor(50, 180, 50));
-            } else if (hpRatio > 0.25) {
-                hpGrad.setColorAt(0, QColor(255, 200, 50));
-                hpGrad.setColorAt(1, QColor(220, 160, 30));
+            if (isOpponent) {
+                hpGrad.setColorAt(0, QColor(190, 120, 255));
+                hpGrad.setColorAt(1, QColor(118, 75, 230));
             } else {
-                hpGrad.setColorAt(0, QColor(255, 80, 80));
-                hpGrad.setColorAt(1, QColor(200, 40, 40));
+                hpGrad.setColorAt(0, QColor(80, 220, 90));
+                hpGrad.setColorAt(1, QColor(35, 175, 70));
             }
             painter.setBrush(hpGrad);
             painter.drawRoundedRect(barX, barY, hpWidth, barHeight, barHeight / 2.0,
