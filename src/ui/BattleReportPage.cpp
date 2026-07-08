@@ -62,7 +62,9 @@ QString unitImagePath(const BattleStatEntry& entry)
     if (entry.name.contains("Mango")) return ":/images/new_art/unit_mango_engineer.png";
     if (entry.name.contains("Sniper")) return ":/images/new_art/unit_sniper_berry.png";
     if (entry.name.contains("Orange")) return ":/images/new_art/unit_orange_bomber.png";
-    if (entry.name.contains("Berry Tank")) return ":/images/new_art/unit_berry_tank.png";
+    if (entry.name.contains("Watermelon Tank") || entry.name.contains("Berry Tank")) {
+        return ":/images/new_art/unit_berry_tank.png";
+    }
     if (entry.name.contains("Grape")) return ":/images/new_art/unit_grape_blaster.png";
     if (entry.name.contains("Peach")) return ":/images/new_art/unit_peach_healer.png";
     if (entry.name.contains("Papaya")) return ":/images/new_art/unit_papaya_support.png";

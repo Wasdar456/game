@@ -159,19 +159,6 @@ void LobbyPage::paintEvent(QPaintEvent *event)
     edgeShade.setColorAt(1.0, QColor(24, 29, 18, 28));
     painter.fillRect(m_canvasRect, edgeShade);
 
-    if (m_currentMode == Mode::PVE) {
-        const QRectF endlessRect = scaledRect(kPveRects[5], m_canvasRect, kPveWidth, kPveHeight);
-        painter.save();
-        painter.setRenderHint(QPainter::Antialiasing, true);
-        painter.setPen(QPen(QColor(94, 55, 25), 2.0));
-        painter.setBrush(QColor(245, 214, 141, 238));
-        painter.drawRoundedRect(endlessRect.adjusted(5, 5, -5, -5), 11, 11);
-        QFont font("Microsoft YaHei UI", qMax(13, qRound(endlessRect.height() * 0.28)), QFont::Black);
-        painter.setFont(font);
-        painter.setPen(QColor(52, 31, 18));
-        painter.drawText(endlessRect, Qt::AlignCenter, "无尽模式");
-        painter.restore();
-    }
 }
 
 void LobbyPage::setMode(Mode mode)

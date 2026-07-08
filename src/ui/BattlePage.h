@@ -138,7 +138,8 @@ private:
     enum class EffectType {
         DeployDust,
         AttackFlash,
-        HitFlash
+        HitFlash,
+        UnitDeath
     };
 
     struct BattleEffect {
@@ -151,6 +152,7 @@ private:
 
     game::core::BattleSnapshot m_snapshot;
     QVector<BattleEffect> m_effects;
+    int m_lastEffectEventSequence;
     QPixmap m_backgroundImage;
     int m_mapRows;
     int m_mapCols;

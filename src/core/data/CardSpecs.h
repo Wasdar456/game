@@ -88,7 +88,7 @@ inline constexpr std::array<CardSpec, 10> kCardSpecs = {{
     {
         CardKind::Specialist,
         "specialist",
-        "Berry Tank",
+        "Watermelon Tank",
         "Sapper > Ranged > Tank > Normal > Fast > Berserk > Regen > Resource",
         55,
         450,

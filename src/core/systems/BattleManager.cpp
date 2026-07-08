@@ -329,6 +329,9 @@ void BattleManager::update(double deltaSeconds) {
     }
 
     updateMonsterAttacks(deltaSeconds);
+    if (!isPvp_) {
+        cardSystem_.removeDead(map_);
+    }
 
     for (auto& monster : monsters_) {
         if (monster && !monster->isDead()) {

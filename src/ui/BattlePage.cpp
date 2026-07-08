@@ -304,6 +304,7 @@ BattleView::BattleView(QWidget *parent)
     , m_animFrame(0)
     , m_hoverRow(-1)
     , m_hoverCol(-1)
+    , m_lastEffectEventSequence(0)
     , m_mapRows(game::core::constants::DefaultMapRows)
     , m_mapCols(game::core::constants::DefaultMapCols)
     , m_imageCropX(0)
@@ -601,6 +602,19 @@ void BattleView::updateFromSnapshot(const game::core::BattleSnapshot &snapshot)
             AudioManager::instance().playHit();
         }
     }
+    for (const auto &oldUnit : m_snapshot.units) {
+        const auto stillPresent = std::find_if(snapshot.units.begin(), snapshot.units.end(),
+            [&oldUnit](const auto &unit) { return unit.id == oldUnit.id; });
+        if (stillPresent != snapshot.units.end()) {
+            continue;
+        }
+        addEffect(EffectType::UnitDeath, oldUnit.row, oldUnit.col, 0.55);
+        if (oldUnit.id == m_selectedUnitId) {
+            hideRadialMenu();
+            m_mode = InteractionMode::NONE;
+            m_selectedUnitId = -1;
+        }
+    }
 
     for (const auto &monster : snapshot.monsters) {
         const int previousHp = oldMonsterHp(monster.id);
@@ -609,6 +623,18 @@ void BattleView::updateFromSnapshot(const game::core::BattleSnapshot &snapshot)
             AudioManager::instance().playHit();
         }
     }
+
+    int newestEffectEventSequence = m_lastEffectEventSequence;
+    for (const auto &event : snapshot.events) {
+        newestEffectEventSequence = std::max(newestEffectEventSequence, event.sequenceId);
+        if (event.sequenceId <= m_lastEffectEventSequence) {
+            continue;
+        }
+        if (event.type == game::core::BattleEventType::MonsterKilled) {
+            addEffect(EffectType::UnitDeath, event.row, event.col, 0.72);
+        }
+    }
+    m_lastEffectEventSequence = newestEffectEventSequence;
 
     if (!m_snapshot.map.grids.empty() && snapshot.baseHealth < m_snapshot.baseHealth) {
         addEffect(EffectType::HitFlash, m_corePos.row, m_corePos.col, 0.42);
@@ -1415,6 +1441,7 @@ void BattleView::clearEffects()
 {
     m_effects.clear();
     m_snapshot = game::core::BattleSnapshot();
+    m_lastEffectEventSequence = 0;
 }
 
 void BattleView::addEffect(EffectType type, int row, int col, qreal duration)
@@ -2934,6 +2961,46 @@ void BattleView::drawEffects(QPainter &painter)
             painter.setBrush(Qt::NoBrush);
             painter.drawEllipse(center, extent * (0.18 + progress * 0.20),
                                 extent * (0.10 + progress * 0.12));
+        } else if (effect.type == EffectType::UnitDeath) {
+            const qreal progress = 1.0 - (effect.life / effect.duration);
+            const qreal alpha = std::clamp(effect.life / effect.duration, 0.0, 1.0);
+            const qreal scale = 1.0 - progress * 0.30;
+            const QPointF settledCenter = center + QPointF(0.0, extent * progress * 0.10);
+            QRectF body(settledCenter.x() - extent * 0.33 * scale,
+                        settledCenter.y() - extent * 0.36 * scale,
+                        extent * 0.66 * scale,
+                        extent * 0.70 * scale);
+
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(72, 55, 40, qRound(alpha * 70)));
+            painter.drawEllipse(QRectF(center.x() - extent * 0.42 * (1.0 + progress * 0.10),
+                                       center.y() + extent * (0.24 + progress * 0.05),
+                                       extent * 0.84 * (1.0 + progress * 0.10),
+                                       extent * 0.18));
+
+            painter.setOpacity(alpha);
+            QRadialGradient afterglow(body.center(), extent * (0.45 + progress * 0.12));
+            afterglow.setColorAt(0.0, QColor(236, 218, 184, qRound(alpha * 92)));
+            afterglow.setColorAt(0.58, QColor(154, 131, 94, qRound(alpha * 58)));
+            afterglow.setColorAt(1.0, QColor(154, 131, 94, 0));
+            painter.setBrush(afterglow);
+            painter.drawEllipse(body.adjusted(-extent * 0.10, -extent * 0.05,
+                                              extent * 0.10, extent * 0.07));
+
+            painter.setPen(QPen(QColor(95, 79, 61, qRound(alpha * 120)), 1.4));
+            painter.setBrush(QColor(137, 124, 104, qRound(alpha * 105)));
+            painter.drawRoundedRect(body, 7, 7);
+
+            painter.setPen(Qt::NoPen);
+            for (int i = 0; i < 7; ++i) {
+                const qreal angle = i * 0.897 + effect.row * 0.16;
+                const qreal distance = extent * (0.12 + progress * (0.20 + (i % 3) * 0.04));
+                const QPointF dust = center + QPointF(qCos(angle), qSin(angle) * 0.55) * distance
+                                     + QPointF(0.0, extent * progress * 0.08);
+                const qreal radius = extent * (0.045 + (i % 2) * 0.018) * alpha;
+                painter.setBrush(QColor(151, 119, 73, qRound(alpha * 120)));
+                painter.drawEllipse(dust, radius, radius * 0.68);
+            }
         } else {
             const qreal alpha = 1.0 - progress;
             const qreal radius = extent * (0.16 + progress * 0.42);
@@ -2963,10 +3030,14 @@ void BattleView::drawEffects(QPainter &painter)
             }
             painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
             painter.setPen(QPen(QColor(255, 91, 67, qRound(alpha * 210)), 2));
-            painter.drawLine(center + QPointF(-extent * 0.23, -extent * 0.18),
-                             center + QPointF(extent * 0.23, extent * 0.18));
-            painter.drawLine(center + QPointF(extent * 0.23, -extent * 0.18),
-                             center + QPointF(-extent * 0.23, extent * 0.18));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawEllipse(center,
+                                extent * (0.20 + progress * 0.22),
+                                extent * (0.12 + progress * 0.13));
+            painter.setPen(QPen(QColor(255, 226, 168, qRound(alpha * 155)), 1.2));
+            painter.drawEllipse(center + QPointF(0.0, extent * 0.02),
+                                extent * (0.12 + progress * 0.16),
+                                extent * (0.07 + progress * 0.10));
         }
         painter.restore();
     }
